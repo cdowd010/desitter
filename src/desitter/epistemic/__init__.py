@@ -19,7 +19,6 @@ from .model import (
     Analysis,
     Assumption,
     Claim,
-    Concept,
     DeadEnd,
     Discovery,
     IndependenceGroup,
@@ -36,7 +35,6 @@ from .types import (
     ClaimId,
     ClaimStatus,
     ClaimType,
-    ConceptId,
     ConfidenceTier,
     DeadEndId,
     DeadEndStatus,
@@ -66,14 +64,14 @@ from .web import (
 __all__ = [
     # types
     "ClaimId", "AssumptionId", "PredictionId", "TheoryId", "DiscoveryId",
-    "AnalysisId", "IndependenceGroupId", "ParameterId", "ConceptId", "DeadEndId",
+    "AnalysisId", "IndependenceGroupId", "ParameterId", "DeadEndId",
     "PairwiseSeparationId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
     "PredictionStatus", "DeadEndStatus", "ClaimStatus", "TheoryStatus", "DiscoveryStatus",
     "AssumptionType", "ClaimType", "ClaimCategory",
     # model
     "Claim", "Assumption", "Prediction", "Theory", "IndependenceGroup",
-    "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Concept", "Parameter",
+    "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Parameter",
     # web
     "EpistemicWeb", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
     "CycleError", "InvariantViolation",

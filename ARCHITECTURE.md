@@ -30,7 +30,7 @@ AssumptionId  = NewType("AssumptionId", str)
 PredictionId  = NewType("PredictionId", str)
 AnalysisId    = NewType("AnalysisId", str)
 ParameterId   = NewType("ParameterId", str)
-# ... and so on for all eleven entity types
+# ... and so on for all ten entity types
 ```
 
 At runtime, a `ClaimId` is just a string. The `NewType` is zero-cost. But the static type checker treats `ClaimId` and `PredictionId` as incompatible types, so passing one where the other is expected is caught before the code runs. This is not a runtime guard — it is documentation that the type checker can enforce.
@@ -70,7 +70,7 @@ Findings are the system's output language. Every validator, health check, and st
 
 ### The Entity Model (`model.py`)
 
-`model.py` contains eleven dataclasses — one per entity type in the epistemic web. Each is a pure data record: no methods, no I/O, no logic. Relationships between entities are expressed as sets of typed identifiers, not as object references. To navigate from a `Prediction` to its supporting `Claim` objects, you hold the prediction's `.claim_ids` (a `set[ClaimId]`) and ask the `EpistemicWeb` to look them up. This keeps entities lightweight and makes the `EpistemicWeb` the single place where referential integrity is enforced.
+`model.py` contains ten dataclasses — one per entity type in the epistemic web. Each is a pure data record: no methods, no I/O, no logic. Relationships between entities are expressed as sets of typed identifiers, not as object references. To navigate from a `Prediction` to its supporting `Claim` objects, you hold the prediction's `.claim_ids` (a `set[ClaimId]`) and ask the `EpistemicWeb` to look them up. This keeps entities lightweight and makes the `EpistemicWeb` the single place where referential integrity is enforced.
 
 **`Claim`** is an atomic, falsifiable assertion. The most fundamental unit. Claims form a directed acyclic graph through their `depends_on` set: a derived claim lists the claims it is built on, and the web ensures no cycles exist. `assumptions` links to the premises a claim takes as given; `analyses` links to the analyses that cover it. Both of these are bidirectional — adding a claim to `analyses` automatically adds the corresponding entry on the `Analysis` side, and the web enforces that both sides always agree. The `parameter_constraints` field is an annotation map `{ParameterId: constraint_str}` — a human-readable threshold like `"< 0.05"` or `"> 3.0"`. deSitter does not evaluate these constraints. It surfaces them when the referenced parameter changes, so the researcher knows which claims have thresholds that might now need revisiting.
 
@@ -100,15 +100,13 @@ Findings are the system's output language. Every validator, health check, and st
 
 **`DeadEnd`** records a known abandoned direction with a description of what was tried and why it failed. Negative results constrain the hypothesis space and should not be silently discarded because the current code cannot find a reference to them.
 
-**`Concept`** defines a project-specific vocabulary term, with aliases and references. It keeps the lexicon under version control alongside the rest of the project.
-
 **`Parameter`** is a physical or mathematical constant referenced by analyses: masses, coupling constants, significance thresholds, model hyperparameters. Parameters live in a version-controlled JSON file rather than inside analysis scripts so that a single authoritative value is shared across all analyses and changes are tracked with full provenance. The `used_in_analyses` field (bidirectional with `Analysis.uses_parameters`) enables the staleness detection cascade: change a parameter, the health check tells you exactly which analyses need re-running and which predictions are therefore stale.
 
 ### The Aggregate Root: `EpistemicWeb` (`web.py`)
 
 `EpistemicWeb` is the most important class in the system. It is the **aggregate root** of the epistemic domain — the single object that owns the complete research state and is the only legitimate path through which any mutation to that state can occur. Nothing outside the web ever modifies an entity directly. Everything goes through the web's methods, because the web is responsible for maintaining every invariant.
 
-The class itself is a dataclass holding eleven dictionaries, one per entity type, all keyed by typed identifiers:
+The class itself is a dataclass holding ten dictionaries, one per entity type, all keyed by typed identifiers:
 
 ```python
 @dataclass
@@ -122,7 +120,6 @@ class EpistemicWeb:
     pairwise_separations: dict[PairwiseSeparationId, PairwiseSeparation]
     discoveries:          dict[DiscoveryId, Discovery]
     dead_ends:            dict[DeadEndId, DeadEnd]
-    concepts:             dict[ConceptId, Concept]
     parameters:           dict[ParameterId, Parameter]
 ```
 
@@ -150,7 +147,7 @@ new_web = original_web.register_claim(new_claim)  # original_web still has 5
 # The original_web is still intact. No undo stack needed.
 ```
 
-The cost of this approach is O(n) memory per mutation — a full deep copy of all eleven dictionaries. For research-scale webs (hundreds to low thousands of entities) this is fast enough, measured in microseconds. The benefit is correctness without complexity: failure at any subsequent validation step means the caller throws away the new web and the disk state is never affected. There is no concept of a "partially committed" mutation.
+The cost of this approach is O(n) memory per mutation — a full deep copy of all ten dictionaries. For research-scale webs (hundreds to low thousands of entities) this is fast enough, measured in microseconds. The benefit is correctness without complexity: failure at any subsequent validation step means the caller throws away the new web and the disk state is never affected. There is no concept of a "partially committed" mutation.
 
 #### Referential Integrity Enforcement
 
@@ -310,11 +307,10 @@ project/data/
 ├── pairwise_separations.json
 ├── discoveries.json
 ├── dead_ends.json
-├── concepts.json
 └── parameters.json
 ```
 
-`load()` reads and deserialises all eleven files and assembles a fully hydrated `EpistemicWeb`. Missing files are treated as empty registries — a new project has no files at all and the repository returns an empty web, which is correct behaviour.
+`load()` reads and deserialises all ten files and assembles a fully hydrated `EpistemicWeb`. Missing files are treated as empty registries — a new project has no files at all and the repository returns an empty web, which is correct behaviour.
 
 `save(web)` serialises the web back to disk **atomically**: for each entity type, it writes the JSON to a `.json.tmp` file in the same directory, then calls `tmp.replace(path)` — a POSIX atomic rename. If the process crashes mid-write, the on-disk state is always the complete previous version. No partial writes, no corrupted entity files.
 
@@ -398,7 +394,7 @@ GATEWAY_RESOURCE_ALIASES = {
     "prediction": "prediction",  "predictions": "prediction",
     "independence-group": "independence_group",
     "analyses": "analysis",
-    # ... all forms for all eleven types
+    # ... all forms for all ten types
 }
 ```
 

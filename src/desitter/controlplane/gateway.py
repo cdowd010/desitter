@@ -56,8 +56,6 @@ GATEWAY_RESOURCE_ALIASES: dict[str, str] = {
     "dead_end": "dead_end",
     "dead-ends": "dead_end",
     "dead_ends": "dead_end",
-    "concept": "concept",
-    "concepts": "concept",
     "parameter": "parameter",
     "parameters": "parameter",
     "summary": "session_summary",

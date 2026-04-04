@@ -7,7 +7,6 @@ from desitter.epistemic.model import (
     Analysis,
     Assumption,
     Claim,
-    Concept,
     DeadEnd,
     Discovery,
     IndependenceGroup,
@@ -20,7 +19,6 @@ from desitter.epistemic.types import (
     AnalysisId,
     AssumptionId,
     ClaimId,
-    ConceptId,
     DeadEndId,
     DiscoveryId,
     IndependenceGroupId,
@@ -43,7 +41,6 @@ from .conftest import (
     make_assumption_id,
     make_claim,
     make_claim_id,
-    make_concept,
     make_dead_end,
     make_discovery,
     make_group,
@@ -448,18 +445,6 @@ class TestRegisterDeadEnd:
         with pytest.raises(BrokenReferenceError):
             empty_web.register_dead_end(d)
 
-
-# ── register_concept ──────────────────────────────────────────────
-
-class TestRegisterConcept:
-    def test_happy_path(self, empty_web):
-        web = empty_web.register_concept(make_concept(1))
-        assert "CO-001" in [str(k) for k in web.concepts]
-
-    def test_duplicate_raises(self, empty_web):
-        web = empty_web.register_concept(make_concept(1))
-        with pytest.raises(DuplicateIdError):
-            web.register_concept(make_concept(1))
 
 
 # ── Caller reference isolation ────────────────────────────────────

@@ -1,4 +1,4 @@
-"""Tests for epistemic/model.py — all 11 entity dataclasses."""
+"""Tests for epistemic/model.py — all 10 entity dataclasses."""
 from __future__ import annotations
 
 from dataclasses import fields
@@ -10,7 +10,6 @@ from desitter.epistemic.model import (
     Analysis,
     Assumption,
     Claim,
-    Concept,
     DeadEnd,
     Discovery,
     IndependenceGroup,
@@ -27,7 +26,6 @@ from desitter.epistemic.types import (
     ClaimId,
     ClaimStatus,
     ClaimType,
-    ConceptId,
     ConfidenceTier,
     DeadEndId,
     DeadEndStatus,
@@ -265,20 +263,6 @@ class TestDeadEnd:
         assert de.references == []
         assert de.source is None
 
-
-# ── Concept ───────────────────────────────────────────────────────
-
-class TestConcept:
-    def test_defaults(self):
-        c = Concept(
-            id=ConceptId("CO-001"),
-            term="entropy",
-            definition="measure of disorder",
-        )
-        assert c.aliases == []
-        assert c.notes == []
-        assert c.references == []
-        assert c.source is None
 
 
 # ── Parameter ─────────────────────────────────────────────────────

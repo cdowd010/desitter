@@ -20,7 +20,6 @@ from .types import (
     ClaimId,
     ClaimStatus,
     ClaimType,
-    ConceptId,
     ConfidenceTier,
     DeadEndId,
     DeadEndStatus,
@@ -227,18 +226,6 @@ class DeadEnd:
     related_claims: set[ClaimId] = field(default_factory=set)
     references: list[str] = field(default_factory=list)
     source: str | None = None                    # doi:..., arxiv:..., url, or analysis reference
-
-
-@dataclass
-class Concept:
-    """A defined term in the project vocabulary."""
-    id: ConceptId
-    term: str
-    definition: str
-    aliases: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-    references: list[str] = field(default_factory=list)
-    source: str | None = None                    # primary source for this definition
 
 
 @dataclass

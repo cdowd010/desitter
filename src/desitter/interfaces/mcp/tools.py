@@ -38,7 +38,7 @@ def register_tools(server, context: ProjectContext) -> None:
         """Register a new entity in the epistemic web.
 
         resource: entity type — "claim", "assumption", "prediction", "analysis",
-                  "theory", "discovery", "dead_end", "concept", "parameter",
+                  "theory", "discovery", "dead_end", "parameter",
                   "independence_group"
         payload:  entity fields as a dict
         dry_run:  if True, validate without writing to disk

@@ -33,7 +33,6 @@ DEFAULT_RENDER_TRIGGERS: list[RenderTrigger] = [
     RenderTrigger("theory"),
     RenderTrigger("discovery"),
     RenderTrigger("dead_end"),
-    RenderTrigger("concept"),
     RenderTrigger("parameter"),
 ]
 

@@ -8,7 +8,6 @@ from desitter.epistemic.types import (
     AssumptionId,
     ClaimId,
     ClaimType,
-    ConceptId,
     DeadEndId,
     DiscoveryId,
     IndependenceGroupId,
@@ -26,8 +25,6 @@ from .conftest import (
     make_assumption_id,
     make_claim,
     make_claim_id,
-    make_concept,
-    make_concept_id,
     make_dead_end,
     make_dead_end_id,
     make_discovery,
@@ -314,10 +311,6 @@ class TestRemoveLeafEntities:
         web = rich_web.remove_dead_end(make_dead_end_id(1))
         assert make_dead_end_id(1) not in web.dead_ends
 
-    def test_remove_concept(self, rich_web):
-        web = rich_web.remove_concept(make_concept_id(1))
-        assert make_concept_id(1) not in web.concepts
-
     def test_remove_pairwise_separation(self, empty_web):
         web = empty_web.register_independence_group(make_group(1))
         web = web.register_independence_group(make_group(2))
@@ -336,10 +329,6 @@ class TestRemoveLeafEntities:
     def test_remove_dead_end_nonexistent(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.remove_dead_end(DeadEndId("nope"))
-
-    def test_remove_concept_nonexistent(self, empty_web):
-        with pytest.raises(BrokenReferenceError):
-            empty_web.remove_concept(ConceptId("nope"))
 
     def test_remove_separation_nonexistent(self, empty_web):
         with pytest.raises(BrokenReferenceError):

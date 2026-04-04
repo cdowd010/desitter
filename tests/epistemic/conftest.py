@@ -13,7 +13,6 @@ from desitter.epistemic.model import (
     Analysis,
     Assumption,
     Claim,
-    Concept,
     DeadEnd,
     Discovery,
     IndependenceGroup,
@@ -30,7 +29,6 @@ from desitter.epistemic.types import (
     ClaimId,
     ClaimStatus,
     ClaimType,
-    ConceptId,
     ConfidenceTier,
     DeadEndId,
     DeadEndStatus,
@@ -74,9 +72,6 @@ def make_discovery_id(n: int = 1) -> DiscoveryId:
 
 def make_dead_end_id(n: int = 1) -> DeadEndId:
     return DeadEndId(f"DE-{n:03d}")
-
-def make_concept_id(n: int = 1) -> ConceptId:
-    return ConceptId(f"CO-{n:03d}")
 
 def make_group_id(n: int = 1) -> IndependenceGroupId:
     return IndependenceGroupId(f"IG-{n:03d}")
@@ -161,15 +156,6 @@ def make_dead_end(n: int = 1, **overrides) -> DeadEnd:
     )
     defaults.update(overrides)
     return DeadEnd(**defaults)
-
-def make_concept(n: int = 1, **overrides) -> Concept:
-    defaults = dict(
-        id=make_concept_id(n),
-        term=f"concept_{n}",
-        definition=f"Definition of concept {n}",
-    )
-    defaults.update(overrides)
-    return Concept(**defaults)
 
 def make_group(n: int = 1, **overrides) -> IndependenceGroup:
     defaults = dict(id=make_group_id(n), label=f"group_{n}")
@@ -292,6 +278,4 @@ def rich_web() -> EpistemicWeb:
     web = web.register_discovery(make_discovery(1))
     # Dead end
     web = web.register_dead_end(make_dead_end(1))
-    # Concept
-    web = web.register_concept(make_concept(1))
     return web

@@ -15,7 +15,6 @@ from .model import (
     Analysis,
     Assumption,
     Claim,
-    Concept,
     DeadEnd,
     Discovery,
     IndependenceGroup,
@@ -29,7 +28,6 @@ from .types import (
     AssumptionId,
     ClaimId,
     ClaimStatus,
-    ConceptId,
     DeadEndId,
     DeadEndStatus,
     DiscoveryId,
@@ -62,7 +60,6 @@ class EpistemicWeb:
     )
     pairwise_separations: dict[PairwiseSeparationId, PairwiseSeparation] = field(default_factory=dict)
     dead_ends: dict[DeadEndId, DeadEnd] = field(default_factory=dict)
-    concepts: dict[ConceptId, Concept] = field(default_factory=dict)
     parameters: dict[ParameterId, Parameter] = field(default_factory=dict)
 
     # ── Queries ───────────────────────────────────────────────────
@@ -417,14 +414,6 @@ class EpistemicWeb:
         new.dead_ends[dead_end.id] = copy.deepcopy(dead_end)
         return new
 
-    def register_concept(self, concept: Concept) -> EpistemicWeb:
-        """Add a concept definition."""
-        if concept.id in self.concepts:
-            raise DuplicateIdError(f"Concept {concept.id} already exists")
-        new = self._copy()
-        new.concepts[concept.id] = copy.deepcopy(concept)
-        return new
-
     def register_parameter(self, parameter: Parameter) -> EpistemicWeb:
         """Add a parameter constant.
 
@@ -691,14 +680,6 @@ class EpistemicWeb:
         new.dead_ends[new_dead_end.id] = copy.deepcopy(new_dead_end)
         return new
 
-    def update_concept(self, new_concept: Concept) -> EpistemicWeb:
-        """Replace a concept's fields."""
-        if new_concept.id not in self.concepts:
-            raise BrokenReferenceError(f"Concept {new_concept.id} does not exist")
-        new = self._copy()
-        new.concepts[new_concept.id] = copy.deepcopy(new_concept)
-        return new
-
     # ── Remove mutations — safe deletion with ref checks ──────────
 
     def remove_prediction(self, pid: PredictionId) -> EpistemicWeb:
@@ -890,14 +871,6 @@ class EpistemicWeb:
             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
         new = self._copy()
         del new.dead_ends[did]
-        return new
-
-    def remove_concept(self, coid: ConceptId) -> EpistemicWeb:
-        """Remove a concept. Concepts are leaves — nothing references them by ID."""
-        if coid not in self.concepts:
-            raise BrokenReferenceError(f"Concept {coid} does not exist")
-        new = self._copy()
-        del new.concepts[coid]
         return new
 
     def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicWeb:

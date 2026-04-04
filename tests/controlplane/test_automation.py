@@ -26,7 +26,7 @@ class TestDefaultTriggers:
         expected = {
             "claim", "assumption", "prediction", "analysis",
             "independence_group", "theory", "discovery",
-            "dead_end", "concept", "parameter",
+            "dead_end", "parameter",
         }
         actual = {t.resource for t in DEFAULT_RENDER_TRIGGERS}
         assert actual == expected

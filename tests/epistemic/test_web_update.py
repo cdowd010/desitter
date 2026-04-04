@@ -29,8 +29,6 @@ from .conftest import (
     make_assumption_id,
     make_claim,
     make_claim_id,
-    make_concept,
-    make_concept_id,
     make_dead_end,
     make_dead_end_id,
     make_discovery,
@@ -396,17 +394,3 @@ class TestUpdateDeadEnd:
         with pytest.raises(BrokenReferenceError):
             rich_web.update_dead_end(updated)
 
-
-# ── update_concept ────────────────────────────────────────────────
-
-class TestUpdateConcept:
-    def test_basic(self, rich_web):
-        old = rich_web.concepts[make_concept_id(1)]
-        updated = copy.deepcopy(old)
-        updated.definition = "better def"
-        web = rich_web.update_concept(updated)
-        assert web.concepts[make_concept_id(1)].definition == "better def"
-
-    def test_nonexistent_raises(self, empty_web):
-        with pytest.raises(BrokenReferenceError):
-            empty_web.update_concept(make_concept(99))
