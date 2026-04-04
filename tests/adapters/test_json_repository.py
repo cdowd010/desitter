@@ -26,6 +26,12 @@ class TestLoadFile:
         repo = JsonRepository(tmp_path)
         assert repo._load_file("empty.json") == []
 
+    def test_invalid_json_raises(self, tmp_path):
+        (tmp_path / "bad.json").write_text("{not valid json", encoding="utf-8")
+        repo = JsonRepository(tmp_path)
+        with pytest.raises(json.JSONDecodeError):
+            repo._load_file("bad.json")
+
 
 class TestWriteFile:
     def test_creates_file(self, tmp_path):

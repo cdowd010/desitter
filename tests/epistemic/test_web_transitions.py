@@ -77,3 +77,25 @@ class TestTransitionDiscovery:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.transition_discovery("D-999", DiscoveryStatus.ARCHIVED)
+
+
+class TestTransitionImmutability:
+    def test_claim_transition_is_copy_on_write(self, rich_web):
+        web2 = rich_web.transition_claim(make_claim_id(1), ClaimStatus.REVISED)
+        assert rich_web.claims[make_claim_id(1)].status != ClaimStatus.REVISED
+        assert web2.claims[make_claim_id(1)].status == ClaimStatus.REVISED
+
+    def test_theory_transition_is_copy_on_write(self, rich_web):
+        web2 = rich_web.transition_theory(make_theory_id(1), TheoryStatus.REFINED)
+        assert rich_web.theories[make_theory_id(1)].status != TheoryStatus.REFINED
+        assert web2.theories[make_theory_id(1)].status == TheoryStatus.REFINED
+
+    def test_dead_end_transition_is_copy_on_write(self, rich_web):
+        web2 = rich_web.transition_dead_end(make_dead_end_id(1), DeadEndStatus.RESOLVED)
+        assert rich_web.dead_ends[make_dead_end_id(1)].status != DeadEndStatus.RESOLVED
+        assert web2.dead_ends[make_dead_end_id(1)].status == DeadEndStatus.RESOLVED
+
+    def test_discovery_transition_is_copy_on_write(self, rich_web):
+        web2 = rich_web.transition_discovery(make_discovery_id(1), DiscoveryStatus.INTEGRATED)
+        assert rich_web.discoveries[make_discovery_id(1)].status != DiscoveryStatus.INTEGRATED
+        assert web2.discoveries[make_discovery_id(1)].status == DiscoveryStatus.INTEGRATED

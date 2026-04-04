@@ -1,0 +1,5 @@
+    1: """Tests for the control-plane services.
+       
+       Uses in-memory fakes for repositories, renderers, and executors.
+       No real filesystem or network access required.
+       """

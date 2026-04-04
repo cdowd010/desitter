@@ -20,7 +20,7 @@ from desitter.epistemic.types import (
     PredictionStatus,
     TheoryStatus,
 )
-from desitter.epistemic.web import BrokenReferenceError, EpistemicWeb
+from desitter.epistemic.web import BrokenReferenceError, CycleError, EpistemicWeb
 
 from .conftest import (
     make_analysis,
@@ -91,6 +91,20 @@ class TestUpdateClaim:
         with pytest.raises(BrokenReferenceError):
             web_with_claim_chain.update_claim(updated)
 
+    def test_parameter_constraints_broken_ref_raises(self, web_with_claim_chain):
+        updated = copy.deepcopy(web_with_claim_chain.claims[make_claim_id(1)])
+        updated.parameter_constraints = {ParameterId("nonexistent"): "< 1"}
+        with pytest.raises(BrokenReferenceError):
+            web_with_claim_chain.update_claim(updated)
+
+    def test_cycle_detection_raises(self, web_with_claim_chain):
+        """Updating C-001 to depend on C-002 creates C-001 <-> C-002 cycle."""
+        updated = copy.deepcopy(web_with_claim_chain.claims[make_claim_id(1)])
+        updated.type = ClaimType.DERIVED
+        updated.depends_on = {make_claim_id(2)}
+        with pytest.raises(CycleError):
+            web_with_claim_chain.update_claim(updated)
+
 
 # ── update_assumption ─────────────────────────────────────────────
 
@@ -116,6 +130,17 @@ class TestUpdateAssumption:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.update_assumption(make_assumption(99))
+
+    def test_cycle_detection_raises(self, web_with_assumptions):
+        """A-002 depends_on A-001, then A-001 depends_on A-002 creates a cycle."""
+        a2 = copy.deepcopy(web_with_assumptions.assumptions[make_assumption_id(2)])
+        a2.depends_on = {make_assumption_id(1)}
+        web = web_with_assumptions.update_assumption(a2)
+
+        a1 = copy.deepcopy(web.assumptions[make_assumption_id(1)])
+        a1.depends_on = {make_assumption_id(2)}
+        with pytest.raises(CycleError):
+            web.update_assumption(a1)
 
 
 # ── update_prediction ─────────────────────────────────────────────
@@ -149,6 +174,37 @@ class TestUpdatePrediction:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.update_prediction(make_prediction(99))
+
+    def test_group_removed_tears_down_backlink(self, rich_web):
+        old = rich_web.predictions[make_prediction_id(1)]
+        updated = copy.deepcopy(old)
+        updated.independence_group = None
+        web = rich_web.update_prediction(updated)
+        assert make_prediction_id(1) not in web.independence_groups[make_group_id(1)].member_predictions
+
+    def test_broken_claim_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.predictions[make_prediction_id(1)])
+        updated.claim_ids = {ClaimId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_prediction(updated)
+
+    def test_broken_analysis_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.predictions[make_prediction_id(1)])
+        updated.analysis = AnalysisId("nonexistent")
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_prediction(updated)
+
+    def test_broken_group_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.predictions[make_prediction_id(1)])
+        updated.independence_group = IndependenceGroupId("nonexistent")
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_prediction(updated)
+
+    def test_broken_conditional_on_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.predictions[make_prediction_id(1)])
+        updated.conditional_on = {AssumptionId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_prediction(updated)
 
 
 # ── update_parameter ──────────────────────────────────────────────
@@ -203,6 +259,12 @@ class TestUpdateAnalysis:
         with pytest.raises(BrokenReferenceError):
             empty_web.update_analysis(make_analysis(99))
 
+    def test_broken_parameter_ref_raises(self, web_with_analysis):
+        updated = copy.deepcopy(web_with_analysis.analyses[make_analysis_id(1)])
+        updated.uses_parameters = {ParameterId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            web_with_analysis.update_analysis(updated)
+
 
 # ── update_theory ─────────────────────────────────────────────────
 
@@ -240,6 +302,18 @@ class TestUpdateIndependenceGroup:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.update_independence_group(make_group(99))
+
+    def test_missing_claim_lineage_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.independence_groups[make_group_id(1)])
+        updated.claim_lineage = {ClaimId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_independence_group(updated)
+
+    def test_missing_assumption_lineage_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.independence_groups[make_group_id(1)])
+        updated.assumption_lineage = {AssumptionId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_independence_group(updated)
 
 
 # ── update_pairwise_separation ────────────────────────────────────
@@ -283,6 +357,18 @@ class TestUpdateDiscovery:
         with pytest.raises(BrokenReferenceError):
             empty_web.update_discovery(make_discovery(99))
 
+    def test_broken_claim_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.discoveries[make_discovery_id(1)])
+        updated.related_claims = {ClaimId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_discovery(updated)
+
+    def test_broken_prediction_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.discoveries[make_discovery_id(1)])
+        updated.related_predictions = {PredictionId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_discovery(updated)
+
 
 # ── update_dead_end ───────────────────────────────────────────────
 
@@ -297,6 +383,18 @@ class TestUpdateDeadEnd:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.update_dead_end(make_dead_end(99))
+
+    def test_broken_claim_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.dead_ends[make_dead_end_id(1)])
+        updated.related_claims = {ClaimId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_dead_end(updated)
+
+    def test_broken_prediction_ref_raises(self, rich_web):
+        updated = copy.deepcopy(rich_web.dead_ends[make_dead_end_id(1)])
+        updated.related_predictions = {PredictionId("nonexistent")}
+        with pytest.raises(BrokenReferenceError):
+            rich_web.update_dead_end(updated)
 
 
 # ── update_concept ────────────────────────────────────────────────

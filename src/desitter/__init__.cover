@@ -1,0 +1,24 @@
+    1: """deSitter (desitter) — control plane for research epistemic webs.
+       
+       Primary interface:  MCP server (AI agents call tools)
+       Secondary interface: CLI (humans and scripts)
+       Both route through:  controlplane.gateway.Gateway
+       
+       Layer cake (top to bottom):
+         mcp / cli       — external interfaces
+         controlplane/views/features — layered services above the epistemic kernel
+         epistemic       — domain kernel: EpistemicWeb, entities, invariants, ports
+         adapters        — JSON repo, markdown renderer, sandbox executor, tx log
+       
+       Quick start (programmatic):
+           from pathlib import Path
+           from desitter.config import build_context, load_config
+           from desitter.adapters.json_repository import JsonRepository
+           from desitter.epistemic import EpistemicWeb
+       
+           ctx = build_context(Path("."), load_config(Path(".")))
+           repo = JsonRepository(ctx.paths.data_dir)
+           web = repo.load()
+       """
+       
+    1: __version__ = "0.1.0"

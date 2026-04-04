@@ -61,3 +61,14 @@ class TestReadAll:
         records = log.read_all()
         for i, rec in enumerate(records):
             assert rec["identifier"] == f"id-{i}"
+
+    def test_ignores_blank_lines(self, tmp_path):
+        log_file = tmp_path / "log.jsonl"
+        log_file.write_text(
+            '{"tx_id":"1","timestamp":"t","operation":"a","identifier":"x"}\n\n'
+            '{"tx_id":"2","timestamp":"t","operation":"b","identifier":"y"}\n',
+            encoding="utf-8",
+        )
+        log = JsonTransactionLog(log_file)
+        records = log.read_all()
+        assert [r["identifier"] for r in records] == ["x", "y"]

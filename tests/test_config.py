@@ -48,6 +48,13 @@ class TestLoadConfig:
         cfg = load_config(tmp_path)
         assert cfg.project_dir == Path("project")
 
+    def test_invalid_toml_raises(self, tmp_path):
+        (tmp_path / "desitter.toml").write_text(
+            "[desitter\nproject_dir = \"broken\"\n", encoding="utf-8"
+        )
+        with pytest.raises(Exception):
+            load_config(tmp_path)
+
 
 class TestBuildContext:
     def test_path_derivation(self, tmp_path):

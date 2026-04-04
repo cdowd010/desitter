@@ -1,0 +1,74 @@
+    1: """Tests for adapters/transaction_log.py — JsonTransactionLog."""
+    1: from __future__ import annotations
+       
+    1: import json
+       
+    1: import pytest
+       
+    1: from desitter.adapters.transaction_log import JsonTransactionLog
+       
+       
+    2: class TestAppend:
+    1:     def test_creates_file_and_record(self, tmp_path):
+    1:         log_file = tmp_path / "sub" / "log.jsonl"
+    1:         log = JsonTransactionLog(log_file)
+    1:         tx_id = log.append("register", "C-001")
+    1:         assert log_file.exists()
+    1:         assert isinstance(tx_id, str)
+    1:         assert len(tx_id) > 0
+       
+    1:     def test_record_schema(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "log.jsonl")
+    1:         tx_id = log.append("register", "C-001")
+    1:         record = json.loads((tmp_path / "log.jsonl").read_text().strip())
+    1:         assert record["tx_id"] == tx_id
+    1:         assert record["operation"] == "register"
+    1:         assert record["identifier"] == "C-001"
+    1:         assert "timestamp" in record
+       
+    1:     def test_multiple_appends(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "log.jsonl")
+    1:         log.append("register", "C-001")
+    1:         log.append("update", "C-002")
+    1:         log.append("remove", "P-001")
+    1:         lines = (tmp_path / "log.jsonl").read_text().strip().splitlines()
+    1:         assert len(lines) == 3
+       
+    1:     def test_unique_tx_ids(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "log.jsonl")
+   11:         ids = {log.append("op", f"id-{i}") for i in range(10)}
+    1:         assert len(ids) == 10
+       
+       
+    2: class TestReadAll:
+    1:     def test_empty_when_missing(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "nonexistent.jsonl")
+    1:         assert log.read_all() == []
+       
+    1:     def test_roundtrip(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "log.jsonl")
+    1:         log.append("register", "C-001")
+    1:         log.append("update", "C-002")
+    1:         records = log.read_all()
+    1:         assert len(records) == 2
+    1:         assert records[0]["operation"] == "register"
+    1:         assert records[1]["operation"] == "update"
+       
+    1:     def test_preserves_order(self, tmp_path):
+    1:         log = JsonTransactionLog(tmp_path / "log.jsonl")
+    6:         for i in range(5):
+    5:             log.append("op", f"id-{i}")
+    1:         records = log.read_all()
+    6:         for i, rec in enumerate(records):
+    5:             assert rec["identifier"] == f"id-{i}"
+       
+    1:     def test_ignores_blank_lines(self, tmp_path):
+    1:         log_file = tmp_path / "log.jsonl"
+    2:         log_file.write_text(
+    1:             '{"tx_id":"1","timestamp":"t","operation":"a","identifier":"x"}\n\n'
+                   '{"tx_id":"2","timestamp":"t","operation":"b","identifier":"y"}\n',
+    1:             encoding="utf-8",
+               )
+    1:         log = JsonTransactionLog(log_file)
+    1:         records = log.read_all()
+    3:         assert [r["identifier"] for r in records] == ["x", "y"]

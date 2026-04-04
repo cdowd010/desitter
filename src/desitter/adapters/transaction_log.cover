@@ -1,0 +1,61 @@
+    1: """Transaction log: implements TransactionLog.
+       
+       Appends a provenance record for every gateway mutation and query.
+       Records are newline-delimited JSON written to
+         project/integrity/query_transaction_log.jsonl
+       
+       Implements the TransactionLog protocol from epistemic/ports.py.
+       """
+    1: from __future__ import annotations
+       
+    1: import json
+    1: import uuid
+    1: from datetime import datetime, timezone
+    1: from pathlib import Path
+       
+       
+    2: class JsonTransactionLog:
+    1:     """Appends provenance records to a JSONL file.
+       
+           log_file: path to the .jsonl file (created if missing).
+           """
+       
+    1:     def __init__(self, log_file: Path) -> None:
+    8:         self._log_file = log_file
+       
+    1:     def append(self, operation: str, identifier: str) -> str:
+               """Append a provenance record and return the transaction ID.
+       
+               Record schema:
+                 {
+                   "tx_id":     "<uuid4>",
+                   "timestamp": "<ISO 8601 UTC>",
+                   "operation": "<operation>",
+                   "identifier":"<identifier>"
+                 }
+               """
+   22:         tx_id = str(uuid.uuid4())
+   22:         record = {
+   22:             "tx_id": tx_id,
+   22:             "timestamp": datetime.now(timezone.utc).isoformat(),
+   22:             "operation": operation,
+   22:             "identifier": identifier,
+               }
+   22:         self._log_file.parent.mkdir(parents=True, exist_ok=True)
+   44:         with self._log_file.open("a", encoding="utf-8") as fh:
+   22:             fh.write(json.dumps(record) + "\n")
+   22:         return tx_id
+       
+    1:     def read_all(self) -> list[dict]:
+               """Return all records in the log, oldest first.
+       
+               Returns an empty list if the log file doesn't exist.
+               """
+    4:         if not self._log_file.exists():
+    1:             return []
+    3:         records = []
+   13:         for line in self._log_file.read_text(encoding="utf-8").splitlines():
+   10:             line = line.strip()
+   10:             if line:
+    9:                 records.append(json.loads(line))
+    3:         return records

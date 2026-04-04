@@ -1,0 +1,119 @@
+    1: """Value types and type aliases for the epistemic domain.
+       
+       No external dependencies. No I/O. Pure data definitions.
+       """
+    1: from __future__ import annotations
+       
+    1: from dataclasses import dataclass
+    1: from enum import Enum, auto
+    1: from typing import NewType
+       
+       
+       # ── Typed identifiers ─────────────────────────────────────────────
+       # NewType gives nominal typing: ClaimId and AnalysisId are both str at
+       # runtime, but the type checker treats them as distinct types.
+       
+    1: ClaimId = NewType("ClaimId", str)
+    1: AssumptionId = NewType("AssumptionId", str)
+    1: PredictionId = NewType("PredictionId", str)
+    1: TheoryId = NewType("TheoryId", str)
+    1: DiscoveryId = NewType("DiscoveryId", str)
+    1: AnalysisId = NewType("AnalysisId", str)
+    1: IndependenceGroupId = NewType("IndependenceGroupId", str)
+    1: ParameterId = NewType("ParameterId", str)
+    1: ConceptId = NewType("ConceptId", str)
+    1: DeadEndId = NewType("DeadEndId", str)
+    1: PairwiseSeparationId = NewType("PairwiseSeparationId", str)
+       
+       
+       
+       # ── Severity ──────────────────────────────────────────────────────
+       
+    2: class Severity(Enum):
+    1:     INFO = auto()
+    1:     WARNING = auto()
+    1:     CRITICAL = auto()
+       
+       
+    3: @dataclass
+    2: class Finding:
+    1:     """One validation result."""
+    1:     severity: Severity
+    1:     source: str
+    1:     message: str
+       
+       
+       # ── Confidence tiers ──────────────────────────────────────────────
+       
+    2: class ConfidenceTier(Enum):
+    1:     """How strongly a prediction is constrained.
+       
+           A: Zero free parameters — pure prediction from theory.
+           B: Conditional on stated assumptions beyond the core theory.
+           C: Fit/consistency check — not a novel prediction.
+           """
+    1:     A = "A"
+    1:     B = "B"
+    1:     C = "C"
+       
+       
+       # ── Evidence classification ───────────────────────────────────────
+       
+    2: class EvidenceKind(Enum):
+    1:     NOVEL_PREDICTION = "novel_prediction"
+    1:     RETRODICTION = "retrodiction"
+    1:     FIT_CONSISTENCY = "fit_consistency"
+       
+       
+    2: class MeasurementRegime(Enum):
+    1:     MEASURED = "measured"
+    1:     BOUND_ONLY = "bound_only"
+    1:     UNMEASURED = "unmeasured"
+       
+       
+    2: class PredictionStatus(Enum):
+    1:     CONFIRMED = "CONFIRMED"
+    1:     STRESSED = "STRESSED"
+    1:     REFUTED = "REFUTED"
+    1:     PENDING = "PENDING"
+    1:     NOT_YET_TESTABLE = "NOT_YET_TESTABLE"
+       
+       
+    2: class DeadEndStatus(Enum):
+    1:     ACTIVE = "active"
+    1:     RESOLVED = "resolved"
+    1:     ARCHIVED = "archived"
+       
+       
+    2: class TheoryStatus(Enum):
+    1:     ACTIVE = "active"         # currently under investigation
+    1:     REFINED = "refined"       # initial formulation has been updated
+    1:     ABANDONED = "abandoned"   # no longer pursued
+    1:     SUPERSEDED = "superseded" # replaced by a better framework
+       
+       
+    2: class DiscoveryStatus(Enum):
+    1:     NEW = "new"                    # recently found, not yet integrated into the web
+    1:     INTEGRATED = "integrated"      # incorporated as claims or predictions
+    1:     ARCHIVED = "archived"          # historical record only
+       
+       
+    2: class ClaimStatus(Enum):
+    1:     ACTIVE = "active"        # normal, in-use
+    1:     REVISED = "revised"      # statement updated; downstream may need re-evaluation
+    1:     RETRACTED = "retracted"  # found to be wrong; predictions citing it are broken
+       
+       
+    2: class ClaimType(Enum):
+    1:     FOUNDATIONAL = "foundational"  # axiomatic starting point; must not depend on other claims
+    1:     DERIVED = "derived"            # follows from other claims via depends_on
+       
+       
+    2: class ClaimCategory(Enum):
+    1:     NUMERICAL = "numerical"    # a quantitative assertion; should have linked analyses
+    1:     QUALITATIVE = "qualitative"
+       
+       
+    2: class AssumptionType(Enum):
+    1:     EMPIRICAL = "E"        # can in principle be falsified by observation
+    1:     METHODOLOGICAL = "M"   # a choice of method or modelling convention

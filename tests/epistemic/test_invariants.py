@@ -23,6 +23,7 @@ from desitter.epistemic.types import (
     ConfidenceTier,
     EvidenceKind,
     MeasurementRegime,
+    PredictionId,
     PredictionStatus,
     Severity,
 )
@@ -98,6 +99,15 @@ class TestTierConstraints:
         findings = validate_tier_constraints(web)
         assert any("observed_bound" in f.message for f in findings)
 
+    def test_tier_b_with_conditional_on_clean(self):
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tier=ConfidenceTier.B, conditional_on={make_assumption_id(1)})
+        )
+        findings = validate_tier_constraints(web)
+        assert not any("conditional_on" in f.message for f in findings)
+
 
 # ── validate_independence_semantics ───────────────────────────────
 
@@ -116,6 +126,34 @@ class TestIndependenceSemantics:
         web = web.add_pairwise_separation(make_separation(1))
         findings = validate_independence_semantics(web)
         assert not any("Missing pairwise" in f.message for f in findings)
+
+    def test_group_member_backref_mismatch_detected(self, rich_web):
+        web = rich_web.register_independence_group(make_group(2))
+        # Inject inconsistent state directly: P-001 still points at IG-001,
+        # but IG-002 also claims membership.
+        web.independence_groups[make_group_id(2)].member_predictions.add(make_prediction_id(1))
+        findings = validate_independence_semantics(web)
+        assert any("doesn't back-reference" in f.message for f in findings)
+
+    def test_orphan_group_member_is_ignored(self):
+        web = EpistemicWeb().register_independence_group(make_group(1))
+        web.independence_groups[make_group_id(1)].member_predictions.add(PredictionId("P-404"))
+        findings = validate_independence_semantics(web)
+        assert findings == []
+
+    def test_three_groups_report_each_missing_pair(self):
+        web = EpistemicWeb()
+        web = web.register_independence_group(make_group(1))
+        web = web.register_independence_group(make_group(2))
+        web = web.register_independence_group(make_group(3))
+        # Only (1,2) exists, so (1,3) and (2,3) should be flagged.
+        web = web.add_pairwise_separation(make_separation(1, group_a=make_group_id(1), group_b=make_group_id(2)))
+
+        findings = [f for f in validate_independence_semantics(web) if "Missing pairwise" in f.message]
+        assert len(findings) == 2
+        messages = {f.message for f in findings}
+        assert "Missing pairwise separation for (IG-001, IG-003)" in messages
+        assert "Missing pairwise separation for (IG-002, IG-003)" in messages
 
 
 # ── validate_coverage ─────────────────────────────────────────────
@@ -167,6 +205,14 @@ class TestAssumptionTestability:
         )
         findings = validate_assumption_testability(web)
         assert not any(make_assumption_id(1) in f.source for f in findings)
+
+    def test_no_consequence_is_not_flagged(self):
+        web = EpistemicWeb()
+        web = web.register_assumption(
+            make_assumption(1, falsifiable_consequence=None)
+        )
+        findings = validate_assumption_testability(web)
+        assert findings == []
 
 
 # ── validate_retracted_claim_citations ────────────────────────────
@@ -273,6 +319,18 @@ class TestEvidenceConsistency:
                 1,
                 tier=ConfidenceTier.C,
                 evidence_kind=EvidenceKind.FIT_CONSISTENCY,
+            )
+        )
+        findings = validate_evidence_consistency(web)
+        assert findings == []
+
+    def test_tier_a_novel_prediction_clean(self):
+        web = EpistemicWeb()
+        web = web.register_prediction(
+            make_prediction(
+                1,
+                tier=ConfidenceTier.A,
+                evidence_kind=EvidenceKind.NOVEL_PREDICTION,
             )
         )
         findings = validate_evidence_consistency(web)

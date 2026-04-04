@@ -1,0 +1,266 @@
+    1: """Core epistemic entities.
+       
+       Relationships are ID references, not object references. To traverse
+       the graph, go through the EpistemicWeb.
+       
+       Native Python collections throughout: set, list, dict. The web is
+       the encapsulation boundary, not the type system.
+       """
+    1: from __future__ import annotations
+       
+    1: from dataclasses import dataclass, field
+    1: from datetime import date
+    1: from typing import Any
+       
+    1: from .types import (
+           AnalysisId,
+           AssumptionId,
+           AssumptionType,
+           ClaimCategory,
+           ClaimId,
+           ClaimStatus,
+           ClaimType,
+           ConceptId,
+           ConfidenceTier,
+           DeadEndId,
+           DeadEndStatus,
+           DiscoveryId,
+           DiscoveryStatus,
+           EvidenceKind,
+           IndependenceGroupId,
+           MeasurementRegime,
+           ParameterId,
+           PairwiseSeparationId,
+           PredictionId,
+           PredictionStatus,
+           TheoryId,
+           TheoryStatus,
+       )
+       
+       
+    3: @dataclass
+    2: class Claim:
+    1:     """An atomic, falsifiable assertion.
+       
+           depends_on forms a DAG. assumptions and analyses have bidirectional
+           links maintained by the EpistemicWeb.
+       
+           'parameter_constraints' is an annotation map: {ParameterId: constraint_str}.
+           The constraint string is human-readable ("< 0.05", "> 3.0", "in [0.1, 10]").
+           deSitter does not evaluate constraints — it surfaces them when a referenced
+           parameter changes, so the researcher knows to re-check this claim.
+           """
+    1:     id: ClaimId
+    1:     statement: str
+    1:     type: ClaimType
+    1:     scope: str                                   # "global", "domain-specific"
+    1:     falsifiability: str
+    1:     status: ClaimStatus = ClaimStatus.ACTIVE
+    1:     category: ClaimCategory = ClaimCategory.QUALITATIVE
+    1:     assumptions: set[AssumptionId] = field(default_factory=set)
+    1:     depends_on: set[ClaimId] = field(default_factory=set)
+    1:     analyses: set[AnalysisId] = field(default_factory=set)
+    1:     parameter_constraints: dict[ParameterId, str] = field(default_factory=dict)
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
+       
+       
+    3: @dataclass
+    2: class Assumption:
+    1:     """A premise taken as given.
+       
+           'depends_on' captures presupposition: "the detector is linear" depends on
+           "the detector is calibrated." This lets assumption_lineage do a full
+           transitive closure through both claim chains AND assumption chains, so
+           no silent dependency is missed.
+           """
+    1:     id: AssumptionId
+    1:     statement: str
+    1:     type: AssumptionType
+    1:     scope: str
+    1:     used_in_claims: set[ClaimId] = field(default_factory=set)
+    1:     depends_on: set[AssumptionId] = field(default_factory=set)
+    1:     falsifiable_consequence: str | None = None
+    1:     tested_by: set[PredictionId] = field(default_factory=set)
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
+    1:     notes: str | None = None
+       
+       
+    3: @dataclass
+    2: class Prediction:
+    1:     """A testable consequence of one or more claims.
+       
+           'claim_ids' is the set of claims that jointly imply this prediction —
+           the logical derivation chain. Most non-trivial predictions require
+           multiple claims together. Bidirectional maintenance is one-way only:
+           the web validates all claim_ids exist; no backlink on Claim.
+       
+           'tests_assumptions' is the set of assumptions this prediction was
+           explicitly designed to test — i.e., its outcome bears on whether
+           those assumptions hold. Bidirectional with Assumption.tested_by.
+       
+           'derivation' is the prose explanation of why claim_ids → this
+           prediction. Distinct from 'specification' (the formula being tested).
+       
+           'conditional_on' is the set of assumptions this prediction is explicitly
+           conditioned on — i.e., "this prediction holds only if these assumptions
+           hold." Unlike tests_assumptions (which marks assumptions under active
+           test), conditional_on marks assumptions that are taken as given for
+           this prediction to be valid. The web validates all IDs exist.
+           """
+    1:     id: PredictionId
+    1:     observable: str
+    1:     tier: ConfidenceTier
+    1:     status: PredictionStatus
+    1:     evidence_kind: EvidenceKind
+    1:     measurement_regime: MeasurementRegime
+    1:     predicted: Any                               # the predicted value/outcome
+    1:     specification: str | None = None             # formula/relationship being tested (the "what")
+    1:     derivation: str | None = None                # why claim_ids jointly imply this prediction (the "why")
+    1:     claim_ids: set[ClaimId] = field(default_factory=set)
+    1:     tests_assumptions: set[AssumptionId] = field(default_factory=set)
+    1:     analysis: AnalysisId | None = None
+    1:     independence_group: IndependenceGroupId | None = None
+    1:     correlation_tags: set[str] = field(default_factory=set)
+    1:     observed: Any = None
+    1:     observed_bound: Any = None
+    1:     free_params: int = 0
+    1:     conditional_on: set[AssumptionId] = field(default_factory=set)
+    1:     falsifier: str | None = None
+    1:     benchmark_source: str | None = None
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
+    1:     notes: str | None = None
+       
+       
+    3: @dataclass
+    2: class IndependenceGroup:
+    1:     """Predictions sharing a common derivation chain.
+       
+           member_predictions is bidirectional with Prediction.independence_group.
+           """
+    1:     id: IndependenceGroupId
+    1:     label: str
+    1:     claim_lineage: set[ClaimId] = field(default_factory=set)
+    1:     assumption_lineage: set[AssumptionId] = field(default_factory=set)
+    1:     member_predictions: set[PredictionId] = field(default_factory=set)
+    1:     measurement_regime: MeasurementRegime | None = None
+    1:     notes: str | None = None
+       
+       
+    3: @dataclass
+    2: class PairwiseSeparation:
+    1:     """Documents why two independence groups are genuinely separate."""
+    1:     id: PairwiseSeparationId
+    1:     group_a: IndependenceGroupId
+    1:     group_b: IndependenceGroupId
+    1:     basis: str
+       
+       
+    3: @dataclass
+    2: class Analysis:
+    1:     """A piece of analytical work whose results feed back into the epistemic web.
+       
+           deSitter does not run analyses — the researcher runs them using their
+           preferred tools (SageMath, Python, R, Jupyter, etc.) and records the
+           result via `ds record` or the `record_result` MCP tool.
+       
+           'path' and 'command' are provenance pointers: they tell the researcher
+           (or agent) where the code lives and how to run it. deSitter never invokes
+           them. The git SHA at record time is captured on the AnalysisResult, giving
+           a complete immutable provenance chain: path + SHA + recorded value.
+       
+           'uses_parameters' enables staleness detection: when a Parameter changes,
+           health_check can identify which analyses (and therefore which predictions)
+           need to be re-run. Bidirectional with Parameter.used_in_analyses.
+           """
+    1:     id: AnalysisId
+    1:     command: str | None = None                   # how to invoke it (documentation)
+    1:     path: str | None = None                      # path to the file, relative to workspace root
+    1:     claims_covered: set[ClaimId] = field(default_factory=set)
+    1:     uses_parameters: set[ParameterId] = field(default_factory=set)
+    1:     notes: str | None = None
+       
+       
+    3: @dataclass
+    2: class Theory:
+    1:     """A higher-level explanatory framework being explored.
+       
+           A theory motivates and organises claims. Claims are the atomic
+           assertions the theory rests on; predictions are what the theory
+           predicts that could be tested.
+           """
+    1:     id: TheoryId
+    1:     title: str
+    1:     status: TheoryStatus
+    1:     summary: str | None = None
+    1:     related_claims: set[ClaimId] = field(default_factory=set)
+    1:     related_predictions: set[PredictionId] = field(default_factory=set)
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, citation
+       
+       
+    3: @dataclass
+    2: class Discovery:
+    1:     """A significant finding during research."""
+    1:     id: DiscoveryId
+    1:     title: str
+    1:     date: date
+    1:     summary: str
+    1:     impact: str
+    1:     status: DiscoveryStatus
+    1:     related_claims: set[ClaimId] = field(default_factory=set)
+    1:     related_predictions: set[PredictionId] = field(default_factory=set)
+    1:     references: list[str] = field(default_factory=list)
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, citation
+       
+       
+    3: @dataclass
+    2: class DeadEnd:
+    1:     """A known dead end or abandoned direction.
+       
+           Records what was tried and why it didn't work. Valuable negative
+           results that constrain the hypothesis space.
+           """
+    1:     id: DeadEndId
+    1:     title: str
+    1:     description: str
+    1:     status: DeadEndStatus
+    1:     related_predictions: set[PredictionId] = field(default_factory=set)
+    1:     related_claims: set[ClaimId] = field(default_factory=set)
+    1:     references: list[str] = field(default_factory=list)
+    1:     source: str | None = None                    # doi:..., arxiv:..., url, or analysis reference
+       
+       
+    3: @dataclass
+    2: class Concept:
+    1:     """A defined term in the project vocabulary."""
+    1:     id: ConceptId
+    1:     term: str
+    1:     definition: str
+    1:     aliases: list[str] = field(default_factory=list)
+    1:     notes: list[str] = field(default_factory=list)
+    1:     references: list[str] = field(default_factory=list)
+    1:     source: str | None = None                    # primary source for this definition
+       
+       
+    3: @dataclass
+    2: class Parameter:
+    1:     """A physical or mathematical constant referenced by analyses.
+       
+           Parameters live in project/data/parameters.json and are available
+           to the researcher when running analyses. They keep constants out of
+           scripts and in a single version-controlled location.
+       
+           'used_in_analyses' is the bidirectional backlink to Analysis.uses_parameters.
+           The EpistemicWeb maintains this automatically when analyses are registered.
+           It enables staleness detection: when this parameter changes, health_check
+           surfaces all analyses (and linked predictions) that need to be re-run.
+           """
+    1:     id: ParameterId
+    1:     name: str
+    1:     value: Any                          # numeric, string, or structured
+    1:     unit: str | None = None             # SI or domain unit, human-readable
+    1:     uncertainty: Any = None             # absolute uncertainty, same type as value
+    1:     source: str | None = None           # citation or derivation note
+    1:     used_in_analyses: set[AnalysisId] = field(default_factory=set)
+    1:     notes: str | None = None
+       
+       

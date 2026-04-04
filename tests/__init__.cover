@@ -1,0 +1,9 @@
+    1: """Test suite for desitter.
+       
+       Structure mirrors the package layout:
+         tests/epistemic/     — domain core: pure Python, no I/O, milliseconds
+         tests/controlplane/  — gateway, validate, render, health (uses fakes)
+         tests/adapters/      — JSON repo, renderer, executor (filesystem fixtures)
+         tests/cli/           — CLI commands (invoked via click.testing.CliRunner)
+         tests/mcp/           — MCP tool handlers (gateway fakes)
+       """

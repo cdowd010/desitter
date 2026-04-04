@@ -122,6 +122,24 @@ class TestRemoveClaim:
         web = web.remove_claim(make_claim_id(1))
         assert make_claim_id(1) not in web.theories[make_theory_id(1)].related_claims
 
+    def test_discovery_soft_ref_scrubbed(self, rich_web):
+        web = rich_web.register_discovery(
+            make_discovery(2, related_claims={make_claim_id(1)})
+        )
+        web = web.remove_prediction(make_prediction_id(1))
+        web = web.remove_claim(make_claim_id(2))
+        web = web.remove_claim(make_claim_id(1))
+        assert make_claim_id(1) not in web.discoveries[make_discovery_id(2)].related_claims
+
+    def test_dead_end_soft_ref_scrubbed(self, rich_web):
+        web = rich_web.register_dead_end(
+            make_dead_end(2, related_claims={make_claim_id(1)})
+        )
+        web = web.remove_prediction(make_prediction_id(1))
+        web = web.remove_claim(make_claim_id(2))
+        web = web.remove_claim(make_claim_id(1))
+        assert make_claim_id(1) not in web.dead_ends[make_dead_end_id(2)].related_claims
+
     def test_group_lineage_scrubbed(self, rich_web):
         web = rich_web.remove_prediction(make_prediction_id(1))
         web = web.remove_claim(make_claim_id(2))
@@ -162,6 +180,20 @@ class TestRemoveAssumption:
         with pytest.raises(BrokenReferenceError):
             empty_web.remove_assumption(AssumptionId("nope"))
 
+    def test_blocked_by_prediction_tests_assumptions(self, web_with_assumptions):
+        web = web_with_assumptions.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)})
+        )
+        with pytest.raises(BrokenReferenceError, match="still referenced"):
+            web.remove_assumption(make_assumption_id(1))
+
+    def test_blocked_by_prediction_conditional_on(self, web_with_assumptions):
+        web = web_with_assumptions.register_prediction(
+            make_prediction(1, conditional_on={make_assumption_id(1)})
+        )
+        with pytest.raises(BrokenReferenceError, match="still referenced"):
+            web.remove_assumption(make_assumption_id(1))
+
 
 # ── remove_parameter ──────────────────────────────────────────────
 
@@ -185,6 +217,20 @@ class TestRemoveParameter:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.remove_parameter(ParameterId("nope"))
+
+    def test_removing_one_parameter_keeps_other_constraints(self, web_with_params):
+        web = web_with_params.register_claim(
+            make_claim(
+                1,
+                parameter_constraints={
+                    make_parameter_id(1): "> 0",
+                    make_parameter_id(2): "< 10",
+                },
+            )
+        )
+        web = web.remove_parameter(make_parameter_id(2))
+        assert make_parameter_id(2) not in web.claims[make_claim_id(1)].parameter_constraints
+        assert web.claims[make_claim_id(1)].parameter_constraints[make_parameter_id(1)] == "> 0"
 
 
 # ── remove_analysis ───────────────────────────────────────────────
@@ -241,6 +287,14 @@ class TestRemoveIndependenceGroup:
     def test_nonexistent_raises(self, empty_web):
         with pytest.raises(BrokenReferenceError):
             empty_web.remove_independence_group(IndependenceGroupId("nope"))
+
+    def test_can_remove_after_pairwise_removed(self, empty_web):
+        web = empty_web.register_independence_group(make_group(1))
+        web = web.register_independence_group(make_group(2))
+        web = web.add_pairwise_separation(make_separation(1))
+        web = web.remove_pairwise_separation(make_sep_id(1))
+        web = web.remove_independence_group(make_group_id(1))
+        assert make_group_id(1) not in web.independence_groups
 
 
 # ── remove_theory / discovery / dead_end / concept / pairwise_separation ─

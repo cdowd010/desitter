@@ -153,6 +153,17 @@ class TestRefutationImpact:
         impact = empty_web.refutation_impact(PredictionId("nope"))
         assert impact["claim_ids"] == set()
 
+    def test_claim_ancestors_excludes_direct_claim_ids(self, web_with_assumptions):
+        web = web_with_assumptions
+        web = web.register_claim(make_claim(1))
+        web = web.register_claim(make_claim(2, type=ClaimType.DERIVED, depends_on={make_claim_id(1)}))
+        web = web.register_claim(make_claim(3, type=ClaimType.DERIVED, depends_on={make_claim_id(2)}))
+        web = web.register_prediction(make_prediction(1, claim_ids={make_claim_id(3)}))
+
+        impact = web.refutation_impact(make_prediction_id(1))
+        assert impact["claim_ids"] == {make_claim_id(3)}
+        assert impact["claim_ancestors"] == {make_claim_id(1), make_claim_id(2)}
+
 
 # ── assumption_support_status ─────────────────────────────────────
 
@@ -167,6 +178,14 @@ class TestAssumptionSupportStatus:
         status = empty_web.assumption_support_status(AssumptionId("nope"))
         assert status["direct_claims"] == set()
 
+    def test_conditional_dependency_counted(self, web_with_assumptions):
+        web = web_with_assumptions.register_prediction(
+            make_prediction(1, conditional_on={make_assumption_id(1)})
+        )
+        status = web.assumption_support_status(make_assumption_id(1))
+        assert make_prediction_id(1) in status["dependent_predictions"]
+        assert status["tested_by"] == set()
+
 
 # ── claims_depending_on_claim ─────────────────────────────────────
 
@@ -177,6 +196,18 @@ class TestClaimsDependingOnClaim:
 
     def test_leaf_has_no_dependants(self, web_with_claim_chain):
         assert web_with_claim_chain.claims_depending_on_claim(make_claim_id(2)) == set()
+
+    def test_transitive_downstream(self, web_with_assumptions):
+        web = web_with_assumptions
+        web = web.register_claim(make_claim(1))
+        web = web.register_claim(make_claim(2, type=ClaimType.DERIVED, depends_on={make_claim_id(1)}))
+        web = web.register_claim(make_claim(3, type=ClaimType.DERIVED, depends_on={make_claim_id(2)}))
+        web = web.register_claim(make_claim(4, type=ClaimType.DERIVED, depends_on={make_claim_id(3)}))
+        downstream = web.claims_depending_on_claim(make_claim_id(1))
+        assert downstream == {make_claim_id(2), make_claim_id(3), make_claim_id(4)}
+
+    def test_nonexistent_claim(self, empty_web):
+        assert empty_web.claims_depending_on_claim(ClaimId("nope")) == set()
 
 
 # ── predictions_depending_on_claim ────────────────────────────────
@@ -191,6 +222,9 @@ class TestPredictionsDependingOnClaim:
         So predictions_depending_on_claim(C-001) should include P-001."""
         preds = rich_web.predictions_depending_on_claim(make_claim_id(1))
         assert make_prediction_id(1) in preds
+
+    def test_nonexistent_claim(self, empty_web):
+        assert empty_web.predictions_depending_on_claim(ClaimId("nope")) == set()
 
 
 # ── parameter_impact ──────────────────────────────────────────────
@@ -229,3 +263,29 @@ class TestParameterImpact:
         )
         impact = web.parameter_impact(make_parameter_id(1))
         assert make_prediction_id(1) in impact["affected_predictions"]
+
+    def test_constraint_claim_propagates_to_downstream_prediction(self, web_with_assumptions):
+        web = web_with_assumptions.register_parameter(make_parameter(1))
+        web = web.register_claim(
+            make_claim(1, parameter_constraints={make_parameter_id(1): "> 0"})
+        )
+        web = web.register_claim(
+            make_claim(2, type=ClaimType.DERIVED, depends_on={make_claim_id(1)})
+        )
+        web = web.register_prediction(
+            make_prediction(1, claim_ids={make_claim_id(2)})
+        )
+        impact = web.parameter_impact(make_parameter_id(1))
+        assert make_claim_id(1) in impact["constrained_claims"]
+        assert make_prediction_id(1) in impact["affected_predictions"]
+
+    def test_stale_backlink_to_missing_analysis_does_not_crash(self):
+        web = EpistemicWeb().register_parameter(make_parameter(1))
+        # Inject inconsistent state directly: parameter backlink points to
+        # an analysis that is no longer present.
+        web.parameters[make_parameter_id(1)].used_in_analyses.add(AnalysisId("AN-404"))
+
+        impact = web.parameter_impact(make_parameter_id(1))
+        assert AnalysisId("AN-404") in impact["stale_analyses"]
+        assert impact["affected_claims"] == set()
+        assert impact["affected_predictions"] == set()

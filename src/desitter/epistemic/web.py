@@ -751,11 +751,13 @@ class EpistemicWeb:
         for anid in claim.analyses:
             if anid in new.analyses:
                 new.analyses[anid].claims_covered.discard(cid)
-        # Scrub soft references in theories and dead ends
+        # Scrub soft references in theories, dead ends, and discoveries
         for theory in new.theories.values():
             theory.related_claims.discard(cid)
         for dead_end in new.dead_ends.values():
             dead_end.related_claims.discard(cid)
+        for discovery in new.discoveries.values():
+            discovery.related_claims.discard(cid)
         # Scrub claim_lineage annotations in independence groups
         for group in new.independence_groups.values():
             group.claim_lineage.discard(cid)

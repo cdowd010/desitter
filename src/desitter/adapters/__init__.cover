@@ -1,0 +1,11 @@
+    1: """Infrastructure adapters.
+       
+       Implements the ports defined in epistemic/ports.py using stdlib I/O.
+       All adapters are thin — no business logic lives here.
+       
+       Dependency rule: adapters depend on epistemic (for ports/types), never
+       on controlplane/views/features. Those layers depend on adapters through the ports.
+       
+       External library rule: stdlib only (json, pathlib, subprocess, hashlib).
+       No third-party imports at module level.
+       """

@@ -195,6 +195,11 @@ class TestRegisterClaim:
         with pytest.raises(BrokenReferenceError):
             empty_web.register_claim(c)
 
+    def test_analysis_missing_raises(self, web_with_assumptions):
+        c = make_claim(1, analyses={AnalysisId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            web_with_assumptions.register_claim(c)
+
     def test_cycle_raises(self, web_with_assumptions):
         web = web_with_assumptions.register_claim(
             make_claim(1, assumptions={make_assumption_id(1)})
@@ -282,6 +287,15 @@ class TestRegisterPrediction:
         with pytest.raises(BrokenReferenceError):
             web_with_claim_chain.register_prediction(p)
 
+    def test_missing_tests_assumptions_raises(self, web_with_claim_chain):
+        p = make_prediction(
+            1,
+            claim_ids={make_claim_id(1)},
+            tests_assumptions={AssumptionId("nonexistent")},
+        )
+        with pytest.raises(BrokenReferenceError):
+            web_with_claim_chain.register_prediction(p)
+
     def test_missing_conditional_on_raises(self, web_with_claim_chain):
         p = make_prediction(
             1,
@@ -310,6 +324,11 @@ class TestRegisterTheory:
         with pytest.raises(BrokenReferenceError):
             empty_web.register_theory(t)
 
+    def test_missing_prediction_raises(self, empty_web):
+        t = make_theory(1, related_predictions={PredictionId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_theory(t)
+
     def test_duplicate_raises(self, empty_web):
         web = empty_web.register_theory(make_theory(1))
         with pytest.raises(DuplicateIdError):
@@ -331,6 +350,11 @@ class TestRegisterIndependenceGroup:
 
     def test_missing_claim_lineage_raises(self, empty_web):
         g = make_group(1, claim_lineage={ClaimId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_independence_group(g)
+
+    def test_missing_assumption_lineage_raises(self, empty_web):
+        g = make_group(1, assumption_lineage={AssumptionId("nonexistent")})
         with pytest.raises(BrokenReferenceError):
             empty_web.register_independence_group(g)
 
@@ -391,6 +415,16 @@ class TestRegisterDiscovery:
         with pytest.raises(DuplicateIdError):
             web.register_discovery(make_discovery(1))
 
+    def test_missing_claim_ref_raises(self, empty_web):
+        d = make_discovery(1, related_claims={ClaimId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_discovery(d)
+
+    def test_missing_prediction_ref_raises(self, empty_web):
+        d = make_discovery(1, related_predictions={PredictionId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_discovery(d)
+
 
 # ── register_dead_end ─────────────────────────────────────────────
 
@@ -403,6 +437,16 @@ class TestRegisterDeadEnd:
         web = empty_web.register_dead_end(make_dead_end(1))
         with pytest.raises(DuplicateIdError):
             web.register_dead_end(make_dead_end(1))
+
+    def test_missing_claim_ref_raises(self, empty_web):
+        d = make_dead_end(1, related_claims={ClaimId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_dead_end(d)
+
+    def test_missing_prediction_ref_raises(self, empty_web):
+        d = make_dead_end(1, related_predictions={PredictionId("nonexistent")})
+        with pytest.raises(BrokenReferenceError):
+            empty_web.register_dead_end(d)
 
 
 # ── register_concept ──────────────────────────────────────────────

@@ -1,0 +1,61 @@
+    1: """JSON-backed implementation of WebRepository.
+       
+       Loads and saves the epistemic web as a collection of JSON files under
+       project/data/. Each entity type has its own file:
+         claims.json, assumptions.json, predictions.json, analyses.json,
+         independence_groups.json, theories.json, discoveries.json,
+         dead_ends.json, concepts.json, parameters.json
+       
+       Implements the WebRepository protocol from epistemic/ports.py.
+       """
+    1: from __future__ import annotations
+       
+    1: import json
+    1: from pathlib import Path
+       
+    1: from ..epistemic.web import EpistemicWeb
+       
+       
+    2: class JsonRepository:
+    1:     """Loads and saves the epistemic web as JSON files on disk.
+       
+           data_dir: the project/data/ directory containing entity JSON files.
+           """
+       
+    1:     def __init__(self, data_dir: Path) -> None:
+    8:         self._data_dir = data_dir
+       
+    1:     def load(self) -> EpistemicWeb:
+               """Deserialise all entity JSON files and return a fully hydrated EpistemicWeb.
+       
+               Missing files are treated as empty registries (not an error).
+               """
+               raise NotImplementedError
+       
+    1:     def save(self, web: EpistemicWeb) -> None:
+               """Serialise the web to JSON files, one per entity type.
+       
+               Writes atomically (write to temp file, then rename) to avoid
+               partial writes on crash.
+               """
+               raise NotImplementedError
+       
+    1:     def _load_file(self, name: str) -> list[dict]:
+               """Read and parse a single entity JSON file.
+       
+               Returns an empty list if the file doesn't exist.
+               """
+    5:         path = self._data_dir / name
+    5:         if not path.exists():
+    1:             return []
+    4:         return json.loads(path.read_text(encoding="utf-8"))
+       
+    1:     def _write_file(self, name: str, data: list[dict]) -> None:
+               """Write entity data to a JSON file atomically."""
+    5:         path = self._data_dir / name
+    5:         tmp = path.with_suffix(".json.tmp")
+   10:         tmp.write_text(
+    5:             json.dumps(data, indent=2, default=str, ensure_ascii=False),
+    5:             encoding="utf-8",
+               )
+    5:         tmp.replace(path)

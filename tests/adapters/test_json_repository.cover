@@ -1,0 +1,62 @@
+    1: """Tests for adapters/json_repository.py — _load_file and _write_file."""
+    1: from __future__ import annotations
+       
+    1: import json
+       
+    1: import pytest
+       
+    1: from desitter.adapters.json_repository import JsonRepository
+       
+       
+    2: class TestLoadFile:
+    1:     def test_missing_file_returns_empty(self, tmp_path):
+    1:         repo = JsonRepository(tmp_path)
+    1:         result = repo._load_file("nonexistent.json")
+    1:         assert result == []
+       
+    1:     def test_valid_json_file(self, tmp_path):
+    1:         data = [{"id": "C-001", "statement": "x"}]
+    1:         (tmp_path / "claims.json").write_text(json.dumps(data), encoding="utf-8")
+    1:         repo = JsonRepository(tmp_path)
+    1:         result = repo._load_file("claims.json")
+    1:         assert result == data
+       
+    1:     def test_empty_list(self, tmp_path):
+    1:         (tmp_path / "empty.json").write_text("[]", encoding="utf-8")
+    1:         repo = JsonRepository(tmp_path)
+    1:         assert repo._load_file("empty.json") == []
+       
+    1:     def test_invalid_json_raises(self, tmp_path):
+    1:         (tmp_path / "bad.json").write_text("{not valid json", encoding="utf-8")
+    1:         repo = JsonRepository(tmp_path)
+    2:         with pytest.raises(json.JSONDecodeError):
+    1:             repo._load_file("bad.json")
+       
+       
+    2: class TestWriteFile:
+    1:     def test_creates_file(self, tmp_path):
+    1:         repo = JsonRepository(tmp_path)
+    1:         data = [{"id": "C-001"}]
+    1:         repo._write_file("out.json", data)
+    1:         assert (tmp_path / "out.json").exists()
+    1:         loaded = json.loads((tmp_path / "out.json").read_text())
+    1:         assert loaded == data
+       
+    1:     def test_atomic_write_no_tmp_left(self, tmp_path):
+    1:         repo = JsonRepository(tmp_path)
+    1:         repo._write_file("out.json", [{"a": 1}])
+    1:         assert not (tmp_path / "out.json.tmp").exists()
+       
+    1:     def test_overwrites_existing(self, tmp_path):
+    1:         repo = JsonRepository(tmp_path)
+    1:         repo._write_file("out.json", [{"v": 1}])
+    1:         repo._write_file("out.json", [{"v": 2}])
+    1:         loaded = json.loads((tmp_path / "out.json").read_text())
+    1:         assert loaded == [{"v": 2}]
+       
+    1:     def test_roundtrip(self, tmp_path):
+    1:         repo = JsonRepository(tmp_path)
+    6:         original = [{"id": f"item-{i}", "val": i} for i in range(5)]
+    1:         repo._write_file("data.json", original)
+    1:         loaded = repo._load_file("data.json")
+    1:         assert loaded == original
