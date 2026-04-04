@@ -1,666 +1,678 @@
 # Architecture
 
-This document explains how deSitter works end-to-end: the layer model, the epistemic domain, data flow through the system, key design decisions, and the package dependency rules.
+This document explains how deSitter works from the ground up. It starts with the innermost kernel — the pure Python domain that defines what research knowledge *is* and how it holds together — and builds outward through each layer in turn, finishing at the human and AI interfaces where researchers and agents actually interact with the system. Readers who want to understand why the system is structured the way it is, how the pieces fit together, or where to add new behaviour should read this end-to-end. Readers who want to understand only one specific layer can jump directly to that section, but the kernel section is a prerequisite for all of them.
 
 ---
 
-## Table of Contents
+## The Problem This System Solves
 
-1. [What deSitter Is](#1-what-desitter-is)
-2. [The Layer Cake](#2-the-layer-cake)
-3. [The Epistemic Web](#3-the-epistemic-web)
-4. [Data Flow: Registering a Claim](#4-data-flow-registering-a-claim)
-5. [Data Flow: Health Check](#5-data-flow-health-check)
-6. [Package Layout and Dependency Rules](#6-package-layout-and-dependency-rules)
-7. [The Gateway](#7-the-gateway)
-8. [ProjectContext](#8-projectcontext)
-9. [The Adapter Pattern](#9-the-adapter-pattern)
-10. [Key Design Decisions](#10-key-design-decisions)
-11. [Architecture Remediation Plan](#11-architecture-remediation-plan)
-12. [Boundary Test Matrix](#12-boundary-test-matrix)
-13. [Scale Strategy For Query Performance](#13-scale-strategy-for-query-performance)
+Research projects accumulate a hidden graph of dependencies between ideas. A claim depends on an assumption. A prediction follows from that claim. An analysis tests that prediction. A parameter change invalidates the analysis. These relationships exist whether or not you track them, but when they are implicit, they break silently: a refuted prediction does not update the claims that rely on it, a changed assumption does not propagate, a deleted entity leaves broken references in a dozen other records, and months later nobody knows why a conclusion was drawn or whether the underlying support was ever intact.
+
+**Epistemic** means "relating to knowledge and how it is justified." An **epistemic web** is the explicit, machine-checkable graph of those dependencies — what claims exist, what they depend on, what predictions they make, what evidence supports or refutes them, and which analyses performed by the researcher tested which predictions. deSitter manages, validates, and exposes that graph.
+
+deSitter is an **audit scaffold**, not a reasoning engine. It surfaces structural facts about the epistemic graph — missing links, untested assumptions, uncovered predictions, parameter-staleness chains — and gives researchers and AI agents the navigational structure to do their own reasoning. It never makes logical judgments about whether a theory is correct. It never prescribes which experiment to run next. A system that understood what to do next would need to understand the research domain. A system that surfaces what is structurally incomplete works equally well for physics, medicine, machine learning, or any empirical discipline.
 
 ---
 
-## 1. What deSitter Is
+## The Epistemic Kernel
 
-### The problem
+The kernel is the innermost ring of the system. It lives entirely in `src/desitter/epistemic/` and consists of five Python modules: `types.py`, `model.py`, `web.py`, `invariants.py`, and `ports.py`. The kernel has a single hard rule: **it performs no I/O and imports nothing outside the Python standard library.** No JSON parsing, no file writes, no database calls, no HTTP, no subprocesses. This constraint is what makes the kernel testable in isolation and what lets every layer above it depend on the kernel without pulling in any infrastructure concerns.
 
-Research projects accumulate a hidden graph of dependencies between ideas. A claim depends on an assumption. A prediction follows from that claim. An analysis tests that prediction. These relationships exist whether or not you track them — but when they're implicit, they break silently: a refuted prediction doesn't update the claims that rely on it, a changed assumption doesn't propagate, and months later nobody knows why a conclusion was drawn.
+### Foundation: Typed Identifiers and Value Types (`types.py`)
 
-**Epistemic** means "relating to knowledge and how it's justified." An **epistemic web** is the explicit, machine-checkable graph of those dependencies: what claims exist, what they depend on, what predictions they make, and what evidence supports or refutes them.
+Before any entity can be defined, the kernel needs a vocabulary of types. Every entity in the system has a string identifier, but allowing a `ClaimId` to be passed where a `PredictionId` is expected would be a silent bug — a prediction that claims to depend on "P-001" but actually meant "C-001" is a data corruption issue, not a type error, if all IDs are plain strings.
 
-deSitter manages that graph.
-
-### The Audit Scaffold Principle
-
-deSitter is an **audit scaffold**, not a reasoning engine. It surfaces structural facts about the epistemic graph — missing links, untested assumptions, uncovered predictions — and gives researchers and AI agents the navigational structure to do their own reasoning.
-
-**What deSitter does:**
-- Records the structure of the epistemic graph
-- Enforces referential integrity and bidirectional invariants
-- Reports structural observations (`StructuralGap`, `Finding`)
-- Exposes a traversal API so agents can navigate the graph
-
-**What deSitter does not do:**
-- Make logical judgments about whether a theory is correct
-- Prescribe which experiments to run
-- Suggest how to fix a structural gap
-- Execute analyses (the researcher runs them; deSitter records the results)
-
-This distinction matters. An AI agent calling `get_structural_gaps` gets a list of observations — "Assumption A-003 has a falsifiable consequence but no predictions in `tested_by`" — and applies its own domain knowledge to decide what to do about it. deSitter provides the map. The researcher or agent is the auditor.
-
-### Control plane vs. data plane
-
-- The **data plane** is the project state on disk: canonical JSON registries of claims and predictions, generated markdown views, recorded analysis results. This is the research artifact.
-- The **control plane** is the code that manages that data plane: validates consistency, renders views, records results, and exposes everything through a stable API. This is deSitter.
-- The **epistemic web** is the in-memory representation of the data plane that the control plane works with — the domain model at the core.
-
----
-
-## 2. The Layer Cake
-
-### What is MCP?
-
-MCP (Model Context Protocol) is an open standard that lets AI agents (Claude, Cursor, GitHub Copilot, etc.) call typed tools exposed by a server — similar to REST APIs, but designed specifically for AI agent use. Instead of an HTTP request, an agent calls a named tool with structured arguments and gets a structured result back. No subprocess wrangling, no screen scraping.
-
-deSitter's MCP server is the primary interface for AI agents. An agent calls `register_claim(...)` or `run_health_check()` directly as a tool, with full type information and structured responses.
-
-### The layers
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Interface Layer (interfaces/) — equal peers         │
-│  cli/  Humans + scripts       mcp/  AI agents        │
-│  rest/ future · gui/ future · sdk/ future            │
-└─────────────────────┬────────────────────────────────┘
-                      │  (no business logic in any interface)
-┌─────────────────────▼────────────────────────────────┐
-│  View Services (views/) — always available           │
-│  health · render · status · metrics                  │
-│  Read-only composed summaries + derived files        │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Core Services (controlplane/) — always available            │
-│  Mutations:  gateway · results                       │
-│  Queries:    validate · check · export               │
-│  Policy:     automation (render-trigger table)       │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Config (config.py) — runtime contract               │
-│  DesitterConfig · ProjectContext · ProjectPaths       │
-│  load_config() · build_context()                     │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Infrastructure Adapters (adapters/)                 │
-│  json_repository · transaction_log                   │
-│  markdown_renderer                                   │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Epistemic Kernel (epistemic/) — pure Python, no I/O │
-│  model · web · invariants · types · ports            │
-└──────────────────────────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Data Plane — filesystem                             │
-│  project/data/ (entity JSON) · project/views/ (md)  │
-└──────────────────────────────────────────────────────┘
-```
-
-**Hard dependency rule:** arrows point down only. No layer may import from a layer above it.
-
-```mermaid
-graph TD
-    IFACE["interfaces/*"] --> VIEWS["views/"]
-    IFACE --> CORE["controlplane/"]
-    VIEWS --> CORE
-    CORE --> ADP["adapters/"]
-    CORE --> EPI["epistemic/"]
-    ADP --> EPI
-    CORE -.->|"through abstract interfaces"| ADP
-```
-
-The dashed arrow means `controlplane/` uses adapters only through abstract interfaces defined in `epistemic/ports.py` — it never imports a concrete adapter class directly. Concrete adapters are wired together in the interface layer at startup when the Gateway is constructed.
-
-### Interface layer design
-
-All entry points live under `interfaces/` as equal peers. No interface is primary:
-
-- `interfaces/cli/` — humans and scripts (Click commands + Rich formatting)
-- `interfaces/mcp/` — AI agents (FastMCP tools)
-- `interfaces/rest/` — future REST API
-- `interfaces/gui/` — future web UI
-- `interfaces/sdk/` — future Python SDK
-
-Every interface is a **thin adapter**: parse inputs, call the same controlplane/views/features function, format outputs. If a handler contains business logic, it belongs in `controlplane/` or `views/` instead.
-
-One exception: agent scaffolding (`.desitter/agents.md`, `get_protocol`, `ds init --with-agent`) lives in `interfaces/mcp/` only. It is AI-agent-specific documentation infrastructure, not shared product logic.
-
----
-
-## 3. The Epistemic Web
-
-### A concrete example first
-
-Consider a physics research project making claims about E8 symmetry theory:
-
-```
-Claim C-001: "E8 symmetry predicts the W boson mass"
-  └─ depends on Assumption A-001: "The gauge group is compact and simple"
-  └─ covered by Analysis AN-001: gauge_couplings.py
-
-Prediction P-001: "W mass = 80.379 GeV"  [Tier A, status: CONFIRMED]
-  └─ follows from Claim C-001
-  └─ tested by Analysis AN-001
-  └─ member of IndependenceGroup G-001: "electroweak_sector"
-  └─ observed value: 80.377 GeV
-```
-
-The epistemic web is the live, validated graph of all these relationships across an entire research project. The same structure works for machine learning ("Attention is sufficient for sequence modeling" → BLEU score prediction), medicine (drug trial → hazard ratio prediction), or any empirical discipline.
-
-### Entity types
-
-```mermaid
-erDiagram
-    Claim ||--o{ Assumption : "depends on"
-    Claim ||--o{ Claim : "depends_on (DAG)"
-    Claim ||--o{ Analysis : "covered_by"
-    Prediction }o--o{ Claim : "claim_ids"
-    Prediction }o--o{ Assumption : "tests_assumptions"
-    Prediction }o--o{ Assumption : "conditional_on"
-    Prediction }o--o| Analysis : "analysis"
-    Prediction }o--o| IndependenceGroup : "independence_group"
-    IndependenceGroup ||--o{ Prediction : "member_predictions"
-    IndependenceGroup ||--|| PairwiseSeparation : "separated_from"
-    Theory }o--o{ Claim : "related_claims"
-    Theory }o--o{ Prediction : "related_predictions"
-    DeadEnd }o--o{ Prediction : "related_predictions"
-    DeadEnd }o--o{ Claim : "related_claims"
-    Analysis ||--o{ Parameter : "uses_parameters"
-    Parameter ||--o{ Analysis : "used_in_analyses"
-```
-
-| Entity | Role |
-|--------|------|
-| **Claim** | Atomic falsifiable assertion. Forms a DAG via `depends_on` — derived claims build on foundational ones. `parameter_constraints` is an annotation map `{ParameterId: constraint_str}` — deSitter surfaces these when the referenced parameter changes so the researcher knows to re-check the claim. |
-| **Assumption** | Premise taken as given. Empirical [E] assumptions may have a `falsifiable_consequence`; methodological [M] ones describe how the study is run. `depends_on` captures presupposition chains between assumptions. |
-| **Prediction** | Testable consequence of one or more claims. Has a tier, status, and measurement regime. `claim_ids` is the full set of claims that jointly imply this prediction. `tests_assumptions` marks assumptions under active test; `conditional_on` marks assumptions taken as given for the prediction to be valid. |
-| **Analysis** | A piece of analytical work. deSitter never runs it — the researcher runs it and records the result via `ds record` or the `record_result` MCP tool. `path` and `command` are provenance pointers. `uses_parameters` links to all parameters the analysis depends on, enabling staleness detection. |
-| **IndependenceGroup** | A cluster of predictions sharing a common derivation chain. Prevents overcounting correlated evidence — two analyses that both depend on the same data aren't independent. |
-| **PairwiseSeparation** | Documents the explicit justification for why two independence groups are genuinely separate. Every pair of groups must have a separation record — enforced by `validate_independence_semantics`. |
-| **Theory** | Higher-level explanatory framework. Organises related claims and predictions. |
-| **Discovery** | A significant finding worth recording, even if it doesn't fit neatly into claims or predictions. |
-| **DeadEnd** | A known dead end or abandoned direction. Valuable negative results that constrain the hypothesis space. |
-| **Concept** | A defined vocabulary term specific to the project. |
-| **Parameter** | A physical or mathematical constant (e.g., `c = 3e8 m/s`) referenced by analyses. Enables staleness detection: when a parameter changes, `check_stale` identifies which analyses need re-running. `used_in_analyses` is the bidirectional backlink maintained automatically by the web. |
-
-### Bidirectional invariants
-
-Five relationships in the web are **bidirectional** — both sides of the link must always agree. This is enforced at mutation time, not checked after the fact.
-
-| If... | Then... |
-|-------|---------|
-| `claim.assumptions` contains `A-001` | `assumption.used_in_claims` must contain `C-001` |
-| `analysis.claims_covered` contains `C-001` | `claim.analyses` must contain `AN-001` |
-| `prediction.independence_group` is `G-001` | `group.member_predictions` must contain `P-001` |
-| `prediction.tests_assumptions` contains `A-001` | `assumption.tested_by` must contain `P-001` |
-| `analysis.uses_parameters` contains `PAR-001` | `parameter.used_in_analyses` must contain `AN-001` |
-
-**Why bother?** Without this, a claim can reference an assumption that doesn't know it's being used. If you ask "which claims depend on A-001?", the answer is wrong — and you might delete A-001 thinking nothing needs it. Bidirectionality makes graph traversal safe in both directions.
-
-### Domain invariant validators
-
-Ten pure validator functions in `epistemic/invariants.py` check the web on demand. Each takes an `EpistemicWeb` and returns `list[Finding]`. `validate_all` composes them.
-
-| Validator | What it checks |
-|-----------|----------------|
-| `validate_tier_constraints` | Tier A predictions have 0 free params; Tier B have `conditional_on`; MEASURED predictions have an observed value |
-| `validate_independence_semantics` | Group membership consistency; every group pair has a `PairwiseSeparation` |
-| `validate_coverage` | Claims without analyses; Tier A predictions without independence groups |
-| `validate_assumption_testability` | Empirical assumptions with a `falsifiable_consequence` but no `tested_by` predictions |
-| `validate_retracted_claim_citations` | Predictions and claims that still cite retracted claims |
-| `validate_implicit_assumption_coverage` | Predictions that implicitly rest on empirical assumptions not in `tests_assumptions` |
-| `validate_tests_conditional_overlap` | Predictions where `tests_assumptions` and `conditional_on` share the same assumption (conflicting signals) |
-| `validate_foundational_claim_deps` | Foundational claims that incorrectly have `depends_on` entries |
-| `validate_evidence_consistency` | CONFIRMED/REFUTED predictions without a linked analysis; analyses with no linked predictions |
-| `validate_all` | Composite — runs all validators and returns merged findings |
-
-### Mutation API
-
-`EpistemicWeb` exposes a full copy-on-write mutation API. All methods return a **new web**; the original is untouched.
-
-| Method family | Entities covered |
-|---------------|------------------|
-| `register_*(entity)` | All 11 entity types: claim, assumption, prediction, analysis, theory, independence_group, discovery, dead_end, concept, parameter, pairwise_separation |
-| `update_*(entity)` | claim, assumption, prediction, analysis, theory, independence_group, discovery, dead_end, concept, parameter, pairwise_separation |
-| `remove_*(id)` | prediction, claim, assumption, parameter |
-| `transition_*(id, new_status)` | prediction, claim, theory, discovery, dead_end |
-
-All `register_*` and `update_*` methods enforce referential integrity (no broken IDs), check for cycles where applicable, and maintain all bidirectional links atomically.
-
-### Traversal and impact queries
-
-The web exposes a set of pure query methods for navigating the graph and computing blast radii. These are the primary tools for AI agents and health-check services.
-
-| Method | Returns | Use case |
-|--------|---------|----------|
-| `claim_lineage(cid)` | `set[ClaimId]` | All ancestor claims via `depends_on` (transitive closure) |
-| `assumption_lineage(cid)` | `set[AssumptionId]` | All assumptions reachable from a claim and its ancestors, including assumption presupposition chains |
-| `prediction_implicit_assumptions(pid)` | `set[AssumptionId]` | Every assumption a prediction silently rests on, including `conditional_on` and all assumption `depends_on` chains |
-| `refutation_impact(pid)` | `{claim_ids, claim_ancestors, implicit_assumptions}` | What is called into question when a prediction is refuted |
-| `assumption_support_status(aid)` | `{direct_claims, dependent_predictions, tested_by}` | Everything that depends on an assumption, directly and transitively |
-| `claims_depending_on_claim(cid)` | `set[ClaimId]` | All downstream claims built on this claim (forward traversal) |
-| `predictions_depending_on_claim(cid)` | `set[PredictionId]` | All predictions whose derivation chain includes this claim |
-| `parameter_impact(pid)` | `{stale_analyses, constrained_claims, affected_claims, affected_predictions}` | Full blast radius of a parameter change |
-
-### Prediction tiers
-
-| Tier | Constraint | What it means |
-|------|-----------|---------------|
-| **A** | `free_params == 0` | A pure prediction made before seeing the data. No tunable knobs. The gold standard. |
-| **B** | must set `conditional_on` | Conditional on auxiliary assumptions beyond the core theory. Still a genuine prediction, but weaker than Tier A. |
-| **C** | — | A fit or consistency check. Not a novel prediction — the theory was adjusted to match this data. |
-
-The tier system makes the distinction between "predicted before measurement" and "fit after measurement" explicit and machine-checkable.
-
-### Copy-on-write mutations
-
-Every `EpistemicWeb` mutation returns a **new web**. The original is untouched.
+The kernel uses Python's `NewType` to give each identifier a distinct static type:
 
 ```python
-# Before: web has 5 claims
-new_web = web.register_claim(claim)  # web is unchanged; new_web has 6 claims
-
-# If validation fails on new_web, we simply discard it.
-# web is still intact — free rollback, no cleanup needed.
+ClaimId       = NewType("ClaimId", str)
+AssumptionId  = NewType("AssumptionId", str)
+PredictionId  = NewType("PredictionId", str)
+AnalysisId    = NewType("AnalysisId", str)
+ParameterId   = NewType("ParameterId", str)
+# ... and so on for all eleven entity types
 ```
 
-The cost is O(n) memory per mutation (a full deep copy), acceptable at research scale. The benefit: the gateway never needs an explicit undo mechanism.
+At runtime, a `ClaimId` is just a string. The `NewType` is zero-cost. But the static type checker treats `ClaimId` and `PredictionId` as incompatible types, so passing one where the other is expected is caught before the code runs. This is not a runtime guard — it is documentation that the type checker can enforce.
 
----
+The module also defines several enums that classify entity state. The most important ones for understanding system behaviour:
 
-## 4. Data Flow: Registering a Claim
+**`ConfidenceTier`** classifies how strongly constrained a prediction is.  
+- `FULLY_SPECIFIED`: the prediction was made with zero free parameters — a pure forecast from theory before any data was seen. This is the gold standard. The system enforces that `free_params == 0` for any prediction in this tier.  
+- `CONDITIONAL`: the prediction is valid only if explicitly stated auxiliary assumptions hold. These are real predictions, but weaker than `FULLY_SPECIFIED` because they depend on more than the core theory.  
+- `FIT_CHECK`: the theory was fit to the data, or the data predates the model. Agreement here is unsurprising and constitutes weak evidence at best. The tier makes this explicit.
 
-```mermaid
-sequenceDiagram
-    actor Agent as AI Agent / CLI
-    participant GW as Gateway (controlplane/gateway.py)
-    participant Repo as JsonRepository
-    participant Web as EpistemicWeb
-    participant Val as DomainValidator
-    participant TxLog as TransactionLog
+**`EvidenceKind`** classifies how a prediction relates temporally and methodologically to data.  
+- `NOVEL_PREDICTION`: the forecast was generated before relevant measurements existed.  
+- `RETRODICTION`: the prediction explains already-observed data that was not used to fit parameters.  
+- `FIT_CONSISTENCY`: the agreement is with data that was part of the original fitting procedure.
 
-    Agent->>GW: register("claim", payload)
-    GW->>Repo: load()
-    Repo-->>GW: web (current state)
-    GW->>Web: register_claim(claim)
-    Note over Web: checks refs, cycles, updates back-refs
-    Web-->>GW: new_web (or raises EpistemicError)
-    GW->>Val: validate(new_web)
-    Val-->>GW: findings
-    alt findings contain CRITICAL
-        GW-->>Agent: GatewayResult(status="error", changed=False)
-    else clean
-        GW->>Repo: save(new_web)
-        GW->>TxLog: append("register/claim", claim_id)
-        GW-->>Agent: GatewayResult(status="ok", changed=True, tx_id=…)
-    end
-```
+**`PredictionStatus`** tracks the lifecycle of a prediction as evidence accumulates:  
+`PENDING → CONFIRMED | STRESSED | REFUTED | NOT_YET_TESTABLE`.  
+The `STRESSED` state is meaningful: it means current evidence introduces tension but does not decisively refute the prediction. It is a signal for human review, not an automated conclusion.
 
-Key properties:
+**`Severity`** applies to `Finding` objects produced by validators:  
+- `CRITICAL` means a blocking integrity violation that the gateway will refuse to write.  
+- `WARNING` means a potential issue worth reviewing but not blocking.  
+- `INFO` is non-blocking context.
 
-- **Validate-after-write:** the web is mutated in memory first, *then* validated — but *before* writing to disk. If validation finds a CRITICAL issue, the new web is discarded and the original on-disk state is never touched.
-- **Single path:** MCP tool handlers and CLI commands call the exact same `Gateway.register()` method. No duplicated logic anywhere.
-- **Provenance:** every mutation is logged to the transaction log with a UUID and timestamp, regardless of outcome.
-
----
-
-## 5. Data Flow: Health Check
-
-```mermaid
-sequenceDiagram
-    actor Agent as AI Agent / CLI
-    participant HC as views/health.py
-    participant Val as controlplane/validate.py
-    participant Chk as controlplane/check.py
-
-    Agent->>HC: run_health_check(context, repo, validator)
-    HC->>Val: validate_structure(web)
-    Val-->>HC: structural findings
-    HC->>Chk: check_stale(context)
-    Chk-->>HC: stale analysis findings
-    HC->>Chk: check_refs(context)
-    Chk-->>HC: broken reference findings
-    HC-->>Agent: HealthReport(overall, findings[])
-```
-
-`HealthReport.overall` is `"HEALTHY"`, `"WARNINGS"`, or `"CRITICAL"` — a single machine-readable signal that CI or an agent can act on without parsing the full findings list.
-
----
-
-## 6. Package Layout and Dependency Rules
-
-```
-src/desitter/
-├── __init__.py                  # version, public API re-exports
-├── __main__.py                  # python -m desitter → CLI
-├── config.py                    # DesitterConfig, ProjectContext, ProjectPaths,
-│                                #   load_config(), build_context()
-│
-├── epistemic/                   # ── DOMAIN KERNEL ───────────────────────────
-│   ├── types.py                 # NewType IDs, enums, Finding, Severity
-│   ├── model.py                 # Entity @dataclasses — no methods, no I/O
-│   ├── web.py                   # EpistemicWeb: all mutations to the graph
-│   ├── invariants.py            # Pure functions: (EpistemicWeb) -> list[Finding]
-│   └── ports.py                 # Abstract interfaces (WebRepository, WebRenderer, …)
-│
-├── adapters/                    # ── INFRASTRUCTURE ──────────────────────────
-│   ├── json_repository.py       # implements WebRepository
-│   ├── markdown_renderer.py     # implements WebRenderer
-│   └── transaction_log.py       # implements TransactionLog ✔ done
-│                                # results_repository.py — Phase 6
-│
-├── controlplane/                        # ── CORE SERVICES ───────────────────────────
-│   ├── gateway.py               # Single mutation/query boundary + GatewayResult
-│   ├── validate.py              # validate_project, validate_structure
-│   ├── check.py                 # check_stale, check_refs, sync_prose
-│   ├── export.py                # export_json, export_markdown
-│   └── automation.py            # Render-trigger policy table ✔ done
-│                                # results.py — Phase 6
-│
-├── views/                       # ── VIEW SERVICES ───────────────────────────
-│   ├── health.py                # run_health_check → HealthReport
-│   ├── render.py                # SHA-256 fingerprint cache + incremental render
-│   ├── status.py                # get_status → ProjectStatus
-│   └── metrics.py               # compute_metrics, tier_a_evidence_summary
-│
-└── interfaces/                  # ── INTERFACE ADAPTERS ──────────────────────
-    ├── __init__.py              # Interface layer contract documentation
-    ├── cli/                     # Humans + scripts
-    │   ├── main.py              # Click command tree
-    │   └── formatters.py        # Rich tables + JSON fallback
-    └── mcp/                     # AI agents
-        ├── server.py            # FastMCP entry point
-        └── tools.py             # Tool handlers → thin wrappers over controlplane/views
-        # future: rest/, gui/, sdk/ go here as equal peers
-```
-
-### Allowed import directions
-
-| From | May import | May NOT import |
-|------|-----------|----------------|
-| `epistemic/` | stdlib only | anything |
-| `adapters/` | `epistemic/`, stdlib | `controlplane/`, `views/`, `interfaces/` |
-| `config.py` | stdlib only | anything |
-| `controlplane/` | `epistemic/`, `adapters/` (via protocols), `config` | `views/`, `interfaces/` |
-| `views/` | `controlplane/`, `epistemic/`, `config` | `interfaces/` |
-| `interfaces/*` | all layers above | other interfaces (e.g. `cli/` cannot import `mcp/`) |
-
-`controlplane/` accesses adapters **only through the abstract interfaces defined in `epistemic/ports.py`** — it never imports a concrete adapter class directly. Concrete adapters are wired in the interface layer at startup when the Gateway is constructed.
-
----
-
-## 7. The Gateway
-
-The Gateway is the **single mutation and query boundary**. Both MCP tool handlers and CLI commands call it. There is no other way to mutate the epistemic web.
-
-```python
-class Gateway:
-    def register(self, resource: str, payload: dict, *, dry_run: bool) -> GatewayResult
-    def get(self, resource: str, identifier: str) -> GatewayResult
-    def list(self, resource: str, **filters) -> GatewayResult
-    def set(self, resource: str, identifier: str, payload: dict, *, dry_run: bool) -> GatewayResult
-    def transition(self, resource: str, identifier: str, new_status: str, *, dry_run: bool) -> GatewayResult
-    def query(self, query_type: str, **params) -> GatewayResult
-```
-
-All operations return a `GatewayResult`:
+A `Finding` is simply:
 
 ```python
 @dataclass
-class GatewayResult:
-    status: str           # "ok" | "error" | "CLEAN" | "BLOCKED" | "dry_run"
-    changed: bool         # True if on-disk state was modified
-    message: str          # human-readable summary
-    findings: list[Finding]
-    transaction_id: str | None  # set on successful mutations; None for reads
-    data: dict | None           # populated for get/list/query results
+class Finding:
+    severity: Severity
+    source:   str      # e.g. "predictions/P-001", "independence_groups/G-002"
+    message:  str      # human-readable description of the issue
 ```
 
-This envelope is the contract between the Gateway and all interfaces. MCP tools serialize it to a dict. The CLI formatter renders it with Rich. A future REST API would serialize it to JSON. The contract never changes shape — only how it is presented changes.
+Findings are the system's output language. Every validator, health check, and structural inspection returns a list of `Finding` objects. The location-tagged `source` field lets an interface renderer hyperlink directly to the problematic entity.
 
-`dry_run=True` runs the full mutation and validation pipeline in memory but skips `repo.save()` — useful for checking whether a change would be accepted before committing it.
+### The Entity Model (`model.py`)
 
-### Resource aliases
+`model.py` contains eleven dataclasses — one per entity type in the epistemic web. Each is a pure data record: no methods, no I/O, no logic. Relationships between entities are expressed as sets of typed identifiers, not as object references. To navigate from a `Prediction` to its supporting `Claim` objects, you hold the prediction's `.claim_ids` (a `set[ClaimId]`) and ask the `EpistemicWeb` to look them up. This keeps entities lightweight and makes the `EpistemicWeb` the single place where referential integrity is enforced.
 
-The gateway accepts flexible resource names and resolves them to canonical keys:
+**`Claim`** is an atomic, falsifiable assertion. The most fundamental unit. Claims form a directed acyclic graph through their `depends_on` set: a derived claim lists the claims it is built on, and the web ensures no cycles exist. `assumptions` links to the premises a claim takes as given; `analyses` links to the analyses that cover it. Both of these are bidirectional — adding a claim to `analyses` automatically adds the corresponding entry on the `Analysis` side, and the web enforces that both sides always agree. The `parameter_constraints` field is an annotation map `{ParameterId: constraint_str}` — a human-readable threshold like `"< 0.05"` or `"> 3.0"`. deSitter does not evaluate these constraints. It surfaces them when the referenced parameter changes, so the researcher knows which claims have thresholds that might now need revisiting.
+
+**`Assumption`** is a premise taken as given. Empirical assumptions (`AssumptionType.EMPIRICAL`) should have a `falsifiable_consequence` — a description of what would need to be observed to falsify the assumption — and `tested_by` links to predictions explicitly designed to test whether the assumption holds. Methodological assumptions describe how the study is conducted and may not have falsifiable consequences. Assumptions themselves can depend on other assumptions through `depends_on`, capturing presupposition chains: "the detector is linear" presupposes "the detector is calibrated." The `assumption_lineage` traversal in the web follows both claim-to-assumption and assumption-to-assumption chains so that no silent dependency is missed.
+
+**`Prediction`** is a testable consequence jointly implied by one or more claims. Several of its fields require careful explanation because they address subtly different questions:
+
+- `claim_ids`: the claims that *together* imply this prediction. Most non-trivial predictions require multiple claims simultaneously; this field captures the complete derivation set.
+- `tests_assumptions`: assumptions this prediction was explicitly designed to test. Its outcome bears on whether those assumptions hold. When a `REFUTED` prediction names an assumption here, the researcher knows that assumption is under pressure. Bidirectional with `Assumption.tested_by`.
+- `conditional_on`: assumptions the prediction is *conditioned on* — taken as given rather than under active test. The prediction is only expected to hold if these assumptions hold. Unlike `tests_assumptions`, these are backstops rather than targets. The `CONDITIONAL` tier requires this field to be populated.
+- `independence_group`: the `IndependenceGroupId` of the group this prediction belongs to. Used to prevent overcounting correlated evidence.
+- `derivation`: prose explanation of *why* `claim_ids` jointly imply this prediction. The logical argument.
+- `specification`: the formula or relationship being tested. The *what*, distinct from the *why*.
+- `evidence_kind`: the `EvidenceKind` enum value classifying the temporal relationship between the prediction and data.
+- `free_params`: the number of tunable degrees of freedom in the prediction. Must be zero for `FULLY_SPECIFIED` predictions.
+- `falsifier`: the criterion that would count as refutation.
+
+**`Analysis`** represents a piece of work the researcher has run (or will run) using their own tools. deSitter never executes it. The `path` and `command` fields are provenance documentation only — a record of where the code lives and how to invoke it. When the researcher runs the analysis and records a result via `ds record` or the `record_result` MCP tool, the git SHA at that moment is captured, giving an immutable chain: `path + SHA + result`. The `uses_parameters` field links to every `Parameter` the analysis depends on. When any of those parameters change, the health check surfaces this analysis as stale and flags all predictions linked to it. Bidirectional with `Parameter.used_in_analyses`.
+
+**`IndependenceGroup`** exists because of a subtle statistical requirement: if two predictions both follow from the same data source, they are not independent evidence for the shared claim. Overcounting correlated confirmations inflates the apparent evidentiary support. An `IndependenceGroup` clusters predictions that share a common derivation chain. Every pair of groups must then supply explicit justification for why they are genuinely independent — recorded as a `PairwiseSeparation`. This makes the independence structure of evidence visible and machine-checkable.
+
+**`PairwiseSeparation`** records the justification for why two `IndependenceGroup` entities are genuinely separate. Its `basis` field is human-readable prose. The validator enforces that every pair of groups has a separation record, so the independence structure can never be partially specified.
+
+**`Theory`** is a higher-level explanatory framework. It organises related claims and predictions but does not add structural dependencies the web enforces — it is a navigational organiser. A `Theory` has a status lifecycle (`ACTIVE`, `DEPRECATED`, `REFUTED`, `SPECULATIVE`) that can be advanced through `transition_theory`.
+
+**`Discovery`** records a significant finding during research, even when it does not fit neatly into claims or predictions. Research produces surprises; this entity captures them with a date, impact description, and optional links to related claims or predictions.
+
+**`DeadEnd`** records a known abandoned direction with a description of what was tried and why it failed. Negative results constrain the hypothesis space and should not be silently discarded because the current code cannot find a reference to them.
+
+**`Concept`** defines a project-specific vocabulary term, with aliases and references. It keeps the lexicon under version control alongside the rest of the project.
+
+**`Parameter`** is a physical or mathematical constant referenced by analyses: masses, coupling constants, significance thresholds, model hyperparameters. Parameters live in a version-controlled JSON file rather than inside analysis scripts so that a single authoritative value is shared across all analyses and changes are tracked with full provenance. The `used_in_analyses` field (bidirectional with `Analysis.uses_parameters`) enables the staleness detection cascade: change a parameter, the health check tells you exactly which analyses need re-running and which predictions are therefore stale.
+
+### The Aggregate Root: `EpistemicWeb` (`web.py`)
+
+`EpistemicWeb` is the most important class in the system. It is the **aggregate root** of the epistemic domain — the single object that owns the complete research state and is the only legitimate path through which any mutation to that state can occur. Nothing outside the web ever modifies an entity directly. Everything goes through the web's methods, because the web is responsible for maintaining every invariant.
+
+The class itself is a dataclass holding eleven dictionaries, one per entity type, all keyed by typed identifiers:
 
 ```python
-GATEWAY_RESOURCE_ALIASES = {
-    "claim": "claim", "claims": "claim",
-    "prediction": "prediction", "predictions": "prediction",
-    "analysis": "analysis", "analyses": "analysis",
-    "independence-group": "independence_group",
-    # ...
-}
+@dataclass
+class EpistemicWeb:
+    claims:               dict[ClaimId, Claim]
+    assumptions:          dict[AssumptionId, Assumption]
+    predictions:          dict[PredictionId, Prediction]
+    analyses:             dict[AnalysisId, Analysis]
+    theories:             dict[TheoryId, Theory]
+    independence_groups:  dict[IndependenceGroupId, IndependenceGroup]
+    pairwise_separations: dict[PairwiseSeparationId, PairwiseSeparation]
+    discoveries:          dict[DiscoveryId, Discovery]
+    dead_ends:            dict[DeadEndId, DeadEnd]
+    concepts:             dict[ConceptId, Concept]
+    parameters:           dict[ParameterId, Parameter]
 ```
 
-Adding a new resource type means one entry in this table.
+These dictionaries are not exposed directly for modification. The entire public surface for mutation is a family of methods that return a **new `EpistemicWeb`** rather than modifying the existing one.
 
-### Transaction lifecycle
+#### Copy-on-Write Mutation Semantics
 
+Every mutation method follows the same pattern:
+
+1. Deep-copy the current web into a new instance.
+2. Validate that all referenced IDs exist in the new instance.
+3. Perform the structural check (no cycles, no duplicates).
+4. Write the new entity into the new instance's dictionary.
+5. Update all bidirectional backlinks in the new instance.
+6. Return the new instance.
+
+The original web is never touched.
+
+```python
+# This is safe:
+original_web = ...                                # has 5 claims
+new_web = original_web.register_claim(new_claim)  # original_web still has 5
+
+# If the caller discovers the new web is wrong, it simply discards it.
+# The original_web is still intact. No undo stack needed.
 ```
-1. resolve_resource(alias)       → canonical key (raises KeyError if unknown)
-2. repo.load()                   → current EpistemicWeb from disk
-3. web.register_*(entity)        → new EpistemicWeb in memory
-                                   raises EpistemicError on broken refs, cycles, duplicates
-4. validator.validate(new_web)   → list[Finding]
-5. if any CRITICAL findings      → discard new_web, return GatewayResult(status="error")
-                                   on-disk state is untouched
-6. repo.save(new_web)            → write to disk (atomic rename)
-7. tx_log.append(op, id)         → append provenance record, get transaction_id
-8. return GatewayResult(status="ok", changed=True, tx_id=…)
+
+The cost of this approach is O(n) memory per mutation — a full deep copy of all eleven dictionaries. For research-scale webs (hundreds to low thousands of entities) this is fast enough, measured in microseconds. The benefit is correctness without complexity: failure at any subsequent validation step means the caller throws away the new web and the disk state is never affected. There is no concept of a "partially committed" mutation.
+
+#### Referential Integrity Enforcement
+
+Every `register_*` and `update_*` method checks that all IDs referenced by the new entity actually exist in the web before the entity is written. If a `Prediction` names a `ClaimId` in `claim_ids` and no such claim exists, the method raises an `EpistemicError` immediately. This makes referential integrity a property guaranteed by construction, not a property verified after the fact.
+
+#### Cycle Detection
+
+The `depends_on` fields on both `Claim` and `Assumption` form directed graphs. The web enforces that these are acyclic: if registering a new claim would create a cycle in the `depends_on` graph, the method raises an `EpistemicError`. The algorithm is a simple DFS from the new node's `depends_on` set, checking whether any transitive predecessor equals the new node's own ID.
+
+#### Bidirectional Invariants
+
+Five relationships in the web are **bidirectional**: both sides of the link must always agree. The web maintains these atomically at mutation time. There is no separate "sync" step.
+
+| Forward link | Reverse link | Maintained by |
+|---|---|---|
+| `Claim.assumptions` contains `A-001` | `Assumption.used_in_claims` contains `C-001` | `register_claim`, `update_claim` |
+| `Analysis.claims_covered` contains `C-001` | `Claim.analyses` contains `AN-001` | `register_analysis`, `update_analysis` |
+| `Prediction.independence_group` is `G-001` | `IndependenceGroup.member_predictions` contains `P-001` | `register_prediction`, `update_prediction` |
+| `Prediction.tests_assumptions` contains `A-001` | `Assumption.tested_by` contains `P-001` | `register_prediction`, `update_prediction` |
+| `Analysis.uses_parameters` contains `PAR-001` | `Parameter.used_in_analyses` contains `AN-001` | `register_analysis`, `update_analysis` |
+
+Why does this matter? Without bidirectional maintenance, the answer to "which claims depend on assumption A-001?" is derived by scanning all claims. That is slow, but more critically, it is fragile: if the `used_in_claims` backlink is wrong (perhaps because a past mutation forgot to update it), the answer silently returns the wrong set. Someone might then safely delete A-001, thinking nothing depends on it, when in fact several claims do. Bidirectionality makes graph traversal safe in both directions and prevents a whole class of silent corruption bugs.
+
+When a mutation removes an entity — say, `remove_claim(cid)` — the web scrubs all occurrences of that ID from every other entity's reference sets before writing the new state. The result is that no entity in the returned web contains a reference to a non-existent ID.
+
+#### Graph Traversal Methods
+
+The web provides a set of pure query methods that compute structural properties of the graph. These are used by validators, health checks, and AI agents to navigate the epistemic structure. None of them modify the web.
+
+**`claim_lineage(cid)`** computes the transitive closure of `depends_on` starting from a given claim, walking backward through the DAG. It returns every claim that is, directly or transitively, an ancestor of the target claim. The algorithm is a simple iterative DFS using an explicit stack (not recursion, to avoid stack overflow on deep graphs). The result answers "what is this claim built on?"
+
+**`assumption_lineage(cid)`** computes all assumptions reachable from a claim and its ancestors. It first calls `claim_lineage` to get all ancestor claims, then collects every assumption directly referenced by any of those claims, then follows each assumption's own `depends_on` chain to capture presupposed assumptions. The result is the complete set of implicit premises the claim (and everything it builds on) takes as given. This is one of the most important queries in the system because it reveals invisible dependencies — a claim that looks self-contained may transitively rest on a dozen assumptions the researcher has never explicitly reviewed.
+
+**`prediction_implicit_assumptions(pid)`** extends `assumption_lineage` to the prediction level. It unions `assumption_lineage` across all claims in the prediction's `claim_ids` set, then also expands `conditional_on` through assumption `depends_on` chains. The result is every assumption the prediction silently rests on, regardless of whether any of them are listed explicitly on the prediction itself. This is what the `validate_implicit_assumption_coverage` invariant uses to detect predictions that implicitly rest on empirical assumptions not listed in `tests_assumptions`.
+
+**`refutation_impact(pid)`** answers: if this prediction is refuted, what is called into question? It returns three sets:  
+- `claim_ids`: the direct claims jointly implying this prediction.  
+- `claim_ancestors`: all ancestors of those claims via transitive `depends_on` closure — the entire theoretical chain the prediction was derived from.  
+- `implicit_assumptions`: all assumptions in the full derivation chain.  
+
+An AI agent calling this query after a `REFUTED` status transition gets a complete blast radius: every theoretical statement and every assumption that contributed to the now-falsified prediction.
+
+**`assumption_support_status(aid)`** is the dual: given an assumption, what depends on it? It returns the claim that directly reference the assumption (`direct_claims`), every prediction whose derivation chain includes it (`dependent_predictions`), and the predictions explicitly designed to test it (`tested_by`). Computing `dependent_predictions` requires building a reverse index over all predictions' implicit assumption sets, which is O(P × I) where P is prediction count and I is average implicit assumption depth. The result tells a researcher: "if I revise this assumption, here is the full downstream conversation I need to have."
+
+**`claims_depending_on_claim(cid)`** answers the forward question: if this claim is wrong, which downstream claims are built on it? It builds a reverse `depends_on` index — a dict mapping each claim ID to the set of claim IDs that depend on it — and then BFS from the target ID. The result is the forward blast radius in the claim DAG.
+
+**`predictions_depending_on_claim(cid)`** extends this to predictions: it unions `claims_depending_on_claim(cid)` with the target claim itself, then finds every prediction whose `claim_ids` set intersects with that expanded set. Together with `claims_depending_on_claim`, it gives a complete picture of the damage if a claim is retracted.
+
+**`parameter_impact(pid)`** computes the full blast radius of a parameter change: which analyses are stale (because they `uses_parameters` includes this parameter), which claims carry a `parameter_constraints` annotation for this parameter, which claims are covered by the stale analyses, and which predictions depend on those claims. The result is a structured dict that the health-check and stale-detection services return to the caller without further computation.
+
+### Domain Invariant Validators (`invariants.py`)
+
+`invariants.py` contains ten pure validator functions with a uniform signature: each takes an `EpistemicWeb` and returns `list[Finding]`. There is no side effect. No mutation. `validate_all` composites them.
+
+The distinction between the invariants in this file and the structural enforcement inside `web.py` matters:
+
+- **Structural invariants** (referential integrity, acyclicity, bidirectional links) are enforced *inside* `EpistemicWeb` mutation methods at write time. They are guaranteed by construction. You cannot produce a web that violates them through the normal API.
+- **Semantic invariants** (tier constraints, coverage gaps, testability rules) live in `invariants.py` and are checked *on demand*. They represent best-practice scientific discipline rules that may legitimately be incomplete during active research. A researcher might add a claim before adding the analyses that cover it; the system should not block that.
+
+The ten validators:
+
+**`validate_tier_constraints`** enforces the `ConfidenceTier` rules. A `FULLY_SPECIFIED` prediction with `free_params != 0` is a CRITICAL finding — the prediction's tier is fraudulent. A `CONDITIONAL` prediction missing `conditional_on` is a WARNING. A `MEASURED` prediction with no `observed` value is CRITICAL — the data either exists or the regime is set wrong.
+
+**`validate_independence_semantics`** first checks that every prediction in an `IndependenceGroup.member_predictions` set back-references that group via `Prediction.independence_group` (the bidirectional link is enforced at mutation time, but this makes it auditable). It then checks pairwise separation completeness: for every pair of independence groups `(G-a, G-b)`, there must be a `PairwiseSeparation` record. If X groups exist, `X*(X-1)/2` separation records are required. Any missing pair is CRITICAL.
+
+**`validate_coverage`** reports numerical claims with no linked analyses (INFO) and empirical assumptions with no `falsifiable_consequence` (WARNING). It also surfaces all `STRESSED` predictions as a group, since these represent active evidentiary tension and should not be silently submerged in a list of green checks.
+
+**`validate_assumption_testability`** finds empirical assumptions that name a `falsifiable_consequence` but have no predictions in `tested_by`. The assumption claims it could be falsified but no prediction has been designed to test it. This is a WARNING: the researcher has identified the testability pathway but has not yet set up the corresponding prediction.
+
+**`validate_retracted_claim_citations`** scans all predictions and all claims to find any that still reference a retracted claim in their `claim_ids` or `depends_on` sets. A `RETRACTED` claim should not remain in the derivation chain of an active prediction — doing so means the prediction's theoretical basis is known to be unsound. This is CRITICAL.
+
+**`validate_implicit_assumption_coverage`** is the most computationally expensive validator. For each prediction it calls `prediction_implicit_assumptions` to find every assumption the prediction implicitly rests on, then checks whether any empirical assumptions in that set are absent from the prediction's explicit `tests_assumptions`. The finding is informational: it surfaces assumptions the prediction depends on that are not formally under active test, giving the researcher the full picture of what they are implicitly taking for granted.
+
+**`validate_tests_conditional_overlap`** checks whether any prediction has the same assumption ID in both `tests_assumptions` and `conditional_on`. These are contradictory signals: `tests_assumptions` says "this prediction is designed to evaluate whether the assumption holds" while `conditional_on` says "this prediction is only valid if the assumption already holds." Listing the same assumption in both sets is a logical contradiction. CRITICAL.
+
+**`validate_foundational_claim_deps`** checks claims whose `type` is `FOUNDATIONAL` for the presence of any `depends_on` entries. A foundational claim is definitionally primitive — it does not derive from any other claim in the web. Finding `depends_on` entries on a foundational claim is a CRITICAL contradiction.
+
+**`validate_evidence_consistency`** checks that predictions in terminal states (`CONFIRMED` or `REFUTED`) have a linked analysis, and that analyses have at least one linked prediction. A confirmed prediction with no analysis is structurally suspicious — the confirmation is ungrounded. An analysis with no predictions is orphaned work with no traceability.
+
+### The Abstract Ports (`ports.py`)
+
+The kernel defines not just data structures, but also the shapes of the services the domain requires from the outside world. These are expressed as Python `Protocol` classes in `ports.py`. A `Protocol` specifies a structural interface: any class that provides the right methods satisfies the protocol without needing to explicitly declare it as an implementation.
+
+```python
+class WebRepository(Protocol):
+    def load(self) -> EpistemicWeb: ...
+    def save(self, web: EpistemicWeb) -> None: ...
+
+class WebRenderer(Protocol):
+    def render(self, web: EpistemicWeb) -> dict[str, str]: ...
+
+class WebValidator(Protocol):
+    def validate(self, web: EpistemicWeb) -> list[Finding]: ...
+
+class TransactionLog(Protocol):
+    def append(self, operation: str, identifier: str) -> str: ...
+
+class ProseSync(Protocol):
+    def sync(self, web: EpistemicWeb) -> dict[str, object]: ...
 ```
+
+The kernel defines what it *needs*. The adapters layer defines how those needs are *satisfied*. The control plane uses the kernel's `Protocol` definitions without ever importing a concrete adapter. This inversion is what allows the entire system to be tested without touching a filesystem: substitute an in-memory implementation for `WebRepository`, a stub for `TransactionLog`, and you have a fully functional, fully exercised control plane with zero I/O.
 
 ---
 
-## 8. ProjectContext
+## Project Configuration (`config.py`)
 
-`ProjectContext` is the runtime configuration object passed to every service. It carries data, not callbacks — no hidden collaborators, no module-level globals.
+Between the kernel and the infrastructure sits `config.py`. It contains three dataclasses and two functions, and it is the **runtime configuration contract** for the entire system.
+
+`DesitterConfig` holds values parsed from the project's `.desitter.toml` (or equivalent) file: the directory name of the project data folder, whether prose-sync is enabled, and any other project-level settings.
+
+`ProjectPaths` is a computed record of all filesystem paths the system will ever touch, derived once at startup:
+
+```
+data_dir      →  project/data/
+views_dir     →  project/views/
+tx_log        →  project/data/tx_log.jsonl
+claims_json   →  project/data/claims.json
+predictions_json → project/data/predictions.json
+# ... one entry per entity type and output surface
+```
+
+Every path is computed once in `build_context()` and never re-derived. No service does `Path(context.workspace) / "data" / "claims.json"` inline — it reads `context.paths.claims_json`. This keeps filesystem layout knowledge in one place and makes it trivial to point everything at a temporary directory in tests.
+
+`ProjectContext` bundles the workspace path, the parsed config, and the computed paths into a single object passed to every service:
 
 ```python
 @dataclass
 class ProjectContext:
     workspace: Path
-    config: DesitterConfig    # project_dir, …
-    paths: ProjectPaths      # all derived filesystem paths, computed once at startup
+    config:    DesitterConfig
+    paths:     ProjectPaths
 ```
 
-`ProjectPaths` is computed once in `build_context()` and never re-derived. Every service that needs a file path reads it from `context.paths`. This makes all services fully testable: pass in a `ProjectContext` pointing at a temp directory and nothing touches the real filesystem.
+`load_config(workspace)` reads and parses the project configuration file. `build_context(workspace, config)` constructs the `ProjectContext`. Both are called once at startup — in the MCP server's `create_server()` and in the CLI's root group — and the resulting context object is passed down through every service call for the duration of the process.
 
-```mermaid
-graph LR
-    workspace["workspace/"] --> |"build_context()"| ctx["ProjectContext"]
-    ctx --> GW["controlplane/gateway.py"]
-    ctx --> HC["views/health.py"]
-    ctx --> ST["views/status.py"]
-    ctx --> CH["controlplane/check.py"]
-```
+The rule: **no service reads from `os.environ`, no service opens files by path literals, no service has module-level globals that represent project state.** Data flows through `ProjectContext`. This is not idealism — it is the difference between a test that can point services at a temp directory and a test that cannot run without a real project tree on disk.
 
 ---
 
-## 9. The Adapter Pattern
+## The Adapter Layer (`adapters/`)
 
-### The problem it solves
+The adapters layer implements the abstract ports defined in `epistemic/ports.py`. It is the only layer in the system that speaks file formats, byte streams, and filesystem paths. Everything above it speaks `EpistemicWeb`.
 
-The domain core (`epistemic/`) needs to load and save the web, render views, and record results — but it shouldn't know whether storage is JSON files, a database, or an in-memory dict. Hardcoding `JsonRepository` into the domain would mean tests need real JSON files and swapping storage formats would require changing domain code.
+### `JsonRepository`
 
-### How it works
+`JsonRepository` implements `WebRepository`. It persists the epistemic web as a collection of JSON files under the project's `data/` directory — one file per entity type:
 
-`epistemic/ports.py` defines **what the domain needs** from infrastructure using Python `Protocol` classes — structural interfaces: any class with the right methods satisfies the protocol without needing to inherit from it.
+```
+project/data/
+├── claims.json
+├── assumptions.json
+├── predictions.json
+├── analyses.json
+├── theories.json
+├── independence_groups.json
+├── pairwise_separations.json
+├── discoveries.json
+├── dead_ends.json
+├── concepts.json
+└── parameters.json
+```
+
+`load()` reads and deserialises all eleven files and assembles a fully hydrated `EpistemicWeb`. Missing files are treated as empty registries — a new project has no files at all and the repository returns an empty web, which is correct behaviour.
+
+`save(web)` serialises the web back to disk **atomically**: for each entity type, it writes the JSON to a `.json.tmp` file in the same directory, then calls `tmp.replace(path)` — a POSIX atomic rename. If the process crashes mid-write, the on-disk state is always the complete previous version. No partial writes, no corrupted entity files.
+
+The default serialisation uses `json.dumps(..., default=str)` which handles `date` objects, `Path` objects, and any other type that has a sensible string representation. `set` values are serialised as arrays (since JSON has no set type) and deserialised back to `set` on load.
+
+### `TransactionLog`
+
+`TransactionLog` implements the `TransactionLog` protocol. Every mutation that reaches `repo.save()` is recorded as a JSONL (newline-delimited JSON) entry in `project/data/tx_log.jsonl`. Each record contains:
+
+- A UUID v4 transaction ID
+- The operation type (`register/claim`, `set/prediction`, `transition/theory`, etc.)
+- The entity identifier
+- A UTC timestamp
+
+The `append(operation, identifier)` method writes the record and returns the transaction ID. This ID is included in the `GatewayResult` returned to the caller and is the basis for audit trails. In the future it also provides a foundation for event replay.
+
+### `MarkdownRenderer`
+
+`MarkdownRenderer` implements `WebRenderer`. Given an `EpistemicWeb`, it generates a set of markdown surfaces — the human-readable views of the research project. The return value is `dict[str, str]`: a map from relative file path to rendered content. The framework does not write files — it produces strings. The `views/render.py` service is responsible for deciding what to write and whether a render is needed (via SHA-256 fingerprinting described later).
+
+---
+
+## The Control Plane (`controlplane/`)
+
+The control plane contains the system's core business services. It is the orchestration layer: it loads and saves the web through the `WebRepository` port, invokes the kernel's methods, calls the invariant validators, and writes provenance records to the transaction log. It contains no JSON parsing, no HTTP handling, no terminal output. Those concerns belong in the interface layer.
+
+### The Gateway (`gateway.py`)
+
+The Gateway is the **single mutation and query boundary** for the entire system. Both the CLI and the MCP server route all operations through it. There is no other path by which the epistemic web on disk can be changed.
+
+The `Gateway` class receives its collaborators through constructor injection:
 
 ```python
-# epistemic/ports.py — the interface (what the domain requires)
-class WebRepository(Protocol):
-    def load(self) -> EpistemicWeb: ...
-    def save(self, web: EpistemicWeb) -> None: ...
-
-# adapters/json_repository.py — production implementation
-class JsonRepository:
-    def load(self) -> EpistemicWeb: ...   # reads project/data/*.json
-    def save(self, web: EpistemicWeb) -> None: ...
-
-# In tests: a fake that needs no files at all
-class InMemoryRepository:
-    def __init__(self, web: EpistemicWeb): self._web = web
-    def load(self) -> EpistemicWeb: return self._web
-    def save(self, web: EpistemicWeb) -> None: self._web = web
+class Gateway:
+    def __init__(
+        self,
+        context:    ProjectContext,
+        repo:       WebRepository,
+        validator:  WebValidator,
+        renderer:   WebRenderer,
+        prose_sync: ProseSync,
+        tx_log:     TransactionLog,
+    ) -> None: ...
 ```
 
-The `Gateway` receives a `WebRepository` — it never imports `JsonRepository` directly. The concrete adapter is injected at startup in `interfaces/mcp/tools.py` and `interfaces/cli/main.py`. This is sometimes called "ports and adapters" (Hexagonal Architecture) or dependency injection.
+Every collaborator is declared as a protocol type. The gateway has no knowledge of `JsonRepository`, `MarkdownRenderer`, or any concrete adapter class. It works with the abstract interfaces and the concrete implementations are wired at startup. This means the gateway can be fully unit-tested with in-memory stubs.
 
-```mermaid
-graph LR
-    GW["Gateway"] -->|"calls load() / save()"| PORT["WebRepository (Protocol)"]
-    PORT -.->|"implemented by"| JSON["JsonRepository"]
-    PORT -.->|"implemented by"| MEM["InMemoryRepository (tests)"]
+The gateway exposes six verbs:
+
+```python
+def register(resource, payload, *, dry_run=False)  → GatewayResult
+def get(resource, identifier)                       → GatewayResult
+def list(resource, **filters)                       → GatewayResult
+def set(resource, identifier, payload, *, dry_run=False) → GatewayResult
+def transition(resource, identifier, new_status, *, dry_run=False) → GatewayResult
+def query(query_type, **params)                     → GatewayResult
 ```
+
+Every operation returns a `GatewayResult`:
+
+```python
+@dataclass
+class GatewayResult:
+    status:         str               # "ok" | "error" | "CLEAN" | "BLOCKED" | "dry_run"
+    changed:        bool              # True if persistent state was modified
+    message:        str               # human-readable summary
+    findings:       list[Finding]     # empty for clean mutations
+    transaction_id: str | None        # UUID set on successful mutations; None for reads
+    data:           dict | None       # populated for get/list/query results
+```
+
+This envelope is the **contract** between the gateway and all interfaces. The MCP tool handlers serialise it to a dict. The CLI formatter renders it with Rich tables. A future REST endpoint would JSON-serialise it. The shape never changes — only how it is presented changes. This is the key property that allows any number of interface adapters to be written without touching the gateway.
+
+#### Resource Alias Resolution
+
+The gateway accepts flexible resource names in the `resource` parameter and resolves them through `GATEWAY_RESOURCE_ALIASES`:
+
+```python
+GATEWAY_RESOURCE_ALIASES = {
+    "claim": "claim",  "claims": "claim",
+    "prediction": "prediction",  "predictions": "prediction",
+    "independence-group": "independence_group",
+    "analyses": "analysis",
+    # ... all forms for all eleven types
+}
+```
+
+An AI agent calling `register_resource("claims", ...)` and a CLI user calling `ds register claim ...` both resolve to the same canonical key `"claim"`. Adding a new entity type requires one entry in this table and nothing else in the dispatch machinery.
+
+#### The Mutation Transaction Lifecycle
+
+For `register`, `set`, and `transition` operations, the gateway executes the following sequence:
+
+**Step 1: Resolve the resource alias.** `GATEWAY_RESOURCE_ALIASES.get(alias)` converts the caller-supplied string to a canonical key. Raises `KeyError` if unknown.
+
+**Step 2: Load the current web.** `self._repo.load()` deserialises the current on-disk state into an `EpistemicWeb`. This is always a fresh load — the gateway does not cache the web between calls. For the CLI this is fine (each command is a new process). For the MCP server (a long-running process) this means every mutation reads from disk first, which ensures the MCP server is always working from the current state even if an external tool modified the files.
+
+**Step 3: Parse and build the entity.** The gateway reads the payload dict and constructs the domain entity. Type coercions happen here: `set` fields populated from JSON arrays, `NewType` identifiers applied.
+
+**Step 4: Mutate the web.** `web.register_*(entity)` (or `update_*`, or `transition_*`) is called. If this raises `EpistemicError` — broken reference, cycle, duplicate ID — the web was never modified (the copy-on-write semantics ensure this) and the gateway immediately returns a `GatewayResult(status="error", changed=False)`. The on-disk state is untouched.
+
+**Step 5: Validate the new web.** `self._validator.validate(new_web)` runs all semantic invariant validators. If any finding is `CRITICAL`, the new web is discarded and the gateway returns an error result. The on-disk state remains the state from Step 2.
+
+**Step 6: Honour dry-run.** If `dry_run=True`, the sequence stops here. The caller gets `GatewayResult(status="dry_run", changed=False, findings=[...])` — useful for pre-flight checks.
+
+**Step 7: Write to disk.** `self._repo.save(new_web)` atomically replaces the on-disk state with the validated new web.
+
+**Step 8: Log the transaction.** `self._tx_log.append(operation, entity_id)` appends a provenance record and returns a UUID transaction ID.
+
+**Step 9: Return the result.** `GatewayResult(status="ok", changed=True, tx_id=...)`.
+
+The critical property is that disk state can only change between Step 7 and Step 8. If the process crashes at Step 8, the disk state is still valid (the atomic rename from `JsonRepository.save` is complete) but the transaction is unlogged. This is an acceptable trade-off at research scale.
+
+#### Read Operations: `get`, `list`, `query`
+
+For read-only operations the gateway loads the web, extracts the requested data from the relevant dictionary or calls the appropriate traversal method, and returns a `GatewayResult` with `changed=False` and `data` populated. No validation is run. No transaction is logged. `query` maps named query types to web traversal methods — `"claim_lineage"` calls `web.claim_lineage(cid)`, `"refutation_impact"` calls `web.refutation_impact(pid)`, and so on.
+
+### The Factory (`factory.py`)
+
+`build_gateway(context)` wires together all the concrete adapters and constructs a fully configured `Gateway`. This is the one and only place in the codebase where concrete adapter types are instantiated and injected. Both the CLI and the MCP server call `build_gateway(context)` once at startup, then never touch the adapters directly again.
+
+### Supporting Control-Plane Services
+
+**`validate.py`** provides `validate_project(context, repo)` and `validate_structure(web)`. `validate_project` loads the web from the repository and runs `validate_all`. `validate_structure` runs only the structural validators (a subset of the full validator suite) and is the function called by the health check.
+
+**`check.py`** provides staleness and consistency checks. `check_stale(context)` calls `web.parameter_impact` for each parameter and identifies analyses whose result records predate the parameter's last-modified timestamp. `check_refs(context)` scans the on-disk registry for references to IDs that no longer exist — a cross-check against cases where a manual filesystem edit might have introduced a broken reference outside the normal gateway path.
+
+**`automation.py`** contains the render-trigger policy table: a mapping from operation type to the set of view surfaces that need to be regenerated when that operation succeeds. When the gateway completes a `register/claim` mutation, `automation.py` declares that the claims view, the project status surface, and the dependency graph surface all require re-rendering. The view layer consults this table to avoid re-rendering everything on every mutation.
+
+**`export.py`** provides `export_json` and `export_markdown`: bulk export operations that produce a portable snapshot of the entire web, independent of the project's data directory structure.
 
 ---
 
-## 10. Key Design Decisions
+## View Services (`views/`)
 
-### The Audit Scaffold Principle
+View services sit between the control plane and the interface layer. They are read-only from the web's perspective: they load, aggregate, and summarise — they never mutate the epistemic web. Their outputs are structured reports and rendered artifacts that both interfaces can present.
 
-deSitter surfaces structural facts; it never makes logical judgments. This shapes every API:
+### Health Checks (`health.py`)
 
-- `get_structural_gaps` returns observations, not recommendations
-- `health_check` reports invariant violations, not research strategy
-- `check_stale` identifies which analyses need re-running after a parameter change — it does not decide whether re-running is necessary
+`run_health_check(context, repo, validator)` is the primary "everything OK?" operation. It:
 
-This keeps deSitter domain-neutral and usable across disciplines. A system that understood "what to do next" would need to understand the research domain. A system that surfaces "what is structurally incomplete" works for physics, medicine, and ML equally.
+1. Loads the web via `repo.load()`.
+2. Runs all semantic invariant validators through `validator.validate(web)`.
+3. Runs `check_stale(context)` to detect analyses that need re-running.
+4. Runs `check_refs(context)` to detect broken cross-references.
+5. Aggregates all findings into a `HealthReport`.
 
-### Consumer model (no execution)
+`HealthReport.overall` is one of `"HEALTHY"`, `"WARNINGS"`, or `"CRITICAL"`. This single field is the machine-readable signal that CI, an AI agent, or a shell script can act on without parsing the full findings list. `critical_count` and `warning_count` are computed properties derived from the findings list.
 
-deSitter does not run analyses. The researcher runs them using their preferred tools (SageMath, Python, R, Jupyter) and records results via `ds record` or the `record_result` MCP tool.
+### Project Status (`status.py`)
 
-Analysis entities carry `path` and `command` as documentation only — provenance pointers the researcher can follow. The git SHA at record time is captured on the result, giving an immutable chain: `path + SHA + recorded value`.
+`get_status(context, repo)` produces a `ProjectStatus` snapshot: counts of entities by type, counts of predictions by tier and status, summary of outstanding structural gaps, and a timestamp. This is specifically designed to be the opening context for an AI agent session: one call gives the agent the complete landscape of the project without requiring it to make multiple queries.
 
-This is a deliberate constraint: no sandbox, no subprocess, no supply-chain risk from executing researcher code.
+### Metrics (`metrics.py`)
 
-### Immutable mutations (copy-on-write)
+`compute_metrics(web)` produces quantitative summaries of the epistemic web: tier-A evidence ratios, assumption coverage rates, prediction resolution rates, and the like. `tier_a_evidence_summary(web)` specifically summarises the quantity and confirmation status of `FULLY_SPECIFIED` predictions, which is the primary scientific quality signal.
 
-Every `EpistemicWeb` mutation returns a new web. This is O(n) per mutation (a full deep copy) but correct and simple. For research-scale webs (hundreds to low thousands of entities) this is fast enough. The benefit: free rollback — the gateway discards the new web if validation fails, with no undo stack needed.
+### Render Cache (`render.py`)
 
-### Native Python types
+`render_all(context, web, renderer, force=False)` regenerates view surfaces with SHA-256-based incremental rendering. The process:
 
-Entities use `dict`, `set`, `list` — not `frozenset`, `Mapping`, or `tuple`. The `EpistemicWeb` and the gateway are the encapsulation boundaries, not the container types. This keeps entity construction simple and test fixtures readable: you can construct any entity with plain Python literals.
+1. Load the stored fingerprint cache (a mapping of `surface_id → sha256_hash`).
+2. For each view surface to render, compute what the rendered output *would be* by calling `renderer.render(web)`.
+3. Hash the rendered content.
+4. If the hash matches the stored fingerprint, skip the write.
+5. If the hash differs (or `force=True`), write the content to disk and update the fingerprint cache.
 
-### Structural vs. semantic invariants
+The result is that a health check call — which internally calls `render_all` — does not rewrite every markdown file on every invocation. Only surfaces whose underlying data has actually changed are rewritten. On a project with many views and few mutations this saves significant I/O.
 
-Two categories of constraint, enforced at different times:
+---
 
-- **Structural invariants** (referential integrity, DAG acyclicity, bidirectional links) are enforced *inside* `EpistemicWeb.register_*` at mutation time. They are guaranteed by construction.
-- **Semantic invariants** (tier constraints, coverage gaps, testability) live in `invariants.py` and are checked on demand by the validator. They represent best-practice rules that may legitimately be incomplete during active research.
+## The Interface Layer (`interfaces/`)
 
-### One gateway, many interfaces
+The interface layer is the outermost ring of the system. It contains every surface through which a human or an AI agent interacts with deSitter: the CLI, the MCP server, and future surfaces such as a REST API or SDK. All surfaces are peers — there is no "primary" interface. Every interface is a **thin adapter**: it parses inputs, calls the same gateway and view service functions, and formats outputs. If a handler contains business logic, that logic is in the wrong place.
 
-All interfaces are presentations, not implementations. All business logic lives in the gateway and the service layers. This means:
+### The Command-Line Interface (`interfaces/cli/`)
 
-- A bug fixed in the gateway is fixed for CLI, MCP, and any future interface simultaneously
-- Adding a new resource type requires no changes to any interface's dispatch logic
-- Testing the gateway fully tests the product behaviour
-- Adding a REST API or GUI means writing one new `interfaces/` directory, nothing else
-
-### Dependency inversion at every boundary
+`interfaces/cli/main.py` defines the Click command tree. At the top of the tree, the root `cli` group runs once per invocation: it reads the `--workspace` option (defaulting to the current working directory), calls `load_config` and `build_context`, and stores the resulting `ProjectContext` in Click's context object. Every subcommand below it retrieves the `ProjectContext` from the Click context and calls the appropriate gateway or view service.
 
 ```
-interfaces/*  →  features  →  views  →  core  →  epistemic  ←  adapters
+ds register <resource>              →  gateway.register(resource, payload)
+ds get      <resource> <id>         →  gateway.get(resource, id)
+ds list     <resource>              →  gateway.list(resource)
+ds set      <resource> <id>         →  gateway.set(resource, id, payload)
+ds transition <resource> <id> <s>   →  gateway.transition(resource, id, s)
+ds validate                         →  validate_project(context, repo)
+ds health                           →  run_health_check(context, repo, validator)
+ds status                           →  get_status(context, repo)
+ds render [--force]                 →  render_all(context, web, renderer)
+ds export [--format json|md]        →  export_json / export_markdown
+ds init                             →  scaffold a new project workspace
 ```
 
-`epistemic/` defines the interfaces. `adapters/` implements them. `controlplane/` uses them. The domain has zero knowledge of JSON files, markdown, or the MCP protocol. The entire epistemic kernel and core services can be tested in memory without touching the filesystem.
+`formatters.py` renders `GatewayResult`, `HealthReport`, and `ProjectStatus` objects using Rich — coloured tables, severity-coded finding lists, and structured panels. A `--json` flag bypasses the Rich renderer and writes the envelope dict as JSON to stdout, which allows shell scripts and CI systems to parse the output programmatically.
+
+Throughout the CLI, the pattern is: parse → call → format. Nothing else. Any command that contains conditional logic about the *content* of parameters, or that calls more than one service function and merges the results, is violating the thin-adapter constraint and should be refactored to a service in `controlplane/`.
+
+### The MCP Server (`interfaces/mcp/`)
+
+MCP (Model Context Protocol) is an open protocol that lets AI agents call typed tools exposed by a server process — analogous to REST APIs but designed to be consumed by language model agents rather than humans. The agent calls `register_resource(resource="claim", payload={...})` as a structured tool call; the server executes the handler and returns a structured dict. No subprocess, no screen scraping, no parsing unstructured text.
+
+`interfaces/mcp/server.py` constructs the FastMCP server. `create_server(workspace)` calls `load_config`, `build_context`, and `register_tools(server, context)`, then returns the configured server object. `run()` starts the server and blocks. The entry-point console script `ds-mcp` calls `run()`.
+
+`interfaces/mcp/tools.py` registers the tool handlers using FastMCP's `@server.tool()` decorator. The full tool surface, which mirrors the CLI command surface:
+
+```
+register_resource   →  gateway.register(resource, payload, dry_run)
+get_resource        →  gateway.get(resource, identifier)
+list_resources      →  gateway.list(resource)
+set_resource        →  gateway.set(resource, identifier, payload, dry_run)
+transition_resource →  gateway.transition(resource, identifier, new_status, dry_run)
+query_web           →  gateway.query(query_type, **params)
+validate_web        →  validate_project(context, repo)
+health_check        →  run_health_check(context, repo, validator)
+project_status      →  get_status(context, repo)
+render_views        →  render_all(context, web, renderer, force)
+check_stale         →  check_stale(context)
+check_refs          →  check_refs(context)
+export_web          →  export_json / export_markdown
+```
+
+Every handler follows the same pattern: call the service, call `_envelope(result)` to serialise the `GatewayResult` into a dict with the status-first convention, return the dict. The `_envelope` helper is the only formatting logic in the entire MCP interface.
+
+The result dict always begins with `"status"`: `"ok"`, `"error"`, `"CLEAN"`, `"BLOCKED"`, or `"dry_run"`. This is the first thing an AI agent reads. A well-designed agent checks `result["status"]` before reading anything else.
+
+#### How an AI Agent Uses the System
+
+An agent operating on a research project will typically follow a session pattern like this:
+
+1. Call `health_check()` to get the overall state and any critical findings.
+2. Call `project_status()` to get entity counts, prediction tiers, and structural gaps.
+3. Navigate specific entities via `get_resource` and `list_resources`.
+4. Call `query_web("refutation_impact", pid="P-001")` to understand the blast radius of a status change.
+5. Call `register_resource("prediction", {...}, dry_run=True)` to pre-flight a new prediction before committing it.
+6. Call `register_resource("prediction", {...})` to commit the prediction.
+7. Call `validate_web()` to confirm no new invariant violations were introduced.
+
+At no point does the agent need to understand JSON file formats, directory structures, or transaction semantics. The tool surface is the entire API. The agent receives structured dicts back and can reason about them directly.
 
 ---
 
-## 11. Architecture Remediation Plan
+## Startup and Dependency Wiring
 
-This roadmap fixes cross-layer architecture issues first, then fills in planned stubs in phase order.
+The full dependency tree is assembled exactly once, at the layer closest to the outside world. By the time any service method is called, every collaborator has been injected and no service needs to know how to construct its dependencies.
 
-### Implementation policy for planned stubs
+For the MCP server, the startup sequence is:
 
-Intentionally unimplemented modules must not be filled ad hoc during architecture cleanup. They are tracked in `TRACKER.md` and implemented only in their owning phase.
+```
+server.py: create_server(workspace)
+    ↓
+    load_config(workspace)            → DesitterConfig
+    build_context(workspace, config)  → ProjectContext
+    FastMCP(name="desitter")         → server
+    register_tools(server, context)
+        ↓
+        factory.build_gateway(context)
+            ↓
+            JsonRepository(context.paths.data_dir)
+            DomainValidator(validate_all)
+            MarkdownRenderer(context.paths.views_dir)
+            ProseAdapter(context)
+            JsonTransactionLog(context.paths.tx_log)
+            →  Gateway(context, repo, validator, renderer, prose, tx_log)
+        @server.tool() for each tool function
+    ↓
+server.run()
+```
 
-### Top 5 issues and PR-sized milestones
-
-| Priority | Issue | Target outcome | PR-sized milestones |
-|----------|-------|----------------|---------------------|
-| P0 | Boundary contract mismatches between interfaces and services | No runtime signature mismatch at MCP/CLI boundaries | PR-A1: remove private collaborator reach-through from interface code; PR-A2: align MCP calls with service signatures (`render_all`, `check_refs`); PR-A3: add boundary contract tests to prevent regressions |
-| P0 | Gateway orchestration is still stubbed | All register/get/list/set/transition/query routes execute through one mutation boundary | PR-B1: implement load-mutate-validate-save transaction flow for `register`; PR-B2: implement read/query routes (`get`, `list`, `query`); PR-B3: implement `set`/`transition` with dry-run and transaction logging |
-| P1 | Adapter layer incomplete (`JsonRepository`, `MarkdownRenderer`) | End-to-end persistence and rendering works through ports | PR-C1: implement typed load/save round-trip for all entities; PR-C2: implement markdown surface rendering; PR-C3: add adapter round-trip and rendering contract tests |
-| P1 | View/controlplane read services incomplete (`validate`, `check`, `render`, `status`, `metrics`, `health`, `export`) | Health, status, validation, stale checks, export, and render paths are callable from both interfaces | PR-D1: implement `validate_project` and `check_refs`; PR-D2: implement `metrics` and `status`; PR-D3: implement `render` cache flow plus `health` aggregation and export |
-| P2 | Interface parity and output-contract hardening | CLI and MCP expose the same behavior and stable envelopes | PR-E1: implement CLI command delegation with no business logic in handlers; PR-E2: normalize JSON envelope schemas across MCP/CLI; PR-E3: add parity tests asserting same semantics from both adapters |
-
----
-
-## 12. Boundary Test Matrix
-
-This matrix closes current blind spots quickly while stubs remain tracked.
-
-| Boundary | Test type | What to assert | Fixture strategy | Priority |
-|----------|-----------|----------------|------------------|----------|
-| CLI -> Gateway | Adapter delegation tests | CLI parses payload/options and calls exactly one gateway operation; no business branching in CLI | `click.testing.CliRunner` + fake gateway object | P0 |
-| MCP -> Gateway | Tool wrapper contract tests | Tool handlers forward args correctly and return status-first envelope shape | Fake server decorator + fake gateway, no FastMCP runtime needed | P0 |
-| MCP -> Views/Check/Validate | Signature and envelope tests | `render_views`, `check_refs`, `health_check`, `project_status` call service functions with correct args and return machine-stable fields | Monkeypatched service functions returning deterministic fixtures | P0 |
-| Gateway -> Repository/Validator/TxLog | Transaction orchestration tests | validate-after-write flow, rollback on CRITICAL, dry-run no-save, tx log append on writes | In-memory repo + fake validator + fake tx log | P0 |
-| Views (`health`, `status`, `metrics`) | Read-model tests | Aggregation logic and severity rollups are deterministic | Small canonical web fixtures with focused findings | P1 |
-| Render cache (`views/render`) | Cache behavior tests | unchanged fingerprint skips writes; changed fingerprint writes and updates cache | temp directory cache file + fake renderer output | P1 |
-| Check services (`check_stale`, `check_refs`) | Consistency tests | stale/ref findings match known graph states | synthetic mini-web builders | P1 |
-| Interface parity (CLI vs MCP) | Black-box parity tests | same operation yields same status semantics and equivalent data payloads | shared fixture payloads and normalization helper | P2 |
-
-Suggested execution order:
-1. P0 tests first, because they catch architecture boundary drift immediately.
-2. P1 tests next, because they stabilize read services before feature expansion.
-3. P2 parity tests after both adapters are mostly implemented.
+For the CLI, the sequence is the same except that `build_gateway(context)` is called inside each command that needs mutation (rather than once at server startup), and the Click context object carries the `ProjectContext` between the root group and subcommands.
 
 ---
 
-## 13. Scale Strategy For Query Performance
+## Layer Dependency Rules
 
-The current graph query methods are correct for research-scale webs but include repeated traversals and repeated index construction. If large graph workloads matter now, add query indexes behind the same public methods.
+Arrows point downward only. No layer may import from a layer above it. These rules are enforced by code review; `epistemic/` has it easiest since the standard library is its only conceivable dependency.
 
-### Current hotspots
+```
+interfaces/*
+    ↓
+views/          controlplane/
+    ↓               ↓
+         config.py
+             ↓
+         adapters/
+             ↓
+         epistemic/
+```
 
-| Method | Current behavior | Typical cost |
-|--------|------------------|--------------|
-| `assumption_support_status` | Rebuilds implicit assumption -> prediction dependents by scanning all predictions | O(P * I) per call, where `I` is average implicit assumption count |
-| `parameter_impact` | Repeatedly recomputes claim downstream and prediction impact per affected claim | O(C + A + P + traversal overhead) with repeated set merges |
-| `validate_implicit_assumption_coverage` | Recomputes implicit assumption sets across all predictions | O(P * I) per validation pass |
+More precisely:
 
-### Proposed index set
+| Package | May import | May never import |
+|---|---|---|
+| `epistemic/` | standard library only | anything else |
+| `adapters/` | `epistemic/`, standard library | `controlplane/`, `views/`, `interfaces/` |
+| `config.py` | standard library only | anything else |
+| `controlplane/` | `epistemic/`, `config`, adapters *via protocols only* | `views/`, `interfaces/` |
+| `views/` | `controlplane/`, `epistemic/`, `config` | `interfaces/` |
+| `interfaces/*` | all layers above | other `interfaces/*` packages |
 
-| Index | Key -> Value | Used by | Build strategy |
-|-------|--------------|---------|----------------|
-| `implicit_assumption_to_predictions` | `AssumptionId -> set[PredictionId]` | `assumption_support_status`, `validate_implicit_assumption_coverage` | Lazy build on first query; invalidate on prediction/claim/assumption mutation |
-| `claim_to_downstream_claims` | `ClaimId -> set[ClaimId]` | `predictions_depending_on_claim`, `parameter_impact` | Precompute reverse graph closure once per web version |
-| `analysis_to_predictions` | `AnalysisId -> set[PredictionId]` | `parameter_impact` | Build from prediction registry |
-| `parameter_to_constrained_claims` | `ParameterId -> set[ClaimId]` | `parameter_impact` | Build from claim `parameter_constraints` |
+The critical rule in the third-to-last row: `controlplane/` uses adapters *only through the abstract protocol types defined in `epistemic/ports.py`*. It never imports `JsonRepository` or any other concrete adapter class. Only `interfaces/` (through the factory) wires concrete types together. This is what makes the control plane fully testable without the filesystem.
 
-### Complexity improvements (expected)
+The last row rule — interfaces cannot import each other — means the CLI cannot import MCP tools and the MCP server cannot import CLI formatters. Each interface is self-contained. Shared output logic belongs in `views/`, shared formatting helpers common to all text outputs would belong in a shared `interfaces/_shared/` module.
 
-| Query | Before | After |
-|-------|--------|-------|
-| `assumption_support_status` | O(P * I) | O(1) lookup + output size |
-| `validate_implicit_assumption_coverage` | O(P * I) per pass | O(total indexed edges) reuse with minimal extra filtering |
-| `parameter_impact` | repeated downstream traversal per affected claim | O(index lookups + union cost), no repeated graph walks |
+---
 
-### Rollout plan
+## Key Design Principles
 
-1. Add an internal immutable query-index container attached to `EpistemicWeb`.
-2. Build indexes lazily per web instance and cache them for repeated queries.
-3. Keep public method signatures unchanged to preserve interface compatibility.
-4. Add benchmark tests for small, medium, and large synthetic graphs.
-5. Guard rollout with feature flag until benchmark thresholds are met.
+**The audit scaffold, not the reasoning engine.** deSitter surfaces structural facts; it never makes logical judgments. An AI agent calling `query_web("refutation_impact", pid="P-001")` gets a precise set of claims and assumptions called into question. What to *do* about them is the agent's problem. This keeps deSitter domain-neutral and applicable across disciplines.
+
+**No execution.** deSitter does not run analyses. It records their provenance, captures their results when the researcher reports them, and tracks staleness. The `path` and `command` fields on `Analysis` are documentation. This is a deliberate constraint that eliminates a whole class of security concerns — no sandbox, no subprocess, no supply-chain risk from executing researcher code.
+
+**One gateway.** All mutations flow through the `Gateway`. This means a bug fixed in the gateway is fixed for every interface simultaneously. A new resource type requires one entry in the alias table and nothing in any interface. The gateway is the product; the interfaces are presentations.
+
+**Validate-after-write, not before.** The web is mutated in memory first, then validated, then written to disk. This ordering makes the structural invariants (enforced inside the web's methods) and the semantic invariants (checked by the domain validator) compose cleanly. The on-disk state is always the last state that passed full validation.
+
+**Native Python collections.** Entity fields use `dict`, `set`, and `list` rather than immutable variants. The `EpistemicWeb` is the encapsulation boundary, not the type system. This choice keeps entity construction ergonomic in tests and reduces friction in Python's `dataclasses` ecosystem. The trade-off is that a caller who extracts an entity from the web and mutates its fields directly bypasses all invariant enforcement. This is prevented by convention and code review, not by the type system.
+
+**ProjectContext carries data, not behaviour.** Services receive a `ProjectContext` object, not a service locator or a callback bag. Every service gets its file paths from `context.paths`. No service has module-level globals that represent project state. This makes services fully composable and fully testable: pass in a `ProjectContext` pointing at a temp directory and nothing touches the real filesystem.
+
+---
+
+## The Full Stack, in Summary
+
+The following traces a single `register_resource("claim", {...})` call all the way from the AI agent to the filesystem and back:
+
+```
+AI agent tool call
+    ↓
+interfaces/mcp/tools.py  ::  register_resource(resource, payload, dry_run)
+    │   parse, call _envelope, return dict
+    ↓
+controlplane/factory.py  ::  build_gateway(context)   [called once at startup]
+    ↓
+controlplane/gateway.py  ::  Gateway.register(resource, payload, dry_run=False)
+    │   1. resolve_resource("claim")  →  "claim"
+    │   2. repo.load()                →  EpistemicWeb (from disk)
+    │   3. build Claim from payload
+    │   4. web.register_claim(claim)  →  new_web  (or EpistemicError)
+    │      ├─ referential integrity check
+    │      ├─ cycle check on depends_on DAG
+    │      ├─ bidirectional link updates (Assumption.used_in_claims, etc.)
+    │      └─ deep copy → new EpistemicWeb
+    │   5. validator.validate(new_web)  →  list[Finding]
+    │      └─ all ten invariant functions called
+    │      if any CRITICAL  →  discard new_web, return GatewayResult(status="error")
+    │   6. if dry_run  →  return GatewayResult(status="dry_run")
+    │   7. repo.save(new_web)
+    │      └─ write to project/data/claims.json.tmp
+    │      └─ atomic rename → project/data/claims.json
+    │   8. tx_log.append("register/claim", claim_id)
+    │      └─ append to project/data/tx_log.jsonl
+    │      └─ return UUID
+    │   9. return GatewayResult(status="ok", changed=True, tx_id=UUID)
+    ↓
+interfaces/mcp/tools.py  ::  _envelope(result)
+    │   serialise GatewayResult to {"status": "ok", "changed": True, ...}
+    ↓
+AI agent receives structured dict
+```
+
+Every layer has exactly one responsibility. The kernel defines what is true. The adapters speak to storage. The gateway orchestrates. The interface formats for the consumer. Adding a new entity type means adding one dataclass in `model.py`, the methods in `web.py`, one entry in the gateway alias table, and the JSON serialisation in the repository — each in its correct layer, with no changes to anything else.

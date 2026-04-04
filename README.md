@@ -1,67 +1,75 @@
 # deSitter
 
-> **Early Development — not ready for use.**
-> The API, file formats, and CLI surface are unstable and will change without notice.
-> See [TRACKER.md](TRACKER.md) for current build status.
-
-## The Scientific Method as Code
-
-The scientific method has a structure: you make **claims**, ground them in **assumptions**, derive **predictions**, run **analyses** to test those predictions, and record what the evidence shows. That structure exists in every research project — but it almost never gets tracked. It lives in Notion pages, email threads, and researcher memory, and it breaks silently. A refuted prediction doesn't update the claims that depend on it. A revised assumption doesn't propagate to its consequences. Nobody can tell, six months later, why a conclusion was drawn.
-
-deSitter makes that structure explicit and machine-enforceable. It is a versioned, graph-structured registry of your epistemic chain — every claim, assumption, prediction, analysis, and theory, with the invariants that hold them together.
+*Versioned, invariant-enforced tracking for the epistemic structure of research.*
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Status: Early Development](https://img.shields.io/badge/status-early%20development-orange.svg)](TRACKER.md)
 
----
-
-## Built for AI Agent Swarms
-
-The primary interface is an [MCP server](https://modelcontextprotocol.io) — the protocol that lets AI agents call typed tools directly. This is intentional.
-
-The long-term vision is a research environment where a **swarm of AI agents** collaborates on a single project: one agent audits derivation chains, another identifies structural gaps, a third proposes new predictions, and a fourth validates that everything is still consistent — all working against the same shared epistemic web, simultaneously. The graph provides the coordination layer. The invariants ensure no agent can introduce inconsistencies. The audit trail records every mutation.
-
-Today, a single Claude or Copilot session can already do this:
-
-```
-Agent: call register_claim(...)      → "registered C-042"
-Agent: call run_health_check()       → "3 invariant violations found"
-Agent: call get_structural_gaps()    → "Assumption A-007 has no tested predictions"
-Agent: call get_derivation_chain("C-042") → [full chain back to foundational claims]
-```
-
-No subprocess wrangling. No screen scraping. Each operation is a structured tool call with typed arguments and a structured response. The CLI provides the same surface for humans and scripts.
+> **Early development — not ready for production use.**
+> The API, file formats, and CLI surface are unstable. See [TRACKER.md](TRACKER.md) for current build status.
 
 ---
 
-## What It Does
+## What It Is
 
-deSitter makes the epistemic graph of a research project explicit and keeps it consistent:
+The scientific method has a structure: you make **claims**, ground them in **assumptions**, derive **predictions**, run **analyses** to test those predictions, and record what the evidence shows. That structure exists in every research project, but it almost never gets tracked. It lives in Notion pages, email threads, and researcher memory — and it breaks silently.
 
-- **Register** claims, assumptions, predictions, analyses, theories, and their relationships
-- **Validate** the epistemic web against hard invariants (bidirectional links, DAG structure, tier constraints, coverage)
-- **Record** analysis results — deSitter never runs analyses; researchers run them and record the outcome
-- **Render** human-readable views (markdown tables, summaries) incrementally
-- **Inspect** the web for structural gaps — uncovered claims, untested assumptions, missing derivations
-- **Health-check** the project in one command — usable by CI or an AI agent
+A refuted prediction doesn't update the claims that depend on it. A revised assumption doesn't propagate to its consequences. Six months later, nobody can trace why a conclusion was drawn or whether the underlying support was ever intact.
 
-### The Audit Scaffold Principle
+deSitter makes that structure explicit and machine-enforceable. It is a versioned, graph-structured registry of your **epistemic chain** — every claim, assumption, prediction, analysis, and theory — with hard invariants that keep the graph consistent as research evolves.
 
-deSitter surfaces structural facts about the epistemic graph. It never makes logical judgments or prescriptive recommendations. The system is the scaffold. The researcher or AI agent is the auditor.
+deSitter is an **audit scaffold**, not a reasoning engine. It surfaces structural facts about the graph: missing links, untested assumptions, stale analyses, uncovered predictions. The researcher — or an AI agent — is the one who decides what to do about them.
 
-This means:
-- `get_structural_gaps` returns observations ("this assumption has no tested_by prediction"), not advice
-- `health_check` reports invariant violations, not research strategy
-- An AI agent calls traversal tools and applies its own domain knowledge — deSitter provides the map, not the conclusions
+---
+
+## Core Capabilities
+
+- **Register** claims, assumptions, predictions, analyses, theories, and parameters in a typed, versioned graph
+- **Enforce** referential integrity, DAG acyclicity, bidirectional links, and tier constraints at write time — not after the fact
+- **Validate** the full epistemic web on demand against ten domain invariants
+- **Track evidence** through prediction tiers (`FULLY_SPECIFIED`, `CONDITIONAL`, `FIT_CHECK`) with explicit independence-group accounting
+- **Detect staleness** when a parameter changes and propagates to analyses and predictions
+- **Health-check** the entire project in one command, with a machine-readable `HEALTHY / WARNINGS / CRITICAL` result suitable for CI
+- **Render** human-readable markdown views of the project graph, incrementally
+
+deSitter never executes analyses. Researchers run their own tools — Python, R, SageMath, Jupyter — and record outcomes. deSitter records provenance, enforces structure, and tracks what changed.
+
+---
+
+## Interfaces
+
+deSitter exposes the same capabilities through two equal interfaces:
+
+**CLI — for humans and scripts**
+
+```bash
+ds register claim '{"id": "C-001", "statement": "...", "type": "foundational", ...}'
+ds health
+ds validate
+ds status
+ds render
+```
+
+Every command accepts `--json` for machine-readable output. Shell scripts, CI pipelines, and Makefiles work naturally against the CLI.
+
+**MCP server — for AI agents**
+
+```bash
+ds-mcp   # start the MCP server
+```
+
+The [Model Context Protocol](https://modelcontextprotocol.io) lets AI assistants (Claude, Copilot, Cursor, and others) call deSitter tools directly as structured operations — no subprocess, no parsing, no screen-scraping. An agent calls `register_claim`, `health_check`, or `query_web` with typed arguments and receives a structured response. The same gateway that serves the CLI serves the MCP server: there is no divergence in behaviour.
+
+The MCP interface is designed with AI-assisted research in mind. An agent with access to the deSitter tool surface can audit a derivation chain, identify structural gaps, pre-flight a new prediction with `dry_run=True`, and commit it — all within a single session. The epistemic web provides the shared, persistent, invariant-enforced state. The AI provides the reasoning.
 
 ---
 
 ## Quick Start
 
 ```bash
-pip install desitter          # CLI + adapters
-pip install "desitter[mcp]"   # + MCP server
+pip install desitter            # CLI + core
+pip install "desitter[mcp]"     # + MCP server for AI agent use
 ```
 
 ```bash
@@ -74,71 +82,66 @@ ds register claim '{"id": "C-001", "statement": "...", "type": "foundational", .
 # Run all health checks
 ds health
 
-# Inspect structural gaps
-ds inspect
+# Check structural gaps
+ds validate
 
-# Start the MCP server (for AI agent use)
+# Start the MCP server
 ds-mcp
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a full technical walkthrough.
+---
+
+## Architecture
+
+deSitter is built in layers, from the inside out. The innermost layer — the **epistemic kernel** — is pure Python with no I/O dependencies. It defines the entity model, the `EpistemicWeb` aggregate root, and all invariant rules. Nothing in the kernel touches a file, a database, or a network socket. This is what makes the core fully testable in memory and reusable without any infrastructure.
+
+The layers above the kernel — adapters, control plane, view services, interfaces — each have a single responsibility and depend only on layers below them.
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Interface Layer                                     │
+│  cli/ — humans & scripts    mcp/ — AI agents         │
+└─────────────────────┬────────────────────────────────┘
+                      │
+┌─────────────────────▼────────────────────────────────┐
+│  View Services                                       │
+│  health · status · metrics · render                  │
+└─────────────────────┬────────────────────────────────┘
+                      │
+┌─────────────────────▼────────────────────────────────┐
+│  Control Plane (single gateway for all mutations)    │
+│  gateway · validate · check · export · automation    │
+└─────────────────────┬────────────────────────────────┘
+                      │
+┌─────────────────────▼────────────────────────────────┐
+│  Adapters                                            │
+│  json_repository · transaction_log · renderer        │
+└─────────────────────┬────────────────────────────────┘
+                      │
+┌─────────────────────▼────────────────────────────────┐
+│  Epistemic Kernel — pure Python, no I/O              │
+│  types · model · web · invariants · ports            │
+└──────────────────────────────────────────────────────┘
+```
+
+All mutations route through a single `Gateway`. Both the CLI and the MCP server call the same gateway methods — there is no interface-specific business logic. A bug fixed at the gateway is fixed for every interface simultaneously.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a full technical walkthrough: the entity model, copy-on-write mutation semantics, bidirectional invariant enforcement, every graph traversal method, the full transaction lifecycle, and a concrete end-to-end trace through the stack.
 
 ---
 
 ## Design Goals
 
-| Goal | Description |
-|------|-------------|
-| **Audit scaffold** | Surfaces structural facts about the epistemic graph; never prescribes research direction |
-| **AI-agent first** | MCP server is the primary interface. Agents navigate the web, register artifacts, and validate structure through typed tools |
-| **Human parity** | Every MCP operation is also a CLI command. Humans get rich terminal output; scripts get `--json` |
-| **Single gateway** | All mutations go through one boundary. No MCP-specific or CLI-specific business logic |
-| **Invariants at mutation time** | Broken references, cycles, and bidirectional inconsistencies are caught when introduced — not discovered later |
-| **Consumer model** | deSitter records analysis results from researcher-run tools. It never executes analyses itself |
+| Goal | Meaning |
+|------|---------|
+| **Audit scaffold** | Surfaces structural facts. Never prescribes research direction or makes logical judgments |
+| **Invariants at write time** | Broken references, cycles, and constraint violations are caught at mutation — not discovered later |
+| **Single gateway** | All mutations flow through one boundary. No MCP-specific or CLI-specific business logic |
+| **Consumer model** | deSitter records results from researcher-run analyses. It never executes code itself |
+| **AI-native interface** | MCP server exposes all capabilities as typed tools. No subprocess, no parsing, full structure |
+| **Human parity** | Every MCP tool has a CLI equivalent. Humans get Rich terminal output; scripts get `--json` |
 | **Domain-neutral** | Works for physics, ML, medicine, social science. The vocabulary is general empirical reasoning |
-| **Zero-friction dependencies** | Epistemic kernel is stdlib-only. `click`/`rich` for CLI UX. `fastmcp` opt-in for MCP |
-
----
-
-## Architecture Overview
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Interface Layer (interfaces/) — equal peers         │
-│  cli/  Humans + scripts       mcp/  AI agents        │
-│  rest/ future · gui/ future · sdk/ future            │
-└─────────────────────┬────────────────────────────────┘
-                      │  (no business logic in any interface)
-┌─────────────────────▼────────────────────────────────┐
-│  View Services (views/) — always available           │
-│  health · render · status · metrics                  │
-│  Read-only composed summaries + derived files        │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Core Services (controlplane/) — always available            │
-│  gateway · validate · check · export · automation    │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Config (config.py) — runtime contract               │
-│  DesitterConfig · ProjectContext · ProjectPaths       │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Infrastructure Adapters (adapters/)                 │
-│  json_repository · transaction_log · markdown_renderer│
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
-│  Epistemic Kernel (epistemic/) — pure Python, no I/O │
-│  model · web · invariants · types · ports            │
-└──────────────────────────────────────────────────────┘
-```
-
-**Dependency rule:** arrows point down only. `interfaces/*` depends on everything below. `epistemic/` depends on nothing above stdlib.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for data flow, package layout, design decisions, and the entity model.
+| **Minimal dependencies** | Epistemic kernel is stdlib-only. `click` and `rich` for CLI. `fastmcp` is opt-in for MCP |
 
 ---
 
@@ -146,63 +149,59 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for data flow, package layout, design dec
 
 ```
 src/desitter/
-├── config.py               # DesitterConfig, ProjectContext, load_config(), build_context()
-├── epistemic/              # Domain kernel — pure Python, zero I/O
-│   ├── types.py            # Typed IDs, enums, Finding
-│   ├── model.py            # Entity dataclasses (Claim, Prediction, …)
-│   ├── web.py              # EpistemicWeb aggregate root
-│   ├── invariants.py       # Cross-entity validation rules
-│   └── ports.py            # Abstract interfaces (WebRepository, …)
-├── adapters/               # Infrastructure — stdlib only
-│   ├── json_repository.py
+├── config.py               # ProjectContext, ProjectPaths — runtime configuration contract
+├── epistemic/              # Epistemic kernel — pure Python, zero I/O
+│   ├── types.py            # Typed IDs, enums, Finding, Severity
+│   ├── model.py            # Entity dataclasses: Claim, Assumption, Prediction, …
+│   ├── web.py              # EpistemicWeb — aggregate root, all mutations
+│   ├── invariants.py       # Ten pure validator functions
+│   └── ports.py            # Abstract interfaces: WebRepository, WebValidator, …
+├── adapters/               # Infrastructure implementations
+│   ├── json_repository.py  # Implements WebRepository over project/data/*.json
 │   ├── markdown_renderer.py
-│   └── transaction_log.py  # implemented
-├── controlplane/                   # Core services — mutations + queries
-│   ├── gateway.py          # Single mutation/query boundary
-│   ├── validate.py         # Structural validation
+│   └── transaction_log.py
+├── controlplane/           # Core services
+│   ├── gateway.py          # Single mutation/query boundary + GatewayResult
+│   ├── factory.py          # Wires concrete adapters into Gateway
+│   ├── validate.py
 │   ├── check.py            # check_stale, check_refs
-│   ├── export.py           # Bulk JSON/markdown export
-│   └── automation.py       # Render-trigger policy table (implemented)
-├── views/                  # View services — read-only composed summaries
-│   ├── health.py           # Composed health report
-│   ├── render.py           # Incremental markdown generation
-│   ├── status.py           # Summary read model
-│   └── metrics.py          # Evidence statistics
-└── interfaces/             # Interface adapters — equal peers, no business logic
-    ├── cli/                # Humans + scripts
-    │   ├── main.py         # Click commands
+│   ├── export.py
+│   └── automation.py       # Render-trigger policy table
+├── views/                  # Read-only composed summaries
+│   ├── health.py           # run_health_check → HealthReport
+│   ├── render.py           # SHA-256 fingerprint cache + incremental render
+│   ├── status.py           # get_status → ProjectStatus
+│   └── metrics.py
+└── interfaces/             # Thin adapters — no business logic
+    ├── cli/
+    │   ├── main.py         # Click command tree
     │   └── formatters.py   # Rich tables + JSON fallback
-    └── mcp/                # AI agents
+    └── mcp/
         ├── server.py       # FastMCP entry point
-        └── tools.py        # Tool handlers
+        └── tools.py        # Tool handlers → gateway + view services
 ```
 
 ---
 
-## Development
+## Development Status
 
 ```bash
-# Install with dev dependencies
 pip install -e ".[dev]"
-
-# Run tests
 pytest
-
-# Run tests with coverage
 pytest --cov
 ```
 
-### Build phases
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Epistemic kernel — `EpistemicWeb`, all entities, ten invariants | **Complete** — 295 tests passing |
+| 2 | Persistence, config, packaging | **Partial** — config, transaction log, and automation done; JSON repository and renderer stubbed |
+| 3 | Control plane and view services — gateway, validate, health, render | In progress |
+| 4 | Interface layer — MCP server and CLI | Pending |
+| 5 | Human-first UX — Rich output, `ds inspect` | Pending |
+| 6 | Results ingestion — `record_result`, analysis provenance | Pending |
+| 7 | Governance — session tracking, close gates (opt-in) | Pending |
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 1 | Domain core — EpistemicWeb, entities, invariants | **Complete — 295 tests passing** |
-| 2 | Persistence, config, packaging | **Partial** — `config.py`, `transaction_log.py`, `automation.py` done; JSON repo + renderer stubbed |
-| 3 | Core and view services (gateway, validate, health, render) | Pending |
-| 4 | Interface layer — MCP server + CLI | Pending |
-| 5 | Human-first UX (Rich output, `ds inspect`) | Pending |
-| 6 | Results ingestion (record_result, SDK shim) | Pending |
-| 7 | Governance — sessions, close gates (opt-in) | Pending |
+The epistemic kernel (Phase 1) is the foundation the rest is built on. It is complete, fully tested, and stable. Layers above it are being built in the order listed.
 
 See [TRACKER.md](TRACKER.md) for the full task-level breakdown.
 
