@@ -31,7 +31,7 @@ all = [
 ]
 
 [project.scripts]
-horizon = "horizon_research.cli.main:cli"
+horizon = "horizon_research.interfaces.cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/horizon_research"]

@@ -936,8 +936,6 @@ class DeadEnd:
     title: str
     description: str
     status: DeadEndStatus
-    session_opened: int
-    session_resolved: int | None = None
     related_predictions: set[PredictionId] = field(default_factory=set)
     related_claims: set[ClaimId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, or analysis reference
@@ -1010,12 +1008,12 @@ import copy
 from dataclasses import dataclass, field
 
 from .model import (
-    Assumption, Claim, Concept, Discovery, Failure, Theory,
-    IndependenceGroup, PairwiseSeparation, Parameter, Prediction, Script,
+    Analysis, Assumption, Claim, Concept, DeadEnd, Discovery,
+    IndependenceGroup, PairwiseSeparation, Parameter, Prediction, Theory,
 )
 from .types import (
-    AssumptionId, ClaimId, ConceptId, DiscoveryId, DeadEndId, Finding,
-    TheoryId, IndependenceGroupId, ParameterId, PredictionId, AnalysisId, Severity,
+    AnalysisId, AssumptionId, ClaimId, ConceptId, DeadEndId, DiscoveryId,
+    Finding, IndependenceGroupId, ParameterId, PredictionId, Severity, TheoryId,
 )
 
 
@@ -1029,14 +1027,14 @@ class EpistemicWeb:
     claims: dict[ClaimId, Claim] = field(default_factory=dict)
     assumptions: dict[AssumptionId, Assumption] = field(default_factory=dict)
     predictions: dict[PredictionId, Prediction] = field(default_factory=dict)
-    hypotheses: dict[TheoryId, Theory] = field(default_factory=dict)
+    theories: dict[TheoryId, Theory] = field(default_factory=dict)
     discoveries: dict[DiscoveryId, Discovery] = field(default_factory=dict)
-    scripts: dict[AnalysisId, Script] = field(default_factory=dict)
+    analyses: dict[AnalysisId, Analysis] = field(default_factory=dict)
     independence_groups: dict[IndependenceGroupId, IndependenceGroup] = field(
         default_factory=dict
     )
     pairwise_separations: list[PairwiseSeparation] = field(default_factory=list)
-    failures: dict[DeadEndId, Failure] = field(default_factory=dict)
+    dead_ends: dict[DeadEndId, DeadEnd] = field(default_factory=dict)
     concepts: dict[ConceptId, Concept] = field(default_factory=dict)
     parameters: dict[ParameterId, Parameter] = field(default_factory=dict)
 
@@ -1147,19 +1145,19 @@ class EpistemicWeb:
 
         return new
 
-    def register_analysis(self, script: Script) -> EpistemicWeb:
-        """Add a analysis."""
-        if script.id in self.scripts:
-            raise DuplicateIdError(f"Script {script.id} already exists")
+    def register_analysis(self, analysis: Analysis) -> EpistemicWeb:
+        """Add an analysis."""
+        if analysis.id in self.analyses:
+            raise DuplicateIdError(f"Analysis {analysis.id} already exists")
         new = self._copy()
-        new.scripts[script.id] = script
+        new.analyses[analysis.id] = analysis
         return new
 
-    def register_theory(self, hypothesis: Theory) -> EpistemicWeb:
-        if hypothesis.id in self.hypotheses:
-            raise DuplicateIdError(f"Theory {hypothesis.id} already exists")
+    def register_theory(self, theory: Theory) -> EpistemicWeb:
+        if theory.id in self.theories:
+            raise DuplicateIdError(f"Theory {theory.id} already exists")
         new = self._copy()
-        new.hypotheses[hypothesis.id] = hypothesis
+        new.theories[theory.id] = theory
         return new
 
     def register_independence_group(self, group: IndependenceGroup) -> EpistemicWeb:
@@ -1176,11 +1174,11 @@ class EpistemicWeb:
         new.discoveries[discovery.id] = discovery
         return new
 
-    def register_dead_end(self, failure: Failure) -> EpistemicWeb:
-        if failure.id in self.failures:
-            raise DuplicateIdError(f"Failure {failure.id} already exists")
+    def register_dead_end(self, dead_end: DeadEnd) -> EpistemicWeb:
+        if dead_end.id in self.dead_ends:
+            raise DuplicateIdError(f"DeadEnd {dead_end.id} already exists")
         new = self._copy()
-        new.failures[failure.id] = failure
+        new.dead_ends[dead_end.id] = dead_end
         return new
 
     def register_concept(self, concept: Concept) -> EpistemicWeb:
@@ -1212,17 +1210,12 @@ class EpistemicWeb:
 
     def transition_dead_end(
         self, fid: DeadEndId, new_status: DeadEndStatus,
-        session_resolved: int | None = None,
     ) -> EpistemicWeb:
-        """Change a failure's status, with side effects."""
-        if fid not in self.failures:
-            raise BrokenReferenceError(f"Failure {fid} does not exist")
+        """Change a dead end's status."""
+        if fid not in self.dead_ends:
+            raise BrokenReferenceError(f"DeadEnd {fid} does not exist")
         new = self._copy()
-        new.failures[fid].status = new_status
-        if new_status == DeadEndStatus.RESOLVED and session_resolved is not None:
-            new.failures[fid].session_resolved = session_resolved
-        elif new_status == DeadEndStatus.ACTIVE:
-            new.failures[fid].session_resolved = None
+        new.dead_ends[fid].status = new_status
         return new
 
     # ── Invariant checks ──────────────────────────────────────────
@@ -1565,10 +1558,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..domain.model import Assumption, Claim, Prediction, Script, ...
-from ..domain.ports import WebRepository
-from ..domain.types import ClaimId, AssumptionId, ...
-from ..domain.web import EpistemicWeb
+from ..epistemic.model import Analysis, Assumption, Claim, Prediction, ...
+from ..epistemic.ports import WebRepository
+from ..epistemic.types import ClaimId, AssumptionId, ...
+from ..epistemic.web import EpistemicWeb
 
 
 class JsonFileRepository:
@@ -1664,8 +1657,7 @@ dependencies = [
 ]
 
 [project.scripts]
-horizon = "horizon_research.cli.main:main"
-horizon-research = "horizon_research.cli.main:main"
+horizon = "horizon_research.interfaces.cli.main:main"
 
 [project.optional-dependencies]
 mcp = ["fastmcp>=2,<3"]
@@ -1685,7 +1677,7 @@ than becoming the package root.
 
 ```python
 # src/horizon_research/__main__.py
-from horizon_research.cli.main import main
+from horizon_research.interfaces.cli.main import main
 
 
 if __name__ == "__main__":
@@ -2065,10 +2057,10 @@ structured tool calls with no subprocess or file manipulation needed.
 | `set_resource` | `gateway.set(resource_type, id, payload, dry_run)` | Write |
 | `transition_resource` | `gateway.transition(resource_type, id, status, dry_run)` | Write |
 | `query_web` | `gateway.query(query_type, **params)` | Read |
-| `render_views` | `render.run_render(context, force)` | Write |
-| `check_stale` | `check.run_check_stale(context)` | Read |
-| `check_refs` | `check.run_check_refs(context)` | Read |
-| `export_web` | `export.run_export(context, fmt, output_path)` | Read |
+| `render_views` | `render.render_all(context, force)` | Write |
+| `check_stale` | `check.check_stale(context)` | Read |
+| `check_refs` | `check.check_refs(context)` | Read |
+| `export_web` | `export.export_json / export_markdown` | Read |
 
 **MCP server entry point** (`interfaces/mcp/server.py`):
 
@@ -2138,8 +2130,8 @@ the MCP server returns).
 | `validate` | `validate.validate_project(context, repo)` | Read |
 | `health` | `health.run_health_check(context, repo, validator)` | Read |
 | `status` | `status.get_status(context, repo)` | Read |
-| `render` | `render.run_render(context, force)` | Write |
-| `export` | `export.run_export(context, fmt, output)` | Read |
+| `render` | `render.render_all(context, force)` | Write |
+| `export` | `export.export_json / export_markdown` | Read |
 | `init` | (inline) | Write |
 
 **CLI entry point** — thin dispatch, nothing more:

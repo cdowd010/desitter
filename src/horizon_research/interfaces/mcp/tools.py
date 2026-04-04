@@ -153,8 +153,8 @@ def register_tools(server, context: ProjectContext) -> None:
 
         force: if True, re-render even if nothing has changed.
         """
-        from ...views.render import run_render
-        result = run_render(context, force=force)
+        from ...views.render import render_all
+        result = render_all(context, force=force)
         return _envelope(result)
 
     @server.tool()
@@ -164,8 +164,8 @@ def register_tools(server, context: ProjectContext) -> None:
         Returns analyses whose uses_parameters set includes a parameter
         that has changed since the analysis was last run.
         """
-        from ...core.check import run_check_stale
-        findings = run_check_stale(context)
+        from ...core.check import check_stale
+        findings = check_stale(context)
         return {
             "status": "ok",
             "findings": [
@@ -177,8 +177,8 @@ def register_tools(server, context: ProjectContext) -> None:
     @server.tool()
     def check_refs() -> dict:
         """Verify all ID cross-references in the epistemic web are intact."""
-        from ...core.check import run_check_refs
-        findings = run_check_refs(context)
+        from ...core.check import check_refs
+        findings = check_refs(context)
         return {
             "status": "ok",
             "findings": [
@@ -194,14 +194,15 @@ def register_tools(server, context: ProjectContext) -> None:
         fmt: "json" or "markdown"
         output_path: write to this path; if None, return in response data.
         """
-        from ...core.export import run_export
         from pathlib import Path
-        result = run_export(
-            context,
-            fmt=fmt,
-            output_path=Path(output_path) if output_path else None,
-        )
-        return _envelope(result)
+        from ...core.export import export_json, export_markdown
+        repo = JsonRepository(context.paths.data_dir)
+        out = Path(output_path) if output_path else context.paths.project_dir / "export"
+        if fmt == "json":
+            export_json(context, repo, out if output_path else out.with_suffix(".json"))
+        else:
+            export_markdown(context, repo, out)
+        return {"status": "ok", "changed": True, "message": f"Exported as {fmt} to {out}"}
 
 
 def _envelope(result) -> dict:

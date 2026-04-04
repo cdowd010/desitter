@@ -16,36 +16,36 @@ Public surface:
 """
 
 from .model import (
+    Analysis,
     Assumption,
     Claim,
     Concept,
+    DeadEnd,
     Discovery,
-    Failure,
-    Hypothesis,
     IndependenceGroup,
     PairwiseSeparation,
     Parameter,
     Prediction,
-    Script,
+    Theory,
 )
 from .types import (
+    AnalysisId,
     AssumptionId,
     ClaimId,
     ConceptId,
     ConfidenceTier,
+    DeadEndId,
+    DeadEndStatus,
     DiscoveryId,
     EvidenceKind,
-    FailureId,
-    FailureStatus,
     Finding,
-    HypothesisId,
     IndependenceGroupId,
     MeasurementRegime,
     ParameterId,
     PredictionId,
     PredictionStatus,
-    ScriptId,
     Severity,
+    TheoryId,
 )
 from .web import (
     BrokenReferenceError,
@@ -58,13 +58,13 @@ from .web import (
 
 __all__ = [
     # types
-    "ClaimId", "AssumptionId", "PredictionId", "HypothesisId", "DiscoveryId",
-    "ScriptId", "IndependenceGroupId", "ParameterId", "ConceptId", "FailureId",
+    "ClaimId", "AssumptionId", "PredictionId", "TheoryId", "DiscoveryId",
+    "AnalysisId", "IndependenceGroupId", "ParameterId", "ConceptId", "DeadEndId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
-    "PredictionStatus", "FailureStatus",
+    "PredictionStatus", "DeadEndStatus",
     # model
-    "Claim", "Assumption", "Prediction", "Script", "IndependenceGroup",
-    "PairwiseSeparation", "Hypothesis", "Discovery", "Failure", "Concept", "Parameter",
+    "Claim", "Assumption", "Prediction", "Theory", "IndependenceGroup",
+    "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Concept", "Parameter",
     # web
     "EpistemicWeb", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
     "CycleError", "InvariantViolation",

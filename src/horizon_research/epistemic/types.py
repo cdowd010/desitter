@@ -23,8 +23,7 @@ IndependenceGroupId = NewType("IndependenceGroupId", str)
 ParameterId = NewType("ParameterId", str)
 ConceptId = NewType("ConceptId", str)
 DeadEndId = NewType("DeadEndId", str)
-# GoalId lives in features/goals.py — research goals are a feature layer,
-# not part of the epistemic kernel.
+
 
 
 # ── Severity ──────────────────────────────────────────────────────

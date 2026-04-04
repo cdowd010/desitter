@@ -5,7 +5,7 @@ Delegates to the Click CLI, so:
 is equivalent to:
     horizon <command> [options]
 """
-from horizon_research.cli.main import cli
+from horizon_research.interfaces.cli.main import cli
 
 if __name__ == "__main__":
     cli()

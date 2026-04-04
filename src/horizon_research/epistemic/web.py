@@ -257,17 +257,12 @@ class EpistemicWeb:
         self,
         did: DeadEndId,
         new_status: DeadEndStatus,
-        session_resolved: int | None = None,
     ) -> EpistemicWeb:
-        """Change a dead end's status, with side effects."""
+        """Change a dead end's status."""
         if did not in self.dead_ends:
             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
         new = self._copy()
         new.dead_ends[did].status = new_status
-        if new_status == DeadEndStatus.RESOLVED and session_resolved is not None:
-            new.dead_ends[did].session_resolved = session_resolved
-        elif new_status == DeadEndStatus.ACTIVE:
-            new.dead_ends[did].session_resolved = None
         return new
 
     # ── Invariant checks ──────────────────────────────────────────

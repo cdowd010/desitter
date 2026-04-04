@@ -29,8 +29,6 @@ from .types import (
     PredictionStatus,
     TheoryId,
 )
-# ResearchGoal lives in features/goals.py — it is a project management
-# concept, not an epistemic entity. The epistemic web has no knowledge of goals.
 
 
 @dataclass
@@ -194,8 +192,6 @@ class DeadEnd:
     title: str
     description: str
     status: DeadEndStatus
-    session_opened: int
-    session_resolved: int | None = None
     related_predictions: set[PredictionId] = field(default_factory=set)
     related_claims: set[ClaimId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, or analysis reference
@@ -237,6 +233,3 @@ class Parameter:
     notes: str | None = None
 
 
-# ResearchGoal has been moved to features/goals.py.
-# It is a project management concept (not epistemic) and belongs in the
-# goals feature layer alongside the MCP tools that manage it.
