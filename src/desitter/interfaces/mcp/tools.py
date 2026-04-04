@@ -23,39 +23,15 @@ Core tool surface:
 """
 from __future__ import annotations
 
-from ...adapters.json_repository import JsonRepository
-from ...adapters.markdown_renderer import MarkdownRenderer
-from ...adapters.transaction_log import JsonTransactionLog
 from ...config import ProjectContext
-from ...controlplane.gateway import Gateway
-from ...controlplane.validate import DomainValidator
+from ...controlplane.factory import build_gateway
 from ...views.health import run_health_check
 from ...views.status import get_status
 
 
-def _build_gateway(context: ProjectContext) -> Gateway:
-    """Construct a fully wired Gateway from a ProjectContext."""
-    repo = JsonRepository(context.paths.data_dir)
-    validator = DomainValidator()
-    renderer = MarkdownRenderer()
-    tx_log = JsonTransactionLog(context.paths.transaction_log_file)
-    prose_sync = _NullProseSync()
-    return Gateway(context, repo, validator, renderer, prose_sync, tx_log)
-
-
-class _NullProseSync:
-    """No-op ProseSync used until the prose sync adapter is implemented."""
-    def sync(self, web):
-        """Satisfy the ProseSync interface without side effects.
-
-        Returns an empty mapping to indicate no prose files were updated.
-        """
-        return {}
-
-
 def register_tools(server, context: ProjectContext) -> None:
     """Register all MCP tool handlers on the FastMCP server instance."""
-    gateway = _build_gateway(context)
+    gateway = build_gateway(context)
 
     @server.tool()
     def register_resource(resource: str, payload: dict, dry_run: bool = False) -> dict:
@@ -109,10 +85,8 @@ def register_tools(server, context: ProjectContext) -> None:
 
         Returns CLEAN or BLOCKED with a list of findings.
         """
-        repo = JsonRepository(context.paths.data_dir)
-        validator = DomainValidator()
         from ...controlplane.validate import validate_project
-        findings = validate_project(context, repo)
+        findings = validate_project(context, gateway._repo)
         status = "CLEAN" if not any(
             f.severity.name == "CRITICAL" for f in findings
         ) else "BLOCKED"
@@ -130,9 +104,7 @@ def register_tools(server, context: ProjectContext) -> None:
 
         overall: "HEALTHY" | "WARNINGS" | "CRITICAL"
         """
-        repo = JsonRepository(context.paths.data_dir)
-        validator = DomainValidator()
-        report = run_health_check(context, repo, validator)
+        report = run_health_check(context, gateway._repo, gateway._validator)
         return {
             "status": report.overall,
             "critical": report.critical_count,
@@ -146,9 +118,8 @@ def register_tools(server, context: ProjectContext) -> None:
     @server.tool()
     def project_status() -> dict:
         """Return a high-level project status snapshot."""
-        repo = JsonRepository(context.paths.data_dir)
         from ...views.status import format_status_dict
-        status = get_status(context, repo)
+        status = get_status(context, gateway._repo)
         return {"status": "ok", "data": format_status_dict(status)}
 
     @server.tool()
@@ -200,12 +171,11 @@ def register_tools(server, context: ProjectContext) -> None:
         """
         from pathlib import Path
         from ...controlplane.export import export_json, export_markdown
-        repo = JsonRepository(context.paths.data_dir)
         out = Path(output_path) if output_path else context.paths.project_dir / "export"
         if fmt == "json":
-            export_json(context, repo, out if output_path else out.with_suffix(".json"))
+            export_json(context, gateway._repo, out if output_path else out.with_suffix(".json"))
         else:
-            export_markdown(context, repo, out)
+            export_markdown(context, gateway._repo, out)
         return {"status": "ok", "changed": True, "message": f"Exported as {fmt} to {out}"}
 
 

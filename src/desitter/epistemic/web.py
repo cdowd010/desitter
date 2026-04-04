@@ -182,10 +182,12 @@ class EpistemicWeb:
         assumption = self.assumptions.get(aid)
         if assumption is None:
             return {"direct_claims": set(), "dependent_predictions": set(), "tested_by": set()}
-        dependent: set[PredictionId] = set()
+        # Build inverse index once: {AssumptionId: set[PredictionId]}
+        implicit_dependents: dict[AssumptionId, set[PredictionId]] = {}
         for pid in self.predictions:
-            if aid in self.prediction_implicit_assumptions(pid):
-                dependent.add(pid)
+            for dep_aid in self.prediction_implicit_assumptions(pid):
+                implicit_dependents.setdefault(dep_aid, set()).add(pid)
+        dependent = implicit_dependents.get(aid, set())
         return {
             "direct_claims": assumption.used_in_claims.copy(),
             "dependent_predictions": dependent,
