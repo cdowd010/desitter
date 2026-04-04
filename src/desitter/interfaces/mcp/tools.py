@@ -86,7 +86,7 @@ def register_tools(server, context: ProjectContext) -> None:
         Returns CLEAN or BLOCKED with a list of findings.
         """
         from ...controlplane.validate import validate_project
-        findings = validate_project(context, gateway._repo)
+        findings = validate_project(context, gateway.repo)
         status = "CLEAN" if not any(
             f.severity.name == "CRITICAL" for f in findings
         ) else "BLOCKED"
@@ -104,7 +104,7 @@ def register_tools(server, context: ProjectContext) -> None:
 
         overall: "HEALTHY" | "WARNINGS" | "CRITICAL"
         """
-        report = run_health_check(context, gateway._repo, gateway._validator)
+        report = run_health_check(context, gateway.repo, gateway.validator)
         return {
             "status": report.overall,
             "critical": report.critical_count,
@@ -119,7 +119,7 @@ def register_tools(server, context: ProjectContext) -> None:
     def project_status() -> dict:
         """Return a high-level project status snapshot."""
         from ...views.status import format_status_dict
-        status = get_status(context, gateway._repo)
+        status = get_status(context, gateway.repo)
         return {"status": "ok", "data": format_status_dict(status)}
 
     @server.tool()
@@ -129,8 +129,19 @@ def register_tools(server, context: ProjectContext) -> None:
         force: if True, re-render even if nothing has changed.
         """
         from ...views.render import render_all
-        result = render_all(context, force=force)
-        return _envelope(result)
+        web = gateway.repo.load()
+        written_by_surface = render_all(
+            context,
+            web,
+            gateway.renderer,
+            force=force,
+        )
+        return {
+            "status": "ok",
+            "changed": any(written_by_surface.values()),
+            "message": "Rendered view surfaces",
+            "data": {"written_by_surface": written_by_surface},
+        }
 
     @server.tool()
     def check_stale() -> dict:
@@ -153,7 +164,7 @@ def register_tools(server, context: ProjectContext) -> None:
     def check_refs() -> dict:
         """Verify all ID cross-references in the epistemic web are intact."""
         from ...controlplane.check import check_refs
-        findings = check_refs(context)
+        findings = check_refs(context, gateway.repo)
         return {
             "status": "ok",
             "findings": [
@@ -173,9 +184,9 @@ def register_tools(server, context: ProjectContext) -> None:
         from ...controlplane.export import export_json, export_markdown
         out = Path(output_path) if output_path else context.paths.project_dir / "export"
         if fmt == "json":
-            export_json(context, gateway._repo, out if output_path else out.with_suffix(".json"))
+            export_json(context, gateway.repo, out if output_path else out.with_suffix(".json"))
         else:
-            export_markdown(context, gateway._repo, out)
+            export_markdown(context, gateway.repo, out)
         return {"status": "ok", "changed": True, "message": f"Exported as {fmt} to {out}"}
 
 

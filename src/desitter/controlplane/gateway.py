@@ -115,6 +115,21 @@ class Gateway:
         self._prose_sync = prose_sync
         self._tx_log = tx_log
 
+    @property
+    def repo(self) -> WebRepository:
+        """Read-only access to repository dependency for read services."""
+        return self._repo
+
+    @property
+    def validator(self) -> WebValidator:
+        """Read-only access to validator dependency for health/report services."""
+        return self._validator
+
+    @property
+    def renderer(self) -> WebRenderer:
+        """Read-only access to renderer dependency for view generation services."""
+        return self._renderer
+
     def resolve_resource(self, alias: str) -> str:
         """Resolve a resource alias to its canonical key.
 

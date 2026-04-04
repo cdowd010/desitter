@@ -120,3 +120,50 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` blocked
 - [ ] Tests: SDK shim delegates to same gateway endpoint as CLI
 
 **Exit criteria:** A researcher can record a result from a script with one line. An agent can record it with one MCP tool call.
+
+---
+
+## Architecture Remediation Backlog (Cross-Phase)
+> Goal: fix boundary architecture issues immediately, and track intentionally unimplemented modules without ad hoc implementation.
+
+- [x] Fix MCP boundary contract mismatches (`render_all` call shape, `check_refs` args)
+- [x] Remove MCP private reach-through into gateway internals (`gateway._repo`, `gateway._validator`) by adding public read-only accessors
+- [ ] Add architecture contract test: no private gateway collaborator access from interface adapters
+- [ ] Add architecture contract test: MCP wrapper signatures match underlying service function signatures
+- [ ] Add architecture contract test: status-first envelope is stable for all MCP tools
+- [ ] Document and enforce policy: stubs are only implemented in their owning phase below
+
+### Top 5 PR Milestones
+
+- [ ] PR-A1: Boundary contract hardening and adapter encapsulation guardrails
+- [ ] PR-B1: Gateway mutation orchestration (`register`) with validate-after-write + dry-run + tx log
+- [ ] PR-B2: Gateway read/query routes (`get`, `list`, `query`) and canonical payload normalization
+- [ ] PR-C1: Adapter completeness (`JsonRepository`, `MarkdownRenderer`) with round-trip tests
+- [ ] PR-D1: Read-service completeness (`validate`, `check`, `render`, `status`, `metrics`, `health`, `export`) and shared fixtures
+
+---
+
+## Boundary Test Matrix Execution Backlog
+> Goal: close CLI/MCP/gateway/render/check/status blind spots in the fastest order.
+
+- [ ] P0 CLI -> Gateway delegation tests (`register`, `get`, `list`, `set`, `transition`)
+- [ ] P0 MCP -> Gateway wrapper tests with fake gateway and deterministic envelopes
+- [ ] P0 MCP -> service boundary tests for `render_views`, `check_refs`, `health_check`, `project_status`
+- [ ] P0 Gateway transaction tests: rollback on CRITICAL, dry-run no-save, tx logging on writes
+- [ ] P1 Render cache tests: unchanged fingerprint skip, changed fingerprint write, cache persist/load
+- [ ] P1 Check service tests: stale analysis and broken reference findings on synthetic mini-web fixtures
+- [ ] P1 Status/metrics/health read-model tests with fixed fixture snapshots
+- [ ] P2 CLI/MCP parity tests: same operation, equivalent semantic result
+
+---
+
+## Query Performance Strategy Backlog
+> Goal: keep current behavior unchanged while adding internal indexes for larger graph workloads.
+
+- [ ] Add `implicit_assumption_to_predictions` query index (used by `assumption_support_status`, `validate_implicit_assumption_coverage`)
+- [ ] Add `claim_to_downstream_claims` reverse-closure index (used by claim/prediction blast-radius queries)
+- [ ] Add `analysis_to_predictions` index for direct analysis-linked prediction impact
+- [ ] Add `parameter_to_constrained_claims` index for parameter threshold blast radius
+- [ ] Add lazy-build + invalidation strategy per `EpistemicWeb` instance
+- [ ] Add benchmark suite for small/medium/large synthetic graphs and set acceptance thresholds
+- [ ] Roll out indexes behind a feature flag until benchmark thresholds are stable

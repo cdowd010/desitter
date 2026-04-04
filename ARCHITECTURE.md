@@ -16,6 +16,9 @@ This document explains how deSitter works end-to-end: the layer model, the epist
 8. [ProjectContext](#8-projectcontext)
 9. [The Adapter Pattern](#9-the-adapter-pattern)
 10. [Key Design Decisions](#10-key-design-decisions)
+11. [Architecture Remediation Plan](#11-architecture-remediation-plan)
+12. [Boundary Test Matrix](#12-boundary-test-matrix)
+13. [Scale Strategy For Query Performance](#13-scale-strategy-for-query-performance)
 
 ---
 
@@ -580,3 +583,84 @@ interfaces/*  →  features  →  views  →  core  →  epistemic  ←  adapter
 ```
 
 `epistemic/` defines the interfaces. `adapters/` implements them. `controlplane/` uses them. The domain has zero knowledge of JSON files, markdown, or the MCP protocol. The entire epistemic kernel and core services can be tested in memory without touching the filesystem.
+
+---
+
+## 11. Architecture Remediation Plan
+
+This roadmap fixes cross-layer architecture issues first, then fills in planned stubs in phase order.
+
+### Implementation policy for planned stubs
+
+Intentionally unimplemented modules must not be filled ad hoc during architecture cleanup. They are tracked in `TRACKER.md` and implemented only in their owning phase.
+
+### Top 5 issues and PR-sized milestones
+
+| Priority | Issue | Target outcome | PR-sized milestones |
+|----------|-------|----------------|---------------------|
+| P0 | Boundary contract mismatches between interfaces and services | No runtime signature mismatch at MCP/CLI boundaries | PR-A1: remove private collaborator reach-through from interface code; PR-A2: align MCP calls with service signatures (`render_all`, `check_refs`); PR-A3: add boundary contract tests to prevent regressions |
+| P0 | Gateway orchestration is still stubbed | All register/get/list/set/transition/query routes execute through one mutation boundary | PR-B1: implement load-mutate-validate-save transaction flow for `register`; PR-B2: implement read/query routes (`get`, `list`, `query`); PR-B3: implement `set`/`transition` with dry-run and transaction logging |
+| P1 | Adapter layer incomplete (`JsonRepository`, `MarkdownRenderer`) | End-to-end persistence and rendering works through ports | PR-C1: implement typed load/save round-trip for all entities; PR-C2: implement markdown surface rendering; PR-C3: add adapter round-trip and rendering contract tests |
+| P1 | View/controlplane read services incomplete (`validate`, `check`, `render`, `status`, `metrics`, `health`, `export`) | Health, status, validation, stale checks, export, and render paths are callable from both interfaces | PR-D1: implement `validate_project` and `check_refs`; PR-D2: implement `metrics` and `status`; PR-D3: implement `render` cache flow plus `health` aggregation and export |
+| P2 | Interface parity and output-contract hardening | CLI and MCP expose the same behavior and stable envelopes | PR-E1: implement CLI command delegation with no business logic in handlers; PR-E2: normalize JSON envelope schemas across MCP/CLI; PR-E3: add parity tests asserting same semantics from both adapters |
+
+---
+
+## 12. Boundary Test Matrix
+
+This matrix closes current blind spots quickly while stubs remain tracked.
+
+| Boundary | Test type | What to assert | Fixture strategy | Priority |
+|----------|-----------|----------------|------------------|----------|
+| CLI -> Gateway | Adapter delegation tests | CLI parses payload/options and calls exactly one gateway operation; no business branching in CLI | `click.testing.CliRunner` + fake gateway object | P0 |
+| MCP -> Gateway | Tool wrapper contract tests | Tool handlers forward args correctly and return status-first envelope shape | Fake server decorator + fake gateway, no FastMCP runtime needed | P0 |
+| MCP -> Views/Check/Validate | Signature and envelope tests | `render_views`, `check_refs`, `health_check`, `project_status` call service functions with correct args and return machine-stable fields | Monkeypatched service functions returning deterministic fixtures | P0 |
+| Gateway -> Repository/Validator/TxLog | Transaction orchestration tests | validate-after-write flow, rollback on CRITICAL, dry-run no-save, tx log append on writes | In-memory repo + fake validator + fake tx log | P0 |
+| Views (`health`, `status`, `metrics`) | Read-model tests | Aggregation logic and severity rollups are deterministic | Small canonical web fixtures with focused findings | P1 |
+| Render cache (`views/render`) | Cache behavior tests | unchanged fingerprint skips writes; changed fingerprint writes and updates cache | temp directory cache file + fake renderer output | P1 |
+| Check services (`check_stale`, `check_refs`) | Consistency tests | stale/ref findings match known graph states | synthetic mini-web builders | P1 |
+| Interface parity (CLI vs MCP) | Black-box parity tests | same operation yields same status semantics and equivalent data payloads | shared fixture payloads and normalization helper | P2 |
+
+Suggested execution order:
+1. P0 tests first, because they catch architecture boundary drift immediately.
+2. P1 tests next, because they stabilize read services before feature expansion.
+3. P2 parity tests after both adapters are mostly implemented.
+
+---
+
+## 13. Scale Strategy For Query Performance
+
+The current graph query methods are correct for research-scale webs but include repeated traversals and repeated index construction. If large graph workloads matter now, add query indexes behind the same public methods.
+
+### Current hotspots
+
+| Method | Current behavior | Typical cost |
+|--------|------------------|--------------|
+| `assumption_support_status` | Rebuilds implicit assumption -> prediction dependents by scanning all predictions | O(P * I) per call, where `I` is average implicit assumption count |
+| `parameter_impact` | Repeatedly recomputes claim downstream and prediction impact per affected claim | O(C + A + P + traversal overhead) with repeated set merges |
+| `validate_implicit_assumption_coverage` | Recomputes implicit assumption sets across all predictions | O(P * I) per validation pass |
+
+### Proposed index set
+
+| Index | Key -> Value | Used by | Build strategy |
+|-------|--------------|---------|----------------|
+| `implicit_assumption_to_predictions` | `AssumptionId -> set[PredictionId]` | `assumption_support_status`, `validate_implicit_assumption_coverage` | Lazy build on first query; invalidate on prediction/claim/assumption mutation |
+| `claim_to_downstream_claims` | `ClaimId -> set[ClaimId]` | `predictions_depending_on_claim`, `parameter_impact` | Precompute reverse graph closure once per web version |
+| `analysis_to_predictions` | `AnalysisId -> set[PredictionId]` | `parameter_impact` | Build from prediction registry |
+| `parameter_to_constrained_claims` | `ParameterId -> set[ClaimId]` | `parameter_impact` | Build from claim `parameter_constraints` |
+
+### Complexity improvements (expected)
+
+| Query | Before | After |
+|-------|--------|-------|
+| `assumption_support_status` | O(P * I) | O(1) lookup + output size |
+| `validate_implicit_assumption_coverage` | O(P * I) per pass | O(total indexed edges) reuse with minimal extra filtering |
+| `parameter_impact` | repeated downstream traversal per affected claim | O(index lookups + union cost), no repeated graph walks |
+
+### Rollout plan
+
+1. Add an internal immutable query-index container attached to `EpistemicWeb`.
+2. Build indexes lazily per web instance and cache them for repeated queries.
+3. Keep public method signatures unchanged to preserve interface compatibility.
+4. Add benchmark tests for small, medium, and large synthetic graphs.
+5. Guard rollout with feature flag until benchmark thresholds are met.
