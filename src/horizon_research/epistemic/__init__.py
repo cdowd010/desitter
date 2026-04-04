@@ -41,6 +41,7 @@ from .types import (
     DeadEndId,
     DeadEndStatus,
     DiscoveryId,
+    DiscoveryStatus,
     EvidenceKind,
     Finding,
     IndependenceGroupId,
@@ -51,6 +52,7 @@ from .types import (
     PredictionStatus,
     Severity,
     TheoryId,
+    TheoryStatus,
 )
 from .web import (
     BrokenReferenceError,
@@ -67,7 +69,7 @@ __all__ = [
     "AnalysisId", "IndependenceGroupId", "ParameterId", "ConceptId", "DeadEndId",
     "PairwiseSeparationId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
-    "PredictionStatus", "DeadEndStatus", "ClaimStatus",
+    "PredictionStatus", "DeadEndStatus", "ClaimStatus", "TheoryStatus", "DiscoveryStatus",
     "AssumptionType", "ClaimType", "ClaimCategory",
     # model
     "Claim", "Assumption", "Prediction", "Theory", "IndependenceGroup",

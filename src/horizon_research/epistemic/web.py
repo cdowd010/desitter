@@ -298,13 +298,20 @@ class EpistemicWeb:
         return new
 
     def register_assumption(self, assumption: Assumption) -> EpistemicWeb:
-        """Add an assumption. Validates depends_on refs exist and no cycles."""
+        """Add an assumption. Validates depends_on refs exist and no cycles.
+
+        Backlinks (used_in_claims, tested_by) are owned by claim/prediction
+        operations and are intentionally initialized empty here.
+        """
         if assumption.id in self.assumptions:
             raise DuplicateIdError(f"Assumption {assumption.id} already exists")
         self._check_refs_exist(assumption.depends_on, self.assumptions, "assumption")
         self._check_no_assumption_cycle_with(assumption)
         new = self._copy()
-        new.assumptions[assumption.id] = copy.deepcopy(assumption)
+        stored = copy.deepcopy(assumption)
+        stored.used_in_claims = set()
+        stored.tested_by = set()
+        new.assumptions[assumption.id] = stored
         return new
 
     def register_prediction(self, prediction: Prediction) -> EpistemicWeb:
@@ -340,13 +347,18 @@ class EpistemicWeb:
         return new
 
     def register_analysis(self, analysis: Analysis) -> EpistemicWeb:
-        """Add an analysis reference. Maintains bidirectional uses_parameters link."""
+        """Add an analysis reference. Maintains bidirectional uses_parameters link.
+
+        claims_covered is a backlink owned by claim operations and starts empty.
+        """
         if analysis.id in self.analyses:
             raise DuplicateIdError(f"Analysis {analysis.id} already exists")
         self._check_refs_exist(analysis.uses_parameters, self.parameters, "parameter")
 
         new = self._copy()
-        new.analyses[analysis.id] = copy.deepcopy(analysis)
+        stored = copy.deepcopy(analysis)
+        stored.claims_covered = set()
+        new.analyses[analysis.id] = stored
 
         # Maintain bidirectional: parameter.used_in_analyses
         for pid in analysis.uses_parameters:
@@ -365,13 +377,19 @@ class EpistemicWeb:
         return new
 
     def register_independence_group(self, group: IndependenceGroup) -> EpistemicWeb:
-        """Add an independence group. Validates claim_lineage and assumption_lineage refs."""
+        """Add an independence group. Validates claim_lineage and assumption_lineage refs.
+
+        member_predictions is a backlink owned by prediction operations and
+        starts empty.
+        """
         if group.id in self.independence_groups:
             raise DuplicateIdError(f"Independence group {group.id} already exists")
         self._check_refs_exist(group.claim_lineage, self.claims, "claim")
         self._check_refs_exist(group.assumption_lineage, self.assumptions, "assumption")
         new = self._copy()
-        new.independence_groups[group.id] = copy.deepcopy(group)
+        stored = copy.deepcopy(group)
+        stored.member_predictions = set()
+        new.independence_groups[group.id] = stored
         return new
 
     def register_discovery(self, discovery: Discovery) -> EpistemicWeb:
@@ -403,17 +421,24 @@ class EpistemicWeb:
         return new
 
     def register_parameter(self, parameter: Parameter) -> EpistemicWeb:
-        """Add a parameter constant."""
+        """Add a parameter constant.
+
+        used_in_analyses is a backlink owned by analysis operations and starts empty.
+        """
         if parameter.id in self.parameters:
             raise DuplicateIdError(f"Parameter {parameter.id} already exists")
         new = self._copy()
-        new.parameters[parameter.id] = copy.deepcopy(parameter)
+        stored = copy.deepcopy(parameter)
+        stored.used_in_analyses = set()
+        new.parameters[parameter.id] = stored
         return new
 
     def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicWeb:
         """Document why two independence groups are separate."""
         if sep.id in self.pairwise_separations:
             raise DuplicateIdError(f"PairwiseSeparation {sep.id} already exists")
+        if sep.group_a == sep.group_b:
+            raise BrokenReferenceError("Pairwise separation requires two distinct groups")
         if sep.group_a not in self.independence_groups:
             raise BrokenReferenceError(f"Group {sep.group_a} does not exist")
         if sep.group_b not in self.independence_groups:
@@ -631,6 +656,8 @@ class EpistemicWeb:
         Validates group refs still exist."""
         if new_sep.id not in self.pairwise_separations:
             raise BrokenReferenceError(f"PairwiseSeparation {new_sep.id} does not exist")
+        if new_sep.group_a == new_sep.group_b:
+            raise BrokenReferenceError("Pairwise separation requires two distinct groups")
         if new_sep.group_a not in self.independence_groups:
             raise BrokenReferenceError(f"Group {new_sep.group_a} does not exist")
         if new_sep.group_b not in self.independence_groups:
