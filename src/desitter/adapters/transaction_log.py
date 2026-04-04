@@ -21,6 +21,11 @@ class JsonTransactionLog:
     """
 
     def __init__(self, log_file: Path) -> None:
+        """Create a transaction log writer for a JSONL provenance file.
+
+        Args:
+            log_file: Path to the append-only JSONL log file.
+        """
         self._log_file = log_file
 
     def append(self, operation: str, identifier: str) -> str:

@@ -46,6 +46,10 @@ def _build_gateway(context: ProjectContext) -> Gateway:
 class _NullProseSync:
     """No-op ProseSync used until the prose sync adapter is implemented."""
     def sync(self, web):
+        """Satisfy the ProseSync interface without side effects.
+
+        Returns an empty mapping to indicate no prose files were updated.
+        """
         return {}
 
 

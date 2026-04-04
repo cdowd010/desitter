@@ -23,6 +23,11 @@ class JsonRepository:
     """
 
     def __init__(self, data_dir: Path) -> None:
+        """Create a repository bound to a project data directory.
+
+        Args:
+            data_dir: Directory containing per-entity JSON files.
+        """
         self._data_dir = data_dir
 
     def load(self) -> EpistemicWeb:

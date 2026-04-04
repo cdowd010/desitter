@@ -149,4 +149,5 @@ def init(ws_path: Path | None) -> None:
 
 
 def main() -> None:
+    """Run the CLI command group as the package console entry point."""
     cli()

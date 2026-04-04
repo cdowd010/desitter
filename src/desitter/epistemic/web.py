@@ -68,12 +68,15 @@ class EpistemicWeb:
     # ── Queries ───────────────────────────────────────────────────
 
     def get_claim(self, cid: ClaimId) -> Claim | None:
+        """Return a claim by ID, or None when the claim does not exist."""
         return self.claims.get(cid)
 
     def get_assumption(self, aid: AssumptionId) -> Assumption | None:
+        """Return an assumption by ID, or None when absent from the web."""
         return self.assumptions.get(aid)
 
     def get_prediction(self, pid: PredictionId) -> Prediction | None:
+        """Return a prediction by ID, or None when no matching ID exists."""
         return self.predictions.get(pid)
 
     def claims_using_assumption(self, aid: AssumptionId) -> set[ClaimId]:
@@ -906,6 +909,11 @@ class EpistemicWeb:
     # ── Invariant checks ──────────────────────────────────────────
 
     def _check_refs_exist(self, ids: set, registry: dict, label: str) -> None:
+        """Ensure every referenced ID exists in the target registry.
+
+        Raises:
+            BrokenReferenceError: when one or more IDs are missing.
+        """
         missing = ids - registry.keys()
         if missing:
             raise BrokenReferenceError(f"Non-existent {label}(s): {missing}")
@@ -962,16 +970,24 @@ class EpistemicError(Exception):
 
 
 class DuplicateIdError(EpistemicError):
+    """Raised when registering an entity whose ID already exists."""
+
     pass
 
 
 class BrokenReferenceError(EpistemicError):
+    """Raised when an operation references an ID that does not exist."""
+
     pass
 
 
 class CycleError(EpistemicError):
+    """Raised when a graph mutation would introduce a dependency cycle."""
+
     pass
 
 
 class InvariantViolation(EpistemicError):
+    """Raised when post-conditions or global domain invariants are violated."""
+
     pass

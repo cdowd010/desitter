@@ -98,6 +98,16 @@ class Gateway:
         prose_sync: ProseSync,
         tx_log: TransactionLog,
     ) -> None:
+        """Initialize a fully wired gateway service boundary.
+
+        Args:
+            context: Project paths and runtime configuration.
+            repo: Persistence adapter for loading/saving the web.
+            validator: Domain validation service.
+            renderer: View renderer for markdown outputs.
+            prose_sync: Adapter that synchronizes prose artifacts.
+            tx_log: Provenance logger for operations.
+        """
         self._context = context
         self._repo = repo
         self._validator = validator

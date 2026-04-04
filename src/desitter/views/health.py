@@ -28,10 +28,12 @@ class HealthReport:
 
     @property
     def critical_count(self) -> int:
+        """Count CRITICAL findings in the aggregated report."""
         return sum(1 for f in self.findings if f.severity == Severity.CRITICAL)
 
     @property
     def warning_count(self) -> int:
+        """Count WARNING findings in the aggregated report."""
         return sum(1 for f in self.findings if f.severity == Severity.WARNING)
 
 
