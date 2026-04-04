@@ -1,21 +1,20 @@
-"""CLI entry point, argument parsing, and command dispatch.
+"""CLI entry point — thin adapter over core and view services.
 
-All commands are grouped under the `horizon` root command.
-Each command constructs a ProjectContext, wires a Gateway, and delegates
-to the appropriate control-plane service.
+All commands construct a ProjectContext, wire a Gateway, and delegate
+to the appropriate service. No business logic here.
 
 Command surface (mirrors MCP tools):
-  horizon register <resource> [options]
-  horizon get <resource> <id>
-  horizon list <resource>
+  horizon register <resource>        — register entity (payload from stdin or --data)
+  horizon get <resource> <id>        — retrieve by ID
+  horizon list <resource>            — list all of a type
+  horizon set <resource> <id>        — update fields (payload from stdin or --data)
   horizon transition <resource> <id> <status>
-  horizon validate
-  horizon health
-  horizon status
-  horizon run-script <script-id>
-  horizon render [--force]
-  horizon export [--format json|markdown] [--output PATH]
-  horizon session open|close|list  (governance opt-in)
+  horizon validate                   — run all domain validators
+  horizon health                     — composed health report
+  horizon status                     — high-level project snapshot
+  horizon render [--force]           — regenerate markdown views
+  horizon export [--format json|md]  — bulk export
+  horizon init                       — initialise a new project workspace
 """
 from __future__ import annotations
 
@@ -38,7 +37,7 @@ from .formatters import print_gateway_result, print_health_report, print_status
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON.")
 @click.pass_context
 def cli(ctx: click.Context, workspace: Path | None, output_json: bool) -> None:
-    """Horizon Research — control plane for epistemic webs."""
+    """Horizon Research — epistemic web data system."""
     ws = workspace or Path.cwd()
     config = load_config(ws)
     context = build_context(ws, config)
@@ -49,10 +48,11 @@ def cli(ctx: click.Context, workspace: Path | None, output_json: bool) -> None:
 
 @cli.command()
 @click.argument("resource")
+@click.option("--data", "-d", default=None, help="JSON payload string.")
 @click.option("--dry-run", is_flag=True)
 @click.pass_context
-def register(ctx: click.Context, resource: str, dry_run: bool) -> None:
-    """Register a new resource entity. Reads payload from stdin as JSON."""
+def register(ctx: click.Context, resource: str, data: str | None, dry_run: bool) -> None:
+    """Register a new entity. Reads JSON payload from --data or stdin."""
     raise NotImplementedError
 
 
@@ -61,7 +61,7 @@ def register(ctx: click.Context, resource: str, dry_run: bool) -> None:
 @click.argument("identifier")
 @click.pass_context
 def get(ctx: click.Context, resource: str, identifier: str) -> None:
-    """Retrieve a single resource by ID."""
+    """Retrieve a single entity by ID."""
     raise NotImplementedError
 
 
@@ -69,7 +69,18 @@ def get(ctx: click.Context, resource: str, identifier: str) -> None:
 @click.argument("resource")
 @click.pass_context
 def list_resources(ctx: click.Context, resource: str) -> None:
-    """List all resources of a given type."""
+    """List all entities of a given type."""
+    raise NotImplementedError
+
+
+@cli.command()
+@click.argument("resource")
+@click.argument("identifier")
+@click.option("--data", "-d", default=None, help="JSON payload string.")
+@click.option("--dry-run", is_flag=True)
+@click.pass_context
+def set(ctx: click.Context, resource: str, identifier: str, data: str | None, dry_run: bool) -> None:
+    """Update fields on an existing entity."""
     raise NotImplementedError
 
 
@@ -82,7 +93,7 @@ def list_resources(ctx: click.Context, resource: str) -> None:
 def transition(
     ctx: click.Context, resource: str, identifier: str, new_status: str, dry_run: bool
 ) -> None:
-    """Transition a resource to a new status."""
+    """Transition an entity to a new status."""
     raise NotImplementedError
 
 
@@ -103,15 +114,7 @@ def health(ctx: click.Context) -> None:
 @cli.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
-    """Print a high-level project status dashboard."""
-    raise NotImplementedError
-
-
-@cli.command("run-script")
-@click.argument("script_id")
-@click.pass_context
-def run_script(ctx: click.Context, script_id: str) -> None:
-    """Run a registered verification script."""
+    """Print a high-level project status snapshot."""
     raise NotImplementedError
 
 
@@ -119,7 +122,7 @@ def run_script(ctx: click.Context, script_id: str) -> None:
 @click.option("--force", is_flag=True, help="Re-render even if nothing has changed.")
 @click.pass_context
 def render(ctx: click.Context, force: bool) -> None:
-    """Regenerate all view surfaces."""
+    """Regenerate all markdown view surfaces."""
     raise NotImplementedError
 
 
@@ -130,37 +133,20 @@ def render(ctx: click.Context, force: bool) -> None:
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
 @click.pass_context
 def export(ctx: click.Context, fmt: str, output: Path | None) -> None:
-    """Bulk-export the epistemic web."""
+    """Bulk-export the epistemic web as JSON or markdown."""
     raise NotImplementedError
 
 
-@cli.group()
-def session() -> None:
-    """Session management (governance opt-in)."""
+@cli.command()
+@click.option("--workspace", "ws_path", type=click.Path(path_type=Path), default=None)
+def init(ws_path: Path | None) -> None:
+    """Initialise a new Horizon project workspace.
 
-
-@session.command("open")
-@click.option("--summary", default=None)
-@click.pass_context
-def session_open(ctx: click.Context, summary: str | None) -> None:
-    """Open a new research session."""
+    Creates project_config.json and the standard directory layout.
+    Idempotent — safe to run on an existing workspace.
+    """
     raise NotImplementedError
 
 
-@session.command("close")
-@click.argument("session_number", type=int)
-@click.option("--summary", default=None)
-@click.option("--dry-run", is_flag=True)
-@click.pass_context
-def session_close(
-    ctx: click.Context, session_number: int, summary: str | None, dry_run: bool
-) -> None:
-    """Close a session through the close gate."""
-    raise NotImplementedError
-
-
-@session.command("list")
-@click.pass_context
-def session_list(ctx: click.Context) -> None:
-    """List all sessions."""
-    raise NotImplementedError
+def main() -> None:
+    cli()

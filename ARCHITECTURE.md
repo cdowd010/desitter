@@ -73,16 +73,9 @@ Horizon's MCP server is the primary interface for AI agents. An agent calls `reg
 └─────────────────────┬────────────────────────────────┘
                       │  (no business logic in any interface)
 ┌─────────────────────▼────────────────────────────────┐
-│  Feature Services (features/) — opt-in, flagged      │
-│  goals · discovery · protocols · governance/         │
-│  Registered only when feature flag is true           │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
 │  View Services (views/) — always available           │
 │  health · render · status · metrics                  │
 │  Read-only composed summaries + derived files        │
-│  Never depend on features/                           │
 └─────────────────────┬────────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────────┐
@@ -94,7 +87,7 @@ Horizon's MCP server is the primary interface for AI agents. An agent calls `reg
                       │
 ┌─────────────────────▼────────────────────────────────┐
 │  Config (config.py) — runtime contract               │
-│  ProjectFeatures · HorizonConfig · ProjectContext    │
+│  HorizonConfig · ProjectContext · ProjectPaths       │
 │  load_config() · build_context()                     │
 └─────────────────────┬────────────────────────────────┘
                       │
@@ -119,11 +112,8 @@ Horizon's MCP server is the primary interface for AI agents. An agent calls `reg
 
 ```mermaid
 graph TD
-    IFACE["interfaces/*"] --> FEAT["features/"]
-    IFACE --> VIEWS["views/"]
+    IFACE["interfaces/*"] --> VIEWS["views/"]
     IFACE --> CORE["core/"]
-    FEAT --> VIEWS
-    FEAT --> CORE
     VIEWS --> CORE
     CORE --> ADP["adapters/"]
     CORE --> EPI["epistemic/"]
@@ -307,8 +297,8 @@ sequenceDiagram
 src/horizon_research/
 ├── __init__.py                  # version, public API re-exports
 ├── __main__.py                  # python -m horizon_research → CLI
-├── config.py                    # ProjectFeatures, HorizonConfig, ProjectContext,
-│                                #   ProjectPaths, load_config(), build_context()
+├── config.py                    # HorizonConfig, ProjectContext, ProjectPaths,
+│                                #   load_config(), build_context()
 │
 ├── epistemic/                   # ── DOMAIN KERNEL ───────────────────────────
 │   ├── types.py                 # NewType IDs, enums, Finding, Severity
@@ -337,24 +327,14 @@ src/horizon_research/
 │   ├── status.py                # get_status → ProjectStatus
 │   └── metrics.py               # compute_metrics, tier_a_evidence_summary
 │
-├── features/                    # ── FEATURE SERVICES ────────────────────────
-│   ├── goals.py                 # ResearchGoal CRUD (features.goals)
-│   ├── discovery.py             # Structural gap reporter (features.inference_gap_analysis)
-│   ├── protocols.py             # Agent documentation registry
-│   └── governance/              # opt-in; inactive when governance=False
-│       ├── session.py           # open/close/list sessions; session counter
-│       ├── boundary.py          # check_boundary (no-op when disabled)
-│       ├── close.py             # close-gate validation + optional git publish
-│       └── schedules.py         # AnalysisSchedule, due_analyses computation
-│
 └── interfaces/                  # ── INTERFACE ADAPTERS ──────────────────────
     ├── __init__.py              # Interface layer contract documentation
     ├── cli/                     # Humans + scripts
     │   ├── main.py              # Click command tree
     │   └── formatters.py        # Rich tables + JSON fallback
-    └── mcp/                     # AI agents (+ agent scaffolding)
-        ├── server.py            # FastMCP entry point, feature-gated registration
-        └── tools.py             # Tool handlers → thin wrappers over core/views/features
+    └── mcp/                     # AI agents
+        ├── server.py            # FastMCP entry point
+        └── tools.py             # Tool handlers → thin wrappers over core/views
         # future: rest/, gui/, sdk/ go here as equal peers
 ```
 
@@ -363,11 +343,10 @@ src/horizon_research/
 | From | May import | May NOT import |
 |------|-----------|----------------|
 | `epistemic/` | stdlib only | anything |
-| `adapters/` | `epistemic/`, stdlib | `core/`, `views/`, `features/`, `interfaces/` |
+| `adapters/` | `epistemic/`, stdlib | `core/`, `views/`, `interfaces/` |
 | `config.py` | stdlib only | anything |
-| `core/` | `epistemic/`, `adapters/` (via protocols), `config` | `views/`, `features/`, `interfaces/` |
-| `views/` | `core/`, `epistemic/`, `config` | `features/`, `interfaces/` |
-| `features/` | `core/`, `views/`, `epistemic/`, `config` | `interfaces/` |
+| `core/` | `epistemic/`, `adapters/` (via protocols), `config` | `views/`, `interfaces/` |
+| `views/` | `core/`, `epistemic/`, `config` | `interfaces/` |
 | `interfaces/*` | all layers above | other interfaces (e.g. `cli/` cannot import `mcp/`) |
 
 `core/` accesses adapters **only through the abstract interfaces defined in `epistemic/ports.py`** — it never imports a concrete adapter class directly. Concrete adapters are wired in the interface layer at startup when the Gateway is constructed.
@@ -446,7 +425,7 @@ Adding a new resource type means one entry in this table.
 @dataclass
 class ProjectContext:
     workspace: Path
-    config: HorizonConfig    # ProjectFeatures, project_dir, …
+    config: HorizonConfig    # project_dir, …
     paths: ProjectPaths      # all derived filesystem paths, computed once at startup
 ```
 
@@ -521,12 +500,6 @@ Horizon does not run analyses. The researcher runs them using their preferred to
 Analysis entities carry `path` and `command` as documentation only — provenance pointers the researcher can follow. The git SHA at record time is captured on the result, giving an immutable chain: `path + SHA + recorded value`.
 
 This is a deliberate constraint: no sandbox, no subprocess, no supply-chain risk from executing researcher code.
-
-### Feature isolation
-
-Features that go beyond the epistemic core (goals, governance, discovery) are **entirely off by default**. The `ProjectFeatures` flags in `config.py` gate both the MCP tools and CLI commands — not just their behavior, but their registration. A server with `goals=False` never exposes goal tools; they don't exist in that process.
-
-Disabling a feature removes zero dead code paths. The feature simply isn't wired.
 
 ### Immutable mutations (copy-on-write)
 

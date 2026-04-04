@@ -3,8 +3,9 @@
 Builds the FastMCP server, registers all tool handlers from tools.py,
 and exposes a run() function as the entry point.
 
-Usage (from CLI or subprocess):
-    python -m horizon_research.mcp.server
+Usage:
+    horizon-mcp                           # installed console script
+    python -m horizon_research            # via __main__.py
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ def create_server(workspace: Path | None = None) -> fastmcp.FastMCP:
 
     server = fastmcp.FastMCP(
         name="horizon-research",
-        description="Control plane for managing research epistemic webs",
+        description="Epistemic web data system for research projects",
     )
     register_tools(server, context)
     return server

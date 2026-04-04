@@ -16,10 +16,9 @@ rebuild. Written for execution, not theory.*
 7. [Phase 3 — Gateway and Control-Plane Services](#7-phase-3--gateway-and-control-plane-services)
 8. [Phase 4 — MCP, CLI, Init, Health](#8-phase-4--mcp-cli-init-health)
 9. [Phase 5 — Human-First UX](#9-phase-5--human-first-ux)
-10. [Phase 6 — Execution Pipeline](#10-phase-6--execution-pipeline)
-11. [Phase 7 — Governance as Opt-In](#11-phase-7--governance-as-opt-in)
-12. [After Phase 7: The Backlog](#12-after-phase-7-the-backlog)
-13. [Principle Compliance Matrix](#13-principle-compliance-matrix)
+10. [Phase 6 — Results Ingestion](#10-phase-6--results-ingestion)
+11. [Backlog](#11-backlog)
+12. [Principle Compliance Matrix](#12-principle-compliance-matrix)
 14. [Clean Break from the Current Codebase](#14-clean-break-from-the-current-codebase)
 15. [Standing Decisions](#15-standing-decisions)
 16. [Data Flow Diagram](#16-data-flow-diagram)
@@ -56,8 +55,7 @@ layers outward. Each phase ships something testable.
 
 Horizon is a **control plane over a research data plane**. The epistemic web
 is the domain kernel, but the product is larger than the kernel: the gateway,
-validators, renderers, health, and optional governance all belong to the
-control plane.
+validators, renderers, and health/view services all belong to the control plane.
 
 ---
 
@@ -125,11 +123,9 @@ web.
 ### 3.1 The Right Top-Level Picture
 
 - The **data plane** is the project state and artifacts: canonical registries,
-    generated views, analysiss, integrity metadata, and optional
-    governance data.
+    generated views, analyses, and recorded results.
 - The **control plane** is the product code that manages that data plane:
-    context building, gateway, validators, renderers, health/status, execution
-    policy, and optional governance services.
+    context building, gateway, validators, renderers, and health/view services.
 - The **epistemic web** is the in-memory domain kernel inside the control
     plane, not the whole product.
 
@@ -174,16 +170,9 @@ were good ideas and should be preserved.
 └─────────────────────┬────────────────────────────────┘
                       │  (no business logic in any interface)
 ┌─────────────────────▼────────────────────────────────┐
-│  Feature Services (features/) — opt-in, flagged      │
-│  goals · discovery · protocols · governance/         │
-│  Registered with CLI + MCP only when flag is true    │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
 │  View Services (views/) — always available           │
 │  health · render · status · metrics                  │
 │  Read-only composed summaries + derived files        │
-│  Depend on core; do not depend on features           │
 └─────────────────────┬────────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────────┐
@@ -195,7 +184,7 @@ were good ideas and should be preserved.
                       │
 ┌─────────────────────▼────────────────────────────────┐
 │  Config (config.py) — runtime contract               │
-│  ProjectFeatures · HorizonConfig · ProjectContext    │
+│  HorizonConfig · ProjectContext · ProjectPaths       │
 │  load_config() · build_context()                     │
 └─────────────────────┬────────────────────────────────┘
                       │
@@ -221,19 +210,13 @@ were good ideas and should be preserved.
 - `adapters` → `epistemic` only.
 - `config` → stdlib only.
 - `core` → `epistemic`, `adapters`, `config`.
-- `views` → `core`, `epistemic`, `config`. Never → `features`.
-- `features` → `core`, `views`, `epistemic`, `config`.
+- `views` → `core`, `epistemic`, `config`.
 - `interfaces/cli`, `interfaces/mcp` → all layers above. No business logic lives here.
-- `interfaces/mcp` is also the home of agent scaffolding (`.horizon/agents.md`,
-    `get_protocol`, `init --with-agent`). This stays in `mcp/` — not shared with
-    other interfaces, because it is AI-agent-specific documentation infrastructure.
 
 **Principles:**
 - **Equal interfaces**: `interfaces/cli` and `interfaces/mcp` are peers. Neither
-    is primary. Both expose the same core/views/features services.
+    is primary. Both expose the same core/views services.
     No MCP-specific or CLI-specific business logic.
-- **Feature isolation**: disabling a feature flag removes its tools/commands
-    entirely — zero dead code paths at runtime.
 - **View/mutation separation**: view services never mutate the epistemic web
     (render is the one exception: it writes derived files, not canonical data).
 - **Single config module**: `config.py` is the only place that reads
@@ -249,8 +232,8 @@ src/
 └── horizon_research/               # Top-level product package
     ├── __init__.py
     ├── __main__.py                 # `python -m horizon_research`
-    ├── config.py                   # ProjectFeatures, HorizonConfig, ProjectContext,
-    │                               #   ProjectPaths, load_config(), build_context()
+    ├── config.py                   # HorizonConfig, ProjectContext, ProjectPaths,
+    │                               #   load_config(), build_context()
     ├── epistemic/                  # Layer 1: Kernel — pure Python, zero I/O
     │   ├── __init__.py
     │   ├── types.py                # Typed IDs, enums, Finding, Severity
@@ -272,43 +255,31 @@ src/
     │   ├── results.py              # record_result (Phase 6)
     │   ├── export.py               # Bulk JSON/markdown export
     │   └── automation.py           # Render-trigger policy table
-    ├── views/                      # Layer 3B: View Services — composed summaries
+    ├── views/                      # Layer 4: View Services — composed summaries
     │   ├── __init__.py
     │   ├── health.py               # Composed health report (validate + check)
     │   ├── render.py               # Incremental markdown generation (SHA-256 cache)
     │   ├── status.py               # Summary read model
     │   └── metrics.py              # Evidence statistics (tier A summary)
-    ├── features/                   # Layer 4: Feature Services — opt-in
-    │   ├── __init__.py
-    │   ├── goals.py                # ResearchGoal CRUD (features.goals)
-    │   ├── discovery.py            # Structural gap reporter (features.inference_gap_analysis)
-    │   ├── protocols.py            # Agent documentation registry (features.protocols)
-    │   └── governance/             # Session boundaries + close gates (features.governance)
-    │       ├── __init__.py
-    │       ├── session.py          # Open/close/list sessions; SessionRecord
-    │       ├── boundary.py         # Enforce mutations inside open sessions
-    │       ├── close.py            # Close-gate validation + optional git publish
-    │       └── schedules.py        # AnalysisSchedule, due_analyses computation
     └── interfaces/                 # Layer 5: Interface Adapters — equal peers, no business logic
         ├── __init__.py             # Documents the interface layer contract
         ├── cli/                    # Humans + scripts (Click commands)
         │   ├── __init__.py
-        │   ├── main.py             # Click commands; thin wrappers over core/views/features
+        │   ├── main.py             # Click commands; thin wrappers over core/views
         │   └── formatters.py       # Rich tables, JSON fallback
-        └── mcp/                    # AI agents (FastMCP + agent scaffolding)
+        └── mcp/                    # AI agents (FastMCP)
             ├── __init__.py
-            ├── server.py           # FastMCP entry point, feature-gated tool registration
-            └── tools.py            # Tool handlers; thin wrappers over core/views/features
+            ├── server.py           # FastMCP entry point, tool registration
+            └── tools.py            # Tool handlers; thin wrappers over core/views
             # future: rest/, gui/, sdk/ go here as equal peers
 ```
 
 **Principles:**
 - **Equal interfaces**: `interfaces/cli` and `interfaces/mcp` are peers. No business logic in either.
-- **Acyclic dependencies**: `epistemic ← adapters ← core ← views ← features ← interfaces/*`
+- **Acyclic dependencies**: `epistemic ← adapters ← core ← views ← interfaces/*`
 - **Stable dependencies**: `epistemic/` changes least; `interfaces/*` change most.
-- **Feature isolation**: disabling a feature flag removes its tools/commands entirely.
 - **No duplicated logic**: every MCP tool handler and CLI command calls the same
-    core/views/features function. If a handler does more than parse + call + format,
+    core/views function. If a handler does more than parse + call + format,
     move the logic up.
 
 ### 3.5 The Gateway We Keep
@@ -391,27 +362,8 @@ new plan should preserve that idea explicitly.
 
 ```python
 @dataclass
-class ProjectFeatures:
-        """Opt-in capabilities. Each flag gates a set of MCP tools.
-        
-        Core tools (register, get, list, validate, health, render, export,
-        check_stale, record_result) are always available — no flag needed.
-        Feature tools only register when their flag is true.
-        """
-        goals: bool = False                      # goal tracking MCP tools
-        inference_gap_analysis: bool = False     # structural gap reporter MCP tool
-        governance: bool = False                 # sessions, boundaries, close gates
-        literature_watch: bool = False           # post-Phase 7
-        experiment_ideation: bool = False        # post-Phase 7
-
-        # Note: ProjectSchedules and session counter live in
-        # features/governance/ — they do not exist when governance=False.
-
-
-@dataclass
 class HorizonConfig:
         project_dir: Path = Path("project")
-        features: ProjectFeatures = field(default_factory=ProjectFeatures)
 
 
 @dataclass
@@ -454,15 +406,6 @@ flag malformed references:
 `horizon show` renders `doi:` and `arxiv:` sources as clickable links.
 `health_check` can flag sources that look malformed. No strict enforcement
 at the type level — `str | None` is sufficient.
-
-**Cross-repository link maintenance.** `ResearchGoal.linked_predictions`
-lives in `project_config.json`; the epistemic web has no knowledge of goals.
-The link is **maintained manually** — the researcher (or agent) calls
-`horizon goal link G-001 P-007` to associate a prediction with a goal.
-The Gateway validates that every `ResearchGoal.linked_predictions` ID
-exists in the epistemic web at load time, and surfaces broken links as
-health findings. No automatic bidirectional maintenance: goals are
-intentional annotations, not structural invariants.
 
 **Native Python types everywhere.** The domain model uses `dict`, `set`, and
 `list` — not `Mapping`, `frozenset`, or `tuple`. The `EpistemicWeb` and the
@@ -748,7 +691,6 @@ IndependenceGroupId = NewType("IndependenceGroupId", str)
 ParameterId = NewType("ParameterId", str)
 ConceptId = NewType("ConceptId", str)
 DeadEndId = NewType("DeadEndId", str)
-GoalId = NewType("GoalId", str)
 
 
 # ── Severity ──────────────────────────────────────────────────────
@@ -1033,29 +975,6 @@ class Parameter:
     uncertainty: Any = None             # absolute uncertainty, same type as value
     source: str | None = None           # citation or derivation note
     used_in_analyses: set[AnalysisId] = field(default_factory=set)
-    notes: str | None = None
-
-
-# ── Project-level entity (lives in project_config.json, NOT the epistemic web) ──
-
-@dataclass
-class ResearchGoal:
-    """A researcher-stated intention that motivates the epistemic work.
-
-    ResearchGoals live in project_config.json and are managed by the
-    GoalRepository — not the EpistemicWeb. They answer the "why" layer:
-    what is this project trying to achieve, and how will we know if it
-    succeeded?
-
-    Goals are linked to predictions so the system can surface which
-    epistemic work is evidence for each goal.
-    """
-    id: GoalId
-    statement: str
-    type: str                                # "primary" | "secondary" | "opportunistic"
-    success_criteria: list[str] = field(default_factory=list)
-    status: str = "active"                   # "active" | "achieved" | "abandoned"
-    linked_predictions: set[PredictionId] = field(default_factory=set)
     notes: str | None = None
 ```
 
@@ -1830,19 +1749,16 @@ from .epistemic.types import ClaimId, PredictionId
 | 2.4 | `pyproject.toml` + `src/horizon_research/` package — installable product boundary | `pip install -e .`, console-script smoke, `python -m horizon_research` |
 | 2.5 | Contract tests for packaging, config, and workflow surfaces | Parse `pyproject.toml`, default paths, coverage settings, workflow artifact contract |
 | 2.6 | Schema versioning — add `_schema_version` top-level key to every JSON data file | Loader asserts version presence; migration registry maps `(from, to, transform_fn)` per resource type |
-| 2.7 | `adapters/project_config_repository.py` — owns the full `project_config.json` file: goals, features (`ProjectFeatures`), schedules (`ProjectSchedules`), session counter | Round-trip for all blocks; partial updates don't clobber other blocks |
+| 2.7 | `adapters/markdown_renderer.py` — stub; renders entity summaries to markdown | Snapshot test for claims, predictions, analyses |
 
 ### Phase 2 Exit Criteria
 
-- [ ] `JsonFileRepository` can load and save all entity types
+- [ ] `JsonRepository` can load and save all entity types
 - [ ] Save→load round trip produces identical domain objects
 - [ ] Package installs cleanly with `pip install -e .`
 - [ ] Public console scripts and `python -m horizon_research` are stable
 - [ ] Packaging/config/workflow contracts are locked by tests
 - [ ] Every JSON data file carries `_schema_version`; migration registry exists even if empty
-- [ ] `ProjectConfigRepository` can load and save all blocks of `project_config.json` (goals, features, schedules, session counter)
-- [ ] `project_config.json` features block is parsed into `ProjectFeatures`
-- [ ] `project_config.json` schedules block is parsed into `ProjectSchedules`; partial-write doesn't corrupt other blocks
 
 ---
 
@@ -2038,8 +1954,7 @@ enormously valuable for:
 - Auditing prediction status changes
 - Reproducibility claims in papers
 
-In governance mode (Phase 7), extend with `_modification_session`. In
-core-only mode, timestamps are sufficient.
+Timestamps are sufficient for all provenance needs in the core product.
 
 Do not defer this to Phase 7. The cost of adding provenance at the gateway
 level is near zero when the gateway is fresh, and retrofitting it later
@@ -2075,7 +1990,6 @@ requires a migration.
 - [ ] Markdown output matches current Horizon behavior for the same data
 - [ ] Every gateway write records `_last_modified` and `_modified_by` provenance
 - [ ] `check_stale` uses `Analysis.uses_parameters` to identify stale predictions after parameter changes
-- [ ] Gateway validates that `ResearchGoal.linked_predictions` IDs exist in the epistemic web on load
 
 ---
 
@@ -2140,31 +2054,21 @@ structured tool calls with no subprocess or file manipulation needed.
 
 **MCP tool surface:**
 
-| Tool | Control-Plane Call | Read/Write |
-|------|--------------------|------------|
-| `validate` | `validate.run_validate(context, ...)` | Read |
-| `health` | `health.run_health(context)` | Read |
-| `doctor` | `health.run_health(context)` (alias) | Read |
-| `status` | `status.get_status(context, ...)` | Read |
-| `get` | `gateway.get(resource_type, id)` | Read |
-| `list` | `gateway.list(resource_type, ...)` | Read |
-| `register` | `gateway.register(resource_type, payload, dry_run)` | Write |
-| `set` | `gateway.set(resource_type, id, payload, dry_run)` | Write |
-| `append` | `gateway.append(resource_type, id, key, value, dry_run)` | Write |
-| `transition` | `gateway.transition(resource_type, id, status, dry_run)` | Write |
-| `query` | `gateway.query(resource_type, filters)` | Read |
-| `render` | `render.run_render(context, ...)` | Write |
+| Tool | Service Call | Read/Write |
+|------|-------------|------------|
+| `validate_web` | `validate.validate_project(context, repo)` | Read |
+| `health_check` | `health.run_health_check(context, repo, validator)` | Read |
+| `project_status` | `status.get_status(context, repo)` | Read |
+| `get_resource` | `gateway.get(resource_type, id)` | Read |
+| `list_resources` | `gateway.list(resource_type)` | Read |
+| `register_resource` | `gateway.register(resource_type, payload, dry_run)` | Write |
+| `set_resource` | `gateway.set(resource_type, id, payload, dry_run)` | Write |
+| `transition_resource` | `gateway.transition(resource_type, id, status, dry_run)` | Write |
+| `query_web` | `gateway.query(query_type, **params)` | Read |
+| `render_views` | `render.run_render(context, force)` | Write |
 | `check_stale` | `check.run_check_stale(context)` | Read |
-| `check_refs` | `check.run_check_refs(context, ...)` | Read (+ cache) |
-| `export` | `export.run_export(context, ...)` | Read |
-| `init` | `init.run_init(context, ...)` | Write |
-| `record_result` | `execution.record_result(context, ...)` | Execute |
-| `get_protocol` | `protocols.get_protocol(name)` | Read |
-| `get_goal` | `goals.get_goal(context, id)` | Read |
-| `list_goals` | `goals.list_goals(context)` | Read |
-| `add_goal` | `goals.add_goal(context, payload, dry_run)` | Write |
-| `achieve_goal` | `goals.achieve_goal(context, id, dry_run)` | Write |
-| `get_structural_gaps` | `discovery.get_structural_gaps(web)` | Read (feature-gated) — returns `StructuralGap` list; no reasoning, no suggestions |
+| `check_refs` | `check.run_check_refs(context)` | Read |
+| `export_web` | `export.run_export(context, fmt, output_path)` | Read |
 
 **MCP server entry point** (`interfaces/mcp/server.py`):
 
@@ -2224,28 +2128,19 @@ the MCP server returns).
 
 **CLI dispatch table** — every command is one control-plane call:
 
-| Command | Control-Plane Call | Read/Write |
-|---------|--------------------|------------|
-| `validate` | `validate.run_validate(context, ...)` | Read |
-| `render` | `render.run_render(context, ...)` | Write |
-| `status` | `status.get_status(context, ...)` | Read |
+| Command | Service Call | Read/Write |
+|---------|-------------|------------|
+| `register` | `gateway.register(...)` | Write |
 | `get` | `gateway.get(...)` | Read |
 | `list` | `gateway.list(...)` | Read |
 | `set` | `gateway.set(...)` | Write |
-| `append` | `gateway.append(...)` | Write |
 | `transition` | `gateway.transition(...)` | Write |
-| `register` | `gateway.register(...)` | Write |
-| `query` | `gateway.query(...)` | Read |
-| `run-script` | `execution.record_result(...)` | Execute |
-| `check-stale` | `check.run_check_stale(context)` | Read |
-| `check-refs` | `check.run_check_refs(...)` | Read (+ cache) |
-| `sync-prose` | `check.run_sync_prose(...)` | Write |
-| `verify-prose-sync` | `check.run_verify_prose_sync(...)` | Read |
-| `health` | `health.run_health(context)` | Read |
-| `doctor` | `health.run_health(context)` (alias) | Read |
-| `init` | `init.run_init(context, ...)` | Write |
-| `export` | `export.run_export(...)` | Read |
-| `version` | (inline) | Read |
+| `validate` | `validate.validate_project(context, repo)` | Read |
+| `health` | `health.run_health_check(context, repo, validator)` | Read |
+| `status` | `status.get_status(context, repo)` | Read |
+| `render` | `render.run_render(context, force)` | Write |
+| `export` | `export.run_export(context, fmt, output)` | Read |
+| `init` | (inline) | Write |
 
 **CLI entry point** — thin dispatch, nothing more:
 
@@ -2268,50 +2163,8 @@ Nothing else. CLI never re-implements control-plane logic.
 
 ```python
 @dataclass
-class ProjectFeatures:
-    """Opt-in capabilities. Each flag gates a set of MCP tools and CLI commands.
-
-    The MCP server only registers tools for enabled features. A project with
-    all flags False still has the full epistemic web, gateway, validate,
-    health, and status — the core product.
-    """
-    governance: bool = False
-    literature_watch: bool = False
-    inference_gap_analysis: bool = False  # structural scan; AI mode in backlog
-    adversarial_audit_schedule: bool = False
-    experiment_ideation: bool = False        # post-Phase 7; flag exists now
-
-
-@dataclass
-class AnalysisSchedule:
-    """Controls how often a scheduled analysis runs relative to session count.
-
-    'every_sessions' is the cadence. 'last_run_session' is updated automatically
-    after each run so the system knows when to surface the next due notification.
-    """
-    every_sessions: int = 5     # run every N sessions
-    last_run_session: int = 0   # updated after each run
-
-
-@dataclass
-class ProjectSchedules:
-    """Per-analysis run cadence. Stored in project_config.json under 'schedules'.
-
-    Each entry maps a feature to its AnalysisSchedule. Only features with
-    their flag enabled are checked. Missing entries use the dataclass default.
-    """
-    inference_gap_analysis: AnalysisSchedule = field(
-        default_factory=lambda: AnalysisSchedule(every_sessions=5)
-    )
-    adversarial_audit: AnalysisSchedule = field(
-        default_factory=lambda: AnalysisSchedule(every_sessions=10)
-    )
-
-
-@dataclass
 class HorizonConfig:
     project_dir: Path = Path("project")
-    features: ProjectFeatures = field(default_factory=ProjectFeatures)
 
 
 def load_config(workspace: Path) -> HorizonConfig:
@@ -2319,25 +2172,11 @@ def load_config(workspace: Path) -> HorizonConfig:
     toml_path = workspace / "horizon.toml"
     if toml_path.exists():
         raw = tomllib.loads(toml_path.read_text())
-        feat = raw.get("features", {})
         return HorizonConfig(
-            project_dir=Path(raw.get("project_dir", "project")),
-            features=ProjectFeatures(
-                governance=feat.get("governance", False),
-                literature_watch=feat.get("literature_watch", False),
-                inference_gap_analysis=feat.get("inference_gap_analysis", False),
-                adversarial_audit_schedule=feat.get("adversarial_audit_schedule", False),
-                experiment_ideation=feat.get("experiment_ideation", False),
-            ),
+            project_dir=Path(raw.get("horizon", {}).get("project_dir", "project")),
         )
     return HorizonConfig()
 ```
-
-`ProjectSchedules` is loaded separately from `project_config.json` (not
-`horizon.toml`) because schedule state (`last_run_session`) is mutable
-runtime data that changes as research progresses. Tool configuration
-(`horizon.toml`) is environment-stable; research state (`project_config.json`)
-evolves with the project.
 
 ### 8.5 `horizon init`
 
@@ -2350,31 +2189,15 @@ ready for an AI agent to use immediately.
 ```
 $ horizon init
 
-Welcome to Horizon Research OS.
-
 ? Project name: quantum-gravity-study
-? What are you trying to achieve?
+? Description (optional):
   Derive the fine structure constant from first principles
-? Add success criteria? (press enter to skip)
-  > α within 0.1% of measured value
-  > derivation uses no fitted parameters
-  > done
-? Enable any optional features?
-  [ ] Governance — session boundary enforcement + close gate
-  [x] Literature watch — monitor new papers
-  [x] Prediction path discovery — scan web for untested prediction paths (every 5 sessions)
-  [ ] Adversarial audit schedule — periodic deep audit reminders (every 10 sessions)
-  [ ] Experiment ideation — suggest falsification experiments (post-Phase 7)
 
 ✓ Initialized project workspace
 ✓ Created project/data/project_config.json
-✓ MCP server registered (.mcp.json)
-✓ Agent instructions generated (.horizon/agents.md)
-✓ Updated CLAUDE.md, AGENTS.md, .cursorrules,
-  .github/copilot-instructions.md, .windsurfrules
 ✓ Created horizon.toml
 
-Horizon is ready. Your AI agent can now call health_check() to begin.
+Run `horizon health` or connect your AI agent via `horizon-mcp`.
 ```
 
 **What it creates:**
@@ -2392,192 +2215,68 @@ Horizon is ready. Your AI agent can now call health_check() to begin.
 │   ├── dead_ends.json
 │   ├── concepts.json
 │   ├── parameters.json
-│   └── project_config.json   ← research goals + feature flags
+│   ├── results.json              ← recorded analysis results (Phase 6)
+│   ├── transaction_log.jsonl
+│   └── project_config.json      ← project name + description
 ├── views/
-├── knowledge/
-├── logs/
-│   └── query_transactions.jsonl
-├── src/
-│   ├── verify/
-│   └── analysis/
-├── integrity/
-│   ├── reference_values.json
-│   └── tolerance_bounds.json
 └── .cache/
 
-.horizon/
-└── agents.md               ← generated, owned by Horizon, never hand-edited
-
-horizon.toml                ← tool config (project_dir, MCP server settings)
-.mcp.json                   ← MCP server registration for IDE/agent tooling
-CLAUDE.md                   ← @.horizon/agents.md import (one line added)
-AGENTS.md                   ← @.horizon/agents.md import (OpenAI Codex compat)
-.github/copilot-instructions.md  ← static generated copy
-.cursorrules                     ← static generated copy
-.windsurfrules                   ← static generated copy
+horizon.toml                ← tool config (project_dir)
 ```
-
-**Agent bootstrap design:**
-
-`.horizon/agents.md` is generated and owned entirely by Horizon. It is the
-single source of agent instructions — thin by design (under 30 lines), telling
-the agent to call `health_check()` and `project_status()` at session start and
-listing which protocols to fetch based on the `load_protocols` field in the
-health response.
-
-Tools that support import syntax (`CLAUDE.md`, `AGENTS.md`) get a one-line
-`@.horizon/agents.md` reference inside a `<!-- horizon:start/end -->` block.
-Tools that don't (`copilot-instructions.md`, `.cursorrules`, `.windsurfrules`)
-get a static generated copy of the same content. User content outside the
-delimiter block is never touched.
-
-`horizon init --refresh` regenerates `.horizon/agents.md` and the static
-copies after a Horizon version upgrade without touching user content.
 
 **`project/data/project_config.json`:**
 
-Research configuration separate from tool configuration (`horizon.toml`).
-Holds the active research goals, feature flags, and project description.
-Mutable via gateway tools — not just a file users hand-edit.
+Project metadata separate from tool configuration (`horizon.toml`).
+Holds the project name, description, and any researcher-level annotations.
+Mutable via `horizon config set/get` — not a file users need to hand-edit.
 
 ```json
 {
   "_schema_version": "project_config/v1",
   "name": "quantum-gravity-study",
-  "description": "Derive the fine structure constant from first principles",
-  "session_counter": 7,
-  "goals": {
-    "G-001": {
-      "statement": "Derive α from first principles",
-      "type": "primary",
-      "success_criteria": [
-        "α within 0.1% of measured value",
-        "derivation uses no fitted parameters"
-      ],
-      "status": "active",
-      "linked_predictions": []
-    }
-  },
-  "features": {
-    "governance": false,
-    "literature_watch": true,
-    "inference_gap_analysis": true,
-    "adversarial_audit_schedule": false,
-    "experiment_ideation": false
-  },
-  "schedules": {
-    "inference_gap_analysis": { "every_sessions": 5, "last_run_session": 5 },
-    "adversarial_audit":         { "every_sessions": 10, "last_run_session": 0 }
-  }
+  "description": "Derive the fine structure constant from first principles"
 }
 ```
 
-**Session counter:** `session_counter` is incremented in `project_config.json`
-on each session boundary. When `features.governance = false`, a session is
-defined as a calendar day with at least one registered mutation — the counter
-increments the first time a write goes through the gateway in a new calendar
-day. When `features.governance = true`, a session maps directly to an explicit
-`horizon session open` call. Either way the counter is a single integer in
-`project_config.json` and the `ProjectConfigRepository` owns its increment.
-
-**Schedule evaluation:** `health_check()` compares `session_counter` against
-each schedule's `last_run_session + every_sessions`. Analyses that are due are
-returned in a `due_analyses` list in the health response. The agent decides
-whether to act — Horizon never forces an analysis to run.
-
-**Protocol system:**
-
-The MCP server exposes a `get_protocol(name)` tool that returns agent guidance
-text on demand. `health_check()` response includes a `load_protocols` list —
-the names of protocols the agent should fetch given the current session
-context. This replaces loading all policy documents into context at session
-start with lazy, context-aware fetching.
-
-Protocol names map to files in `.horizon/protocols/` (generated by Horizon,
-not hand-edited). Standard protocols:
-- `research_policy` — claim/prediction/assumption framework, epistemic tags,
-  confidence tiers
-- `code_integrity` — anti-pattern registry, analysis checklist
-- `adversarial_audit` — adversarial posture framework, per-script analysis
-  steps, impact mapping
-
-**Feature-gated tool surface:**
-
-The MCP server reads `project_config.json` at startup and only registers
-tools for enabled features. A project with `governance: false` never sees
-`open_session` or `run_close_gate`. A project with `experiment_ideation: false`
-never sees `suggest_experiments`. This keeps the tool surface minimal for
-simple projects.
-
-**Options:**
-
-- `--refresh` — regenerate `.horizon/agents.md` and static tool copies only;
-  never touches project data or user content
-- `--tools <list>` — generate adapter files for specific tools only
-  (e.g., `--tools claude,cursor`)
-
 Idempotent: safe to run on an existing project. Fills in missing pieces,
-never overwrites existing files or user content outside delimiter blocks.
+never overwrites existing data files.
 
-### 8.6 `horizon health` / `horizon doctor`
+### 8.6 `horizon health`
 
-Project health check composed from existing capabilities — the "research
-linter" concept. Exposed under two names: `health` (for programmatic/MCP use)
-and `doctor` (for human muscle memory, analogous to `brew doctor` or
-`flutter doctor`).
+Project health check — the "linter for research". Composed from existing
+services and exposed as both a CLI command and an MCP tool.
 
-1. Are all expected data files present and valid JSON?
-2. Do cross-references resolve? (validates the web)
-3. Are rendered views current? (render `--check` under the hood)
+1. Do all data files exist and contain valid JSON?
+2. Do all cross-references resolve?
+3. Are rendered views current?
 4. Are there orphaned resources?
-5. Schema validation pass/fail
-6. Verification coverage gaps
-7. Staleness: predictions not recomputed since parameter changes
-8. Coverage: claims without analysiss, hypotheses without
-   supporting predictions, empirical assumptions without falsifiable consequences
+5. Staleness: analyses not re-run after parameter changes
+6. Coverage: claims with no analysis, empirical assumptions without testable predictions
 
-Clear, readable output with severity levels. Available as both an MCP tool
-and a CLI command. This is the "linter for research" — valuable even to
-researchers who don't use sessions, governance, or agents.
-
-Health response includes two scheduling fields:
+Health response:
 
 ```json
 {
-  "status": "CLEAN",
-  "load_protocols": ["research_policy"],
-  "due_analyses": ["inference_gap_analysis"],
-  "findings": []
+  "status": "HEALTHY",
+  "critical": 0,
+  "warnings": 2,
+  "findings": [...]
 }
 ```
-
-`due_analyses` lists any scheduled analyses where
-`session_counter >= last_run_session + every_sessions`. The agent fetches
-this on every session start and decides whether to run them — Horizon never
-forces execution. After a successful run, the tool updates `last_run_session`
-in `project_config.json` to the current `session_counter`.
 
 ### 8.7 Phase 4 Deliverables
 
 | Step | What | Tests |
 |------|------|-------|
 | 4.1 | `config.py` — load from horizon.toml with defaults | Config with/without toml, custom project_dir |
-| 4.2 | `interfaces/mcp/server.py` + `interfaces/mcp/tools.py` — full tool surface over control plane | Tool calls return correct `GatewayResult` envelopes |
+| 4.2 | `interfaces/mcp/server.py` + `interfaces/mcp/tools.py` — full core tool surface | Tool calls return correct `GatewayResult` envelopes |
 | 4.3 | MCP tool schema parity with CLI `--json` output | Both return identical `GatewayResult` JSON for same operation |
 | 4.4 | `horizon-mcp` console-script entry point registered and runnable | Smoke test |
-| 4.5 | `interfaces/cli/main.py` — validate, get, list, register, transition | Subprocess tests: check JSON output shape |
+| 4.5 | `interfaces/cli/main.py` — register, get, list, set, transition, validate, health, status, render, export, init | Subprocess tests: check JSON output shape |
 | 4.6 | `interfaces/cli/formatters.py` — human + JSON output | Unit tests for formatting |
-| 4.7 | `horizon init` | Creates correct directory structure |
+| 4.7 | `horizon init` | Creates correct directory structure; idempotent |
 | 4.8 | `horizon health` (CLI + MCP tool) | Reports known issues in test fixture |
 | 4.9 | `horizon export --format=json` | Exports all data as valid JSON |
-| 4.10 | `horizon version` | Prints version, Python version, workspace path |
-| 4.11 | Backward compat | Current Horizon repo works with new system |
-| 4.12 | `project_config.json` loaded at MCP/CLI startup; `ProjectFeatures` gates registered tools | Server with governance=false never exposes session tools |
-| 4.13 | `get_protocol` MCP tool — returns agent guidance by protocol name | Tool returns correct content for each registered protocol |
-| 4.14 | `health_check` response includes `load_protocols` field listing recommended protocols | Verify field present in all health responses |
-| 4.15 | `horizon init --with-agent` generates `.horizon/agents.md` + per-tool adapter files | Generated files present; CLAUDE.md uses @import; static copies for Cursor/Copilot/Windsurf |
-| 4.16 | `horizon init --refresh` regenerates agent files without touching project data | Existing `project_config.json` and epistemic data untouched |
-| 4.17 | `features/goals.py` — CRUD for `ResearchGoal` via `GoalsRepository` | Add/get/list/achieve; round-trip through goals.json |
 
 ### Release Checkpoint: First Internal Product Alpha
 
@@ -2604,22 +2303,14 @@ horizon health
 
 ### Phase 4 Exit Criteria
 
-- [ ] MCP server exposes the full tool surface over the control-plane gateway
+- [ ] MCP server exposes the full core tool surface
 - [ ] MCP tool results and CLI `--json` results share the same `GatewayResult` contract
 - [ ] `horizon-mcp` console script entry point is registered and tested
 - [ ] CLI dispatches all core commands
-- [ ] `horizon init` creates valid project scaffold (idempotent, never overwrites)
-- [ ] `horizon init --with-agent` generates clean agent adapter templates
-- [ ] `horizon health` / `horizon doctor` reports health accurately (CLI + MCP)
+- [ ] `horizon init` creates valid project scaffold (idempotent)
+- [ ] `horizon health` reports health accurately (CLI + MCP)
 - [ ] Both human and JSON CLI output modes work
 - [ ] Config is optional (defaults work without horizon.toml)
-- [ ] `project_config.json` drives feature-gated tool registration; unlisted features have no exposed tools
-- [ ] `get_protocol` MCP tool returns agent guidance for all registered protocols
-- [ ] `health_check` includes `load_protocols` recommendation field
-- [ ] `horizon init --with-agent` generates agent bootstrap files for all supported tools
-- [ ] `horizon init --refresh` is idempotent and non-destructive
-- [ ] `horizon init` creates initial `project_config.json` with one ResearchGoal from interactive prompt
-- [ ] `features/goals.py` CRUD is fully wired and tested
 
 ---
 
@@ -2634,22 +2325,15 @@ back to its assumptions.
 
 | # | Feature | Description |
 |---|---------|-------------|
-| 1 | Pretty-print output | `horizon list claims` shows a table. `--json` for machine output. |
+| 1 | Pretty-print output | `horizon list claims` shows a Rich table. `--json` for machine output. |
 | 2 | `horizon add <type>` | Interactive prompts. Asks required fields one at a time. No JSON. |
-| 3 | `horizon show <type> [id]` | Human-readable view with relationships. |
-| 4 | `horizon check` | Alias for `validate --quick`. Short, memorable. |
-| 5 | `horizon status` | Readable summary with health counts. |
-| 6 | `horizon log [id]` | Mutation history from transaction log (requires Phase 3 provenance). |
-| 7 | Quickstart guide | Install, init, add theory, add claim, add prediction, record result, inspect. |
-| 8 | Shell completions | Generated from the argument parser for bash, zsh, and fish. Resource ID tab-completion by reading local data files. |
-| 9 | `horizon goal add\|list\|achieve` | Interactive goal management. `add` prompts for statement, type, and success criteria. `list` shows goal status with linked prediction count. `achieve` transitions status and notes which criteria were met. |
-| 10 | `horizon config set\|get` | Read/write top-level fields in `project_config.json` (project name, description, feature flags) without editing JSON directly. |
-| 11 | `horizon status` shows goal progress | Status panel includes active goals, achieved goals, and which predictions are linked to each active goal. |
-| 12 | `features/discovery.py` — structural gap reporter | Given a web, returns a list of `StructuralGap` — structural observations about incomplete documentation, coverage, or testability. Pure read. No suggestions, no writes, no external deps. |
-| 13 | `horizon inspect` CLI command | Reports structural gaps in a readable table. `--json` for piping to an agent. Each gap identifies the entity, the structural property that is incomplete, and the IDs needed to navigate there. |
-| 14 | Session counter — increments in `project_config.json` on first write per calendar day (governance=false) or per `session open` (governance=true) | Counter advances correctly in both modes |
-| 15 | `health_check` returns `due_analyses` list | Correct analyses surfaced when `session_counter >= last_run_session + every_sessions` |
-| 16 | `horizon config set features.inference_gap_analysis true` enables `get_structural_gaps` MCP tool at next server start | Feature flag round-trip through project_config.json |
+| 3 | `horizon show <type> [id]` | Human-readable view with all relationships rendered. `source` shown as clickable link. |
+| 4 | `horizon status` | Readable summary with health counts and tier-A evidence summary. |
+| 5 | `horizon log [id]` | Mutation history from the transaction log. |
+| 6 | Shell completions | Generated for bash, zsh, and fish. Resource ID tab-completion from local data files. |
+| 7 | `horizon config set\|get` | Read/write `project_config.json` without editing JSON directly. |
+| 8 | Consistent error messages | Actionable hints on all common errors. |
+| 9 | Quickstart guide | Install → init → add theory → add claim → add prediction → record result → render. |
 
 For `horizon add prediction`, also prompt for:
 - The `specification` — the mathematical relationship or empirical claim being
@@ -2681,20 +2365,11 @@ having to re-derive it from first principles.
 - [ ] A researcher can use the tool without writing JSON
 - [ ] Interactive add works for all core entity types
 - [ ] `horizon add prediction` collects specification and derivation prose
-- [ ] `horizon show` displays entity with relationships
+- [ ] `horizon show` displays entity with relationships; `source` rendered as link
 - [ ] `horizon log` shows per-resource mutation history from provenance data
 - [ ] Shell completions generated for bash, zsh, and fish
-- [ ] Quickstart guide is written and tested
-- [ ] A researcher can add, list, and achieve research goals without editing JSON
-- [ ] `horizon status` shows goal progress with linked prediction counts
 - [ ] `horizon config set/get` reads and writes `project_config.json` safely
-- [ ] Feature flags can be toggled via `horizon config set features.governance true`
-- [ ] `features/discovery.py` structural gap reporter returns `StructuralGap` list from a web
-- [ ] `horizon inspect` shows structural gaps in a readable table; `--json` works
-- [ ] Each `StructuralGap` identifies entity ID, gap type, and navigable context — no prescriptions
-- [ ] Session counter increments correctly in both governance and no-governance modes
-- [ ] `health_check` surfaces `due_analyses` based on schedule state
-- [ ] After an inspect run, `last_run_session` is updated in `project_config.json`
+- [ ] Quickstart guide is written and tested end-to-end
 
 ---
 
@@ -2807,138 +2482,22 @@ is always returned.
 
 ---
 
-## 11. Phase 7 — Governance: The Professional Tier
+## 11. Backlog
 
-**Goal:** Sessions, boundaries, and close gates work as an opt-in layer
-that adds rigor for disciplined, long-running research projects.
-
-Governance is not an afterthought — it's a **designed-in capability** that
-the architecture supports from Phase 3 onward. The gateway's transaction
-boundary, provenance system, and typed result envelopes all exist partly
-to make governance possible. Phase 7 is when the user-facing surface ships,
-but the hooks have been in place since Phase 3.
-
-**Why opt-in, not default:** The core value proposition — epistemic web
-validation, verification, health checks — stands on its own. A researcher
-evaluating Horizon for the first time should get value immediately without
-learning about session types or close gates. Governance is the natural
-next step for researchers who want:
-
-- **Session discipline**: Named work sessions with typed boundaries (which
-  files can change in a "research" vs. "engineering" session)
-- **Close gates**: Forced checks before closing a session (are all findings
-  resolved? are views up to date? is the transaction log clean?)
-- **Modification provenance**: Which session introduced each change
-- **Audit trail**: Session summaries, boundary violation reports, close-gate
-  findings
-
-The UX should make governance feel like a **progression** — "you've been
-using Horizon for a month, here's how to add structure" — not a burden.
-
-### 11.1 Deliverables
-
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | `horizon init --with-governance` | Adds session types, boundary rules, close config |
-| 2 | `horizon upgrade --add=governance` | Add governance to existing core-only project (additive, non-destructive) |
-| 3 | Mutation provenance extension | Governance mode extends Phase 3 provenance with `_modification_session` |
-| 4 | Conditional session logic | `governance.enabled = false`: no boundaries, no close gate, no session numbers |
-| 5 | Git integration conditional | Core never touches git. Governance uses it when available. |
-| 6 | Session data reclassification | `session_state.json`, `session_summaries.json`, `session_types.json` are governance data |
-| 7 | Split `session_close.py` | Reusable close-gate engine (checks + findings) separate from git publish workflow |
-| 8 | `--with-agent` reinforcement | Verify agent templates from Phase 4 work correctly with governance; boundary enforcement and close gate reference `governance.enabled` so they're inert when governance is off |
-
-### 11.2 Session Boundary Enforcement
-
-```python
-class SessionBoundary:
-    """Enforces file-access rules based on session type."""
-
-    def __init__(self, contract: dict) -> None:
-        self._zones = contract["zones"]
-        self._session_types = contract["session_types"]
-
-    def check_violations(
-        self, modified_files: list[str], session_type: str
-    ) -> list[Finding]:
-        allowed = self._allowed_zones(session_type)
-        findings = []
-        for f in modified_files:
-            if not any(self._match(f, zone) for zone in allowed):
-                findings.append(Finding(
-                    Severity.CRITICAL,
-                    f"session_boundary/{f}",
-                    f"File outside allowed zone for session type '{session_type}'",
-                ))
-        return findings
-```
-
-### Release Checkpoint: Governance-Capable Beta
-
-### Phase 7 Exit Criteria
-
-- [ ] Core experience works identically with governance off
-- [ ] `horizon upgrade --add=governance` adds governance to existing core-only project
-- [ ] Session boundaries enforced when governance enabled
-- [ ] Close gate runs checks and returns findings
-- [ ] Git publish is optional and separate from close-gate logic
-- [ ] Governance extends Phase 3 provenance with `_modification_session`
-- [ ] Agent templates from Phase 4 work correctly under governance
-
----
-
-## 12. After Phase 7: The Backlog
-
-Everything below is real and valuable but not on the critical path.
-
-### High-Value (Do When There's Demand)
+Everything below is real and valuable but not on the critical path for Phase 1–6.
 
 - Schema versioning + `horizon migrate`
 - `horizon export --format=csv|notebook|bibtex`
-- `horizon import` from BibTeX/CSV (offline-first: local file parsing always
-  works; online DOI/arXiv fetch is opt-in and requires explicit network
-  permission)
+- `horizon import` from BibTeX/CSV
 - Research graph traversal — `horizon trace`, `horizon impact`
-- Shell completions (already in Phase 5 deliverables)
-- Example projects (ship sanitized fixtures as `examples/` with the package)
-- `horizon resolve-conflicts` — JSON-structure-aware merge tool for
-  multi-user scenarios
-
-### Medium-Value (Real Features, Not Urgent)
-
-- Schema-driven gateway — resource types in config instead of Python
+- Example projects (`examples/` shipped with the package)
+- `horizon resolve-conflicts` — JSON-structure-aware merge for multi-user scenarios
 - Static HTML rendering — `horizon render --format=html`
-- `horizon health` as CI check
-- One-file-per-resource layout (`data/claims/C-001.json`) — decision point
-  for multi-user scalability; big migration, needs conscious design
-- Multi-user merge / conflict resolution
-- `horizon challenge` — adversarial analysis of claims
-- **Experiment ideation** (`experiment_ideation` feature flag — infrastructure exists,
-  capability deferred): agent-driven suggestion of testable experiments derived from
-  active claims and open hypotheses. Exposes `suggest_experiments` MCP tool when
-  `features.experiment_ideation = true`.
-- **AI-assisted chain audit**: an AI agent calls `get_prediction_chain`,
-  `get_structural_gaps`, and `get_assumption_coverage` via MCP, then reasons
-  over the structured output with its own domain knowledge. No Horizon-internal
-  LLM integration needed — the traversal API is the interface; the agent provides
-  the reasoning. The structural gap reporter (Phase 5) is the foundation.
-- **Persisted structural gaps**: promote `StructuralGap` to a tracked entity so
-  a researcher can mark gaps as reviewed, dismissed, or acted on. Ephemeral
-  gap reporting (Phase 5) ships first.
-
-### Aspirational (Someday, Maybe)
-
-- Hypothesis tournaments
-- Interactive graph explorer
-- Paper draft generation
-- Evidence quality scoring
+- `horizon health` as a CI exit code
+- One-file-per-resource layout for multi-user scalability
+- Web UI (read-only dashboard over the MCP server)
+- VSCode extension
 - Pre-registration export (OSF format)
-- Progressive-disclosure CLI modes
-- XDG-compliant config paths
-- Session replay
-- Reproducibility manifests
-- Webhook/notification integration
-- Research templates / starter kits
 
 ---
 
@@ -2952,10 +2511,10 @@ Everything below is real and valuable but not on the critical path.
 | **L — Liskov Substitution** | `InMemoryRepository` and `JsonFileRepository` interchangeable | `ports.py`, all adapters |
 | **I — Interface Segregation** | `WebRepository` has only `load()` and `save()`. `ResultRecorder` is separate. | `ports.py` |
 | **D — Dependency Inversion** | Domain defines protocols. Adapters implement them. Core depends on abstractions. | `ports.py`, `core/gateway.py` |
-| **Low Coupling** | Kernel code has zero imports from adapters, interfaces, or features | Package DAG: `interfaces/* → features → views → core → adapters → epistemic` |
+| **Low Coupling** | Kernel code has zero imports from adapters or interfaces | Package DAG: `interfaces/* → views → core → adapters → epistemic` |
 | **High Cohesion** | `epistemic/` = kernel reasoning. `core/` = mutation/query boundary. `views/` = composed summaries. `adapters/` = I/O. `interfaces/*` = UI. | Package layout |
-| **Common Closure (CCP)** | Modules that change together are packaged together: automation/render/check, results ingestion, governance close/session/boundary | `core/`, `views/`, `features/governance/` |
-| **Common Reuse (CRP)** | Optional governance and literature surfaces stay separate from the core install and core workflows | Package layout, optional extras |
+| **Common Closure (CCP)** | Modules that change together are packaged together: automation/render/check, results ingestion | `core/`, `views/` |
+| **Common Reuse (CRP)** | Optional extras (MCP, compute) stay separate from the core install | Package layout, optional extras |
 | **DRY** | Bidirectional links maintained once (web mutations). Validation rules each exist once. | `web.py`, `invariants.py` |
 | **KISS** | Plain dataclasses, native Python types, `dict`/`set`/`list`. No metaclasses. Dependencies only at CLI/MCP boundaries where they directly improve UX. | Entire codebase |
 | **YAGNI** | No plugin system, no event bus, no database, no web server, no generic graph engine. Dependencies earn their place by improving end-user experience, not developer convenience. | Explicit in Phase 1-7 scope limits |
@@ -3043,9 +2602,9 @@ correctly, the transition is complete. The data survives; the code doesn't.
 - Network access is off by default.
 - Import paths are offline-first: local file parsing always works; online
   fetch is opt-in with explicit network permission.
-- Git integration is optional: core operations never touch git; governance
-  uses it when available. Horizon works for researchers using Dropbox,
-  OneDrive, or a plain local folder.
+- Git integration is for results ingestion only: `horizon record` captures the
+  git SHA at record time. Core operations never require git. Horizon works for
+  researchers using Dropbox, OneDrive, or a plain local folder.
 - Distribution name: `horizon-research`.
 - Import namespace: `epistemic` (internal), `horizon_research` (public).
 - Primary CLI: `horizon`.
@@ -3053,8 +2612,7 @@ correctly, the transition is complete. The data survives; the code doesn't.
 - Declarative automation graph remains the source of truth for generated-output
     wiring and stale-trigger propagation.
 - Mutation provenance (`_last_modified`, `_modified_by`) ships in Phase 3
-    with the gateway, not deferred to governance. Governance extends it with
-    `_modification_session`.
+    with the gateway.
 - Packaging, config, and workflow contracts should be tested as code.
 - Flat JSON files. Reconsider only if merge conflicts become a real problem.
 - Native Python types (`dict`, `set`, `list`) in the domain model.
@@ -3220,7 +2778,7 @@ state — JSON, rendered markdown, and prose surfaces all agree.
 
 1. **Product fixture:** A minimal project directory created in `tmp_path` for
    each test. Contains only the JSON files needed for the test. No git repo,
-   no governance metadata, no session types. This is the standard for unit
+   no extra metadata. This is the standard for unit
    and integration tests.
 
 2. **Repo fixture:** Points `ProjectContext` at the real repo layout for
@@ -3296,17 +2854,11 @@ Is it recording analysis results from external tools?
 Is it archiving/activating research programs?
     → program_manager (outer shell — NOT in the product core)
 
-Is it about session types, boundaries, or close gates?
-    → src/horizon_research/features/governance/boundary.py, session.py, close.py
-
-Is it an opt-in feature (goals, discovery, protocols)?
-    → src/horizon_research/features/
-
 Is it pure domain logic (entities, invariants, graph queries)?
     → src/horizon_research/epistemic/
 ```
 
-**The seven rules:**
+**The six rules:**
 
 1. If it parses `sys.argv`, it goes in `src/horizon_research/interfaces/cli/`.
 2. If it is an MCP tool handler, it goes in `src/horizon_research/interfaces/mcp/`.
@@ -3314,7 +2866,6 @@ Is it pure domain logic (entities, invariants, graph queries)?
 4. If it expresses source → output or stale-trigger wiring, it goes in `src/horizon_research/core/automation.py`.
 5. If it mutates canonical JSON, it goes through `src/horizon_research/core/gateway.py`.
 6. If it only reads data and returns findings, it goes in `src/horizon_research/core/validate.py` or `src/horizon_research/epistemic/invariants.py`.
-7. If it touches git, GitHub, or commit messages, it's `features/governance/` code.
 
 ---
 

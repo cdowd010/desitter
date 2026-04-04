@@ -1,7 +1,6 @@
 """Project configuration and runtime context.
 
 This module is the single place for:
-  - ProjectFeatures  — which opt-in features are enabled
   - HorizonConfig    — parsed from horizon.toml (or defaults)
   - ProjectPaths     — all filesystem paths derived from workspace + config
   - ProjectContext   — the runtime contract passed to every service
@@ -15,13 +14,6 @@ horizon.toml schema (all keys optional):
 
   [horizon]
   project_dir = "project"     # relative to workspace root
-
-  [features]
-  goals = false
-  inference_gap_analysis = false
-  governance = false
-  literature_watch = false
-  experiment_ideation = false
 """
 from __future__ import annotations
 
@@ -31,30 +23,12 @@ from pathlib import Path
 _CONFIG_FILENAME = "horizon.toml"
 
 
-# ── Feature flags ─────────────────────────────────────────────────
-
-@dataclass
-class ProjectFeatures:
-    """Opt-in capabilities. Each flag gates a set of MCP tools and CLI commands.
-
-    Core tools (register, get, list, validate, health, render, export,
-    check_stale, record_result) are always available — no flag needed.
-    Feature tools register only when their flag is true.
-    """
-    goals: bool = False                  # goal tracking MCP tools + CLI commands
-    inference_gap_analysis: bool = False # structural gap reporter (features/discovery.py)
-    governance: bool = False             # sessions, boundaries, close gates
-    literature_watch: bool = False       # post-Phase 7
-    experiment_ideation: bool = False    # post-Phase 7
-
-
 # ── User config (from horizon.toml) ──────────────────────────────
 
 @dataclass
 class HorizonConfig:
     """Parsed from horizon.toml. All fields have safe defaults."""
     project_dir: Path = field(default_factory=lambda: Path("project"))
-    features: ProjectFeatures = field(default_factory=ProjectFeatures)
 
 
 # ── Filesystem paths ──────────────────────────────────────────────
@@ -106,17 +80,9 @@ def load_config(workspace: Path) -> HorizonConfig:
 
     raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
     horizon = raw.get("horizon", {})
-    feat = raw.get("features", {})
 
     return HorizonConfig(
         project_dir=Path(horizon.get("project_dir", "project")),
-        features=ProjectFeatures(
-            goals=bool(feat.get("goals", False)),
-            inference_gap_analysis=bool(feat.get("inference_gap_analysis", False)),
-            governance=bool(feat.get("governance", False)),
-            literature_watch=bool(feat.get("literature_watch", False)),
-            experiment_ideation=bool(feat.get("experiment_ideation", False)),
-        ),
     )
 
 

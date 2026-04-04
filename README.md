@@ -78,7 +78,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a full technical walkthrough.
 | **Single gateway** | All mutations go through one boundary. No MCP-specific or CLI-specific business logic |
 | **Invariants at mutation time** | Broken references, cycles, and bidirectional inconsistencies are caught when introduced — not discovered later |
 | **Consumer model** | Horizon records analysis results from researcher-run tools. It never executes analyses itself |
-| **Feature-gated surface** | Goals, governance, and discovery are opt-in. The core product is the epistemic web |
 | **Domain-neutral** | Works for physics, ML, medicine, social science. The vocabulary is general empirical reasoning |
 | **Zero-friction dependencies** | Epistemic kernel is stdlib-only. `click`/`rich` for CLI UX. `fastmcp` opt-in for MCP |
 
@@ -94,11 +93,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a full technical walkthrough.
 └─────────────────────┬────────────────────────────────┘
                       │  (no business logic in any interface)
 ┌─────────────────────▼────────────────────────────────┐
-│  Feature Services (features/) — opt-in, flagged      │
-│  goals · discovery · protocols · governance/         │
-└─────────────────────┬────────────────────────────────┘
-                      │
-┌─────────────────────▼────────────────────────────────┐
 │  View Services (views/) — always available           │
 │  health · render · status · metrics                  │
 │  Read-only composed summaries + derived files        │
@@ -111,7 +105,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a full technical walkthrough.
                       │
 ┌─────────────────────▼────────────────────────────────┐
 │  Config (config.py) — runtime contract               │
-│  ProjectFeatures · HorizonConfig · ProjectContext    │
+│  HorizonConfig · ProjectContext · ProjectPaths       │
 └─────────────────────┬────────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────────┐
@@ -135,7 +129,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for data flow, package layout, design dec
 
 ```
 src/horizon_research/
-├── config.py               # ProjectFeatures, HorizonConfig, ProjectContext
+├── config.py               # HorizonConfig, ProjectContext, load_config(), build_context()
 ├── epistemic/              # Domain kernel — pure Python, zero I/O
 │   ├── types.py            # Typed IDs, enums, Finding
 │   ├── model.py            # Entity dataclasses (Claim, Prediction, …)
@@ -149,7 +143,7 @@ src/horizon_research/
 ├── core/                   # Core services — mutations + queries
 │   ├── gateway.py          # Single mutation/query boundary
 │   ├── validate.py         # Structural validation
-│   ├── check.py            # check_stale, check_refs, sync_prose
+│   ├── check.py            # check_stale, check_refs
 │   ├── export.py           # Bulk JSON/markdown export
 │   └── automation.py       # Render-trigger policy table
 ├── views/                  # View services — read-only composed summaries
@@ -157,11 +151,6 @@ src/horizon_research/
 │   ├── render.py           # Incremental markdown generation
 │   ├── status.py           # Summary read model
 │   └── metrics.py          # Evidence statistics
-├── features/               # Opt-in feature services
-│   ├── goals.py            # ResearchGoal CRUD (features.goals)
-│   ├── discovery.py        # Structural gap reporter (features.inference_gap_analysis)
-│   ├── protocols.py        # Agent documentation registry
-│   └── governance/         # Sessions + close gates (features.governance)
 └── interfaces/             # Interface adapters — equal peers, no business logic
     ├── cli/                # Humans + scripts
     │   ├── main.py         # Click commands

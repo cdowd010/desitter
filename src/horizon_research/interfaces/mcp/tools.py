@@ -1,14 +1,25 @@
-"""MCP tool handlers — thin wrappers over the control plane.
+"""MCP tool handlers — thin wrappers over the core and view services.
 
-Every tool here delegates immediately to the Gateway or a read-only
-service. No business logic lives in this file.
+Every tool delegates immediately to the Gateway or a read-only service.
+No business logic lives in this file.
 
 Result envelopes follow the status-first convention:
   {"status": "ok" | "error" | "CLEAN" | "BLOCKED" | "dry_run", ...}
 
-Tool naming convention: <verb>_<resource> or <verb>_<noun>
-  register_claim, get_prediction, list_assumptions,
-  run_health_check, get_status, run_script, …
+Core tool surface:
+  register_resource   — register any entity type
+  get_resource        — retrieve by ID
+  list_resources      — list all of a type
+  set_resource        — update fields on an existing entity
+  transition_resource — change status
+  query_web           — named read-only queries
+  validate_web        — run all domain validators
+  health_check        — composed health report
+  project_status      — high-level status snapshot
+  render_views        — regenerate markdown views
+  check_stale         — identify analyses needing re-run
+  check_refs          — verify all ID references are intact
+  export_web          — bulk export (JSON or markdown)
 """
 from __future__ import annotations
 
@@ -17,9 +28,9 @@ from ...adapters.markdown_renderer import MarkdownRenderer
 from ...adapters.transaction_log import JsonTransactionLog
 from ...config import ProjectContext
 from ...core.gateway import Gateway
+from ...core.validate import DomainValidator
 from ...views.health import run_health_check
 from ...views.status import get_status
-from ...core.validate import DomainValidator
 
 
 def _build_gateway(context: ProjectContext) -> Gateway:
@@ -27,72 +38,82 @@ def _build_gateway(context: ProjectContext) -> Gateway:
     repo = JsonRepository(context.paths.data_dir)
     validator = DomainValidator()
     renderer = MarkdownRenderer()
-    tx_log = JsonTransactionLog(context.paths.query_transaction_log_file)
-    from ...epistemic.ports import ProseSync  # imported for type only
-    # prose_sync placeholder — implement in Phase 3
+    tx_log = JsonTransactionLog(context.paths.transaction_log_file)
     prose_sync = _NullProseSync()
     return Gateway(context, repo, validator, renderer, prose_sync, tx_log)
 
 
 class _NullProseSync:
     """No-op ProseSync used until the prose sync adapter is implemented."""
-
     def sync(self, web):
         return {}
 
 
 def register_tools(server, context: ProjectContext) -> None:
-    """Register all MCP tool handlers on the FastMCP server instance.
-
-    Each handler follows the pattern:
-      1. Resolve resource alias
-      2. Delegate to gateway or service
-      3. Return status-first dict
-    """
+    """Register all MCP tool handlers on the FastMCP server instance."""
     gateway = _build_gateway(context)
 
     @server.tool()
     def register_resource(resource: str, payload: dict, dry_run: bool = False) -> dict:
-        """Register a new resource entity in the epistemic web.
+        """Register a new entity in the epistemic web.
 
-        resource: entity type (e.g. "claim", "assumption", "prediction")
+        resource: entity type — "claim", "assumption", "prediction", "analysis",
+                  "theory", "discovery", "dead_end", "concept", "parameter",
+                  "independence_group"
         payload:  entity fields as a dict
-        dry_run:  if True, validate without writing
+        dry_run:  if True, validate without writing to disk
         """
-        result = gateway.register(resource, payload, dry_run=dry_run)
-        return _envelope(result)
+        return _envelope(gateway.register(resource, payload, dry_run=dry_run))
 
     @server.tool()
     def get_resource(resource: str, identifier: str) -> dict:
-        """Retrieve a single resource by ID."""
-        result = gateway.get(resource, identifier)
-        return _envelope(result)
+        """Retrieve a single entity by ID."""
+        return _envelope(gateway.get(resource, identifier))
 
     @server.tool()
     def list_resources(resource: str) -> dict:
-        """List all resources of a given type."""
-        result = gateway.list(resource)
-        return _envelope(result)
+        """List all entities of a given type."""
+        return _envelope(gateway.list(resource))
+
+    @server.tool()
+    def set_resource(
+        resource: str, identifier: str, payload: dict, dry_run: bool = False
+    ) -> dict:
+        """Update fields on an existing entity."""
+        return _envelope(gateway.set(resource, identifier, payload, dry_run=dry_run))
 
     @server.tool()
     def transition_resource(
         resource: str, identifier: str, new_status: str, dry_run: bool = False
     ) -> dict:
-        """Transition a resource to a new status."""
-        result = gateway.transition(resource, identifier, new_status, dry_run=dry_run)
-        return _envelope(result)
+        """Transition an entity to a new status (e.g. PENDING → CONFIRMED)."""
+        return _envelope(
+            gateway.transition(resource, identifier, new_status, dry_run=dry_run)
+        )
+
+    @server.tool()
+    def query_web(query_type: str, **params) -> dict:
+        """Run a named read-only query across the epistemic web.
+
+        query_type: "claim_lineage", "assumption_lineage", "prediction_chain", etc.
+        """
+        return _envelope(gateway.query(query_type, **params))
 
     @server.tool()
     def validate_web() -> dict:
-        """Run all domain validators and return findings."""
+        """Run all domain validators and return findings.
+
+        Returns CLEAN or BLOCKED with a list of findings.
+        """
         repo = JsonRepository(context.paths.data_dir)
         validator = DomainValidator()
         from ...core.validate import validate_project
         findings = validate_project(context, repo)
+        status = "CLEAN" if not any(
+            f.severity.name == "CRITICAL" for f in findings
+        ) else "BLOCKED"
         return {
-            "status": "CLEAN" if not any(
-                f.severity.name == "CRITICAL" for f in findings
-            ) else "BLOCKED",
+            "status": status,
             "findings": [
                 {"severity": f.severity.name, "source": f.source, "message": f.message}
                 for f in findings
@@ -101,7 +122,10 @@ def register_tools(server, context: ProjectContext) -> None:
 
     @server.tool()
     def health_check() -> dict:
-        """Run all health checks and return a structured report."""
+        """Run all health checks and return a structured report.
+
+        overall: "HEALTHY" | "WARNINGS" | "CRITICAL"
+        """
         repo = JsonRepository(context.paths.data_dir)
         validator = DomainValidator()
         report = run_health_check(context, repo, validator)
@@ -122,6 +146,62 @@ def register_tools(server, context: ProjectContext) -> None:
         from ...views.status import format_status_dict
         status = get_status(context, repo)
         return {"status": "ok", "data": format_status_dict(status)}
+
+    @server.tool()
+    def render_views(force: bool = False) -> dict:
+        """Regenerate all markdown view surfaces.
+
+        force: if True, re-render even if nothing has changed.
+        """
+        from ...views.render import run_render
+        result = run_render(context, force=force)
+        return _envelope(result)
+
+    @server.tool()
+    def check_stale() -> dict:
+        """Identify analyses that need re-running after parameter changes.
+
+        Returns analyses whose uses_parameters set includes a parameter
+        that has changed since the analysis was last run.
+        """
+        from ...core.check import run_check_stale
+        findings = run_check_stale(context)
+        return {
+            "status": "ok",
+            "findings": [
+                {"severity": f.severity.name, "source": f.source, "message": f.message}
+                for f in findings
+            ],
+        }
+
+    @server.tool()
+    def check_refs() -> dict:
+        """Verify all ID cross-references in the epistemic web are intact."""
+        from ...core.check import run_check_refs
+        findings = run_check_refs(context)
+        return {
+            "status": "ok",
+            "findings": [
+                {"severity": f.severity.name, "source": f.source, "message": f.message}
+                for f in findings
+            ],
+        }
+
+    @server.tool()
+    def export_web(fmt: str = "json", output_path: str | None = None) -> dict:
+        """Bulk-export the epistemic web.
+
+        fmt: "json" or "markdown"
+        output_path: write to this path; if None, return in response data.
+        """
+        from ...core.export import run_export
+        from pathlib import Path
+        result = run_export(
+            context,
+            fmt=fmt,
+            output_path=Path(output_path) if output_path else None,
+        )
+        return _envelope(result)
 
 
 def _envelope(result) -> dict:
