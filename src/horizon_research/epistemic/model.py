@@ -25,6 +25,7 @@ from .types import (
     IndependenceGroupId,
     MeasurementRegime,
     ParameterId,
+    PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
     TheoryId,
@@ -52,12 +53,19 @@ class Claim:
 
 @dataclass
 class Assumption:
-    """A premise taken as given."""
+    """A premise taken as given.
+
+    'depends_on' captures presupposition: "the detector is linear" depends on
+    "the detector is calibrated." This lets assumption_lineage do a full
+    transitive closure through both claim chains AND assumption chains, so
+    no silent dependency is missed.
+    """
     id: AssumptionId
     statement: str
     type: str                                    # "E" (empirical), "M" (methodological)
     scope: str
     used_in_claims: set[ClaimId] = field(default_factory=set)
+    depends_on: set[AssumptionId] = field(default_factory=set)
     falsifiable_consequence: str | None = None
     tested_by: set[PredictionId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
@@ -79,6 +87,12 @@ class Prediction:
 
     'derivation' is the prose explanation of why claim_ids → this
     prediction. Distinct from 'specification' (the formula being tested).
+
+    'conditional_on' is the set of assumptions this prediction is explicitly
+    conditioned on — i.e., "this prediction holds only if these assumptions
+    hold." Unlike tests_assumptions (which marks assumptions under active
+    test), conditional_on marks assumptions that are taken as given for
+    this prediction to be valid. The web validates all IDs exist.
     """
     id: PredictionId
     observable: str
@@ -97,7 +111,7 @@ class Prediction:
     observed: Any = None
     observed_bound: Any = None
     free_params: int = 0
-    conditional_on: str | None = None
+    conditional_on: set[AssumptionId] = field(default_factory=set)
     falsifier: str | None = None
     benchmark_source: str | None = None
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
@@ -122,6 +136,7 @@ class IndependenceGroup:
 @dataclass
 class PairwiseSeparation:
     """Documents why two independence groups are genuinely separate."""
+    id: PairwiseSeparationId
     group_a: IndependenceGroupId
     group_b: IndependenceGroupId
     basis: str

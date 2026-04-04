@@ -23,6 +23,7 @@ IndependenceGroupId = NewType("IndependenceGroupId", str)
 ParameterId = NewType("ParameterId", str)
 ConceptId = NewType("ConceptId", str)
 DeadEndId = NewType("DeadEndId", str)
+PairwiseSeparationId = NewType("PairwiseSeparationId", str)
 
 
 

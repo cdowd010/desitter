@@ -65,7 +65,7 @@ def validate_independence_semantics(web: EpistemicWeb) -> list[Finding]:
     # Check pairwise separation completeness
     group_ids = sorted(web.independence_groups.keys())
     seen_pairs: set[tuple[str, str]] = set()
-    for ps in web.pairwise_separations:
+    for ps in web.pairwise_separations.values():
         pair = (min(ps.group_a, ps.group_b), max(ps.group_a, ps.group_b))
         seen_pairs.add(pair)
 
@@ -129,6 +129,44 @@ def validate_assumption_testability(web: EpistemicWeb) -> list[Finding]:
     return findings
 
 
+def validate_implicit_assumption_coverage(web: EpistemicWeb) -> list[Finding]:
+    """Flag assumptions that silently underpin predictions but are never tested.
+
+    An assumption is 'silently depended on' if it appears in the implicit
+    assumption set of one or more predictions (via claim lineage, depends_on
+    chains, or conditional_on) but has no tested_by coverage and is not in
+    the tests_assumptions of any prediction that depends on it.
+
+    Reports one finding per uncovered assumption, not per prediction.
+    """
+    findings: list[Finding] = []
+
+    # Build: for each assumption, which predictions implicitly depend on it
+    implicit_dependents: dict = {}
+    for pid in web.predictions:
+        for aid in web.prediction_implicit_assumptions(pid):
+            implicit_dependents.setdefault(aid, set()).add(pid)
+
+    for aid, pids in implicit_dependents.items():
+        assumption = web.assumptions.get(aid)
+        if assumption is None:
+            continue
+        # Explicit testers: predictions in the dependent set that list this assumption in tests_assumptions
+        explicit_testers = {
+            pid for pid in pids
+            if aid in web.predictions[pid].tests_assumptions
+        }
+        if not assumption.tested_by and not explicit_testers:
+            findings.append(Finding(
+                Severity.INFO,
+                f"assumptions/{aid}",
+                f"Assumption implicitly underpins {len(pids)} prediction(s) "
+                f"but has no tested_by coverage: {sorted(pids)}",
+            ))
+
+    return findings
+
+
 def validate_all(web: EpistemicWeb) -> list[Finding]:
     """Run all domain validators."""
     return (
@@ -136,4 +174,5 @@ def validate_all(web: EpistemicWeb) -> list[Finding]:
         + validate_independence_semantics(web)
         + validate_coverage(web)
         + validate_assumption_testability(web)
+        + validate_implicit_assumption_coverage(web)
     )

@@ -35,6 +35,7 @@ from .types import (
     Finding,
     IndependenceGroupId,
     ParameterId,
+    PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
     Severity,
@@ -58,7 +59,7 @@ class EpistemicWeb:
     independence_groups: dict[IndependenceGroupId, IndependenceGroup] = field(
         default_factory=dict
     )
-    pairwise_separations: list[PairwiseSeparation] = field(default_factory=list)
+    pairwise_separations: dict[PairwiseSeparationId, PairwiseSeparation] = field(default_factory=dict)
     dead_ends: dict[DeadEndId, DeadEnd] = field(default_factory=dict)
     concepts: dict[ConceptId, Concept] = field(default_factory=dict)
     parameters: dict[ParameterId, Parameter] = field(default_factory=dict)
@@ -94,14 +95,98 @@ class EpistemicWeb:
         return visited
 
     def assumption_lineage(self, cid: ClaimId) -> set[AssumptionId]:
-        """All assumptions reachable through a claim and its ancestors."""
+        """All assumptions reachable through a claim and its ancestors,
+        including assumptions presupposed by those assumptions (depends_on)."""
         all_claims = self.claim_lineage(cid) | {cid}
-        result: set[AssumptionId] = set()
+        direct: set[AssumptionId] = set()
         for ancestor_id in all_claims:
             claim = self.claims.get(ancestor_id)
             if claim:
-                result.update(claim.assumptions)
+                direct.update(claim.assumptions)
+        # Expand through assumption.depends_on chains
+        result: set[AssumptionId] = set()
+        stack = list(direct)
+        while stack:
+            aid = stack.pop()
+            if aid in result:
+                continue
+            result.add(aid)
+            assumption = self.assumptions.get(aid)
+            if assumption:
+                for dep in assumption.depends_on:
+                    if dep not in result:
+                        stack.append(dep)
         return result
+
+    def prediction_implicit_assumptions(self, pid: PredictionId) -> set[AssumptionId]:
+        """All assumptions in the full derivation chain of a prediction.
+
+        Includes assumptions on each claim in claim_ids (and their ancestors),
+        assumptions presupposed by those assumptions (depends_on chains),
+        and assumptions in conditional_on (and their depends_on chains).
+
+        This is the complete set of assumptions the prediction silently rests on.
+        """
+        pred = self.predictions.get(pid)
+        if pred is None:
+            return set()
+        result: set[AssumptionId] = set()
+        for cid in pred.claim_ids:
+            result.update(self.assumption_lineage(cid))
+        # Expand conditional_on through depends_on chains
+        stack = list(pred.conditional_on)
+        while stack:
+            aid = stack.pop()
+            if aid in result:
+                continue
+            result.add(aid)
+            assumption = self.assumptions.get(aid)
+            if assumption:
+                for dep in assumption.depends_on:
+                    if dep not in result:
+                        stack.append(dep)
+        return result
+
+    def refutation_impact(self, pid: PredictionId) -> dict[str, set]:
+        """What is called into question when a prediction is refuted.
+
+        Returns:
+            claim_ids:           the direct claims jointly implying this prediction
+            claim_ancestors:     all ancestor claims (transitive depends_on closure)
+            implicit_assumptions: all assumptions in the full derivation chain
+        """
+        pred = self.predictions.get(pid)
+        if pred is None:
+            return {"claim_ids": set(), "claim_ancestors": set(), "implicit_assumptions": set()}
+        ancestors: set[ClaimId] = set()
+        for cid in pred.claim_ids:
+            ancestors.update(self.claim_lineage(cid))
+        return {
+            "claim_ids": pred.claim_ids.copy(),
+            "claim_ancestors": ancestors - pred.claim_ids,
+            "implicit_assumptions": self.prediction_implicit_assumptions(pid),
+        }
+
+    def assumption_support_status(self, aid: AssumptionId) -> dict[str, set]:
+        """What depends on this assumption, directly and transitively.
+
+        Returns:
+            direct_claims:          claims that directly reference this assumption
+            dependent_predictions:  predictions whose derivation chain includes this assumption
+            tested_by:              predictions explicitly testing this assumption
+        """
+        assumption = self.assumptions.get(aid)
+        if assumption is None:
+            return {"direct_claims": set(), "dependent_predictions": set(), "tested_by": set()}
+        dependent: set[PredictionId] = set()
+        for pid in self.predictions:
+            if aid in self.prediction_implicit_assumptions(pid):
+                dependent.add(pid)
+        return {
+            "direct_claims": assumption.used_in_claims.copy(),
+            "dependent_predictions": dependent,
+            "tested_by": assumption.tested_by.copy(),
+        }
 
     # ── Mutations (return new web) ────────────────────────────────
 
@@ -132,11 +217,13 @@ class EpistemicWeb:
         return new
 
     def register_assumption(self, assumption: Assumption) -> EpistemicWeb:
-        """Add an assumption."""
+        """Add an assumption. Validates depends_on refs exist and no cycles."""
         if assumption.id in self.assumptions:
             raise DuplicateIdError(f"Assumption {assumption.id} already exists")
+        self._check_refs_exist(assumption.depends_on, self.assumptions, "assumption")
+        self._check_no_assumption_cycle_with(assumption)
         new = self._copy()
-        new.assumptions[assumption.id] = assumption
+        new.assumptions[assumption.id] = copy.deepcopy(assumption)
         return new
 
     def register_prediction(self, prediction: Prediction) -> EpistemicWeb:
@@ -145,6 +232,7 @@ class EpistemicWeb:
             raise DuplicateIdError(f"Prediction {prediction.id} already exists")
         self._check_refs_exist(prediction.claim_ids, self.claims, "claim")
         self._check_refs_exist(prediction.tests_assumptions, self.assumptions, "assumption")
+        self._check_refs_exist(prediction.conditional_on, self.assumptions, "assumption")
         if prediction.analysis and prediction.analysis not in self.analyses:
             raise BrokenReferenceError(
                 f"Analysis {prediction.analysis} does not exist"
@@ -235,12 +323,14 @@ class EpistemicWeb:
 
     def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicWeb:
         """Document why two independence groups are separate."""
+        if sep.id in self.pairwise_separations:
+            raise DuplicateIdError(f"PairwiseSeparation {sep.id} already exists")
         if sep.group_a not in self.independence_groups:
             raise BrokenReferenceError(f"Group {sep.group_a} does not exist")
         if sep.group_b not in self.independence_groups:
             raise BrokenReferenceError(f"Group {sep.group_b} does not exist")
         new = self._copy()
-        new.pairwise_separations.append(sep)
+        new.pairwise_separations[sep.id] = sep
         return new
 
     def transition_prediction(
@@ -286,6 +376,23 @@ class EpistemicWeb:
                 continue
             visited.add(current)
             upstream = self.claims.get(current)
+            if upstream:
+                stack.extend(upstream.depends_on)
+
+    def _check_no_assumption_cycle_with(self, assumption: Assumption) -> None:
+        """Verify adding this assumption doesn't create a cycle in depends_on."""
+        visited: set[AssumptionId] = set()
+        stack = list(assumption.depends_on)
+        while stack:
+            current = stack.pop()
+            if current == assumption.id:
+                raise CycleError(
+                    f"Adding {assumption.id} would create a dependency cycle in assumptions"
+                )
+            if current in visited:
+                continue
+            visited.add(current)
+            upstream = self.assumptions.get(current)
             if upstream:
                 stack.extend(upstream.depends_on)
 
