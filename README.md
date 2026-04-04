@@ -4,9 +4,11 @@
 > The API, file formats, and CLI surface are unstable and will change without notice.
 > See [TRACKER.md](TRACKER.md) for current build status.
 
-**An audit scaffold for research epistemic webs.**
+## The Scientific Method as Code
 
-deSitter makes the hidden dependency graph of a research project explicit and machine-navigable — claims, assumptions, predictions, analyses, and the invariants that connect them. It does not reason about the research. It gives researchers and AI agents the structure to reason themselves.
+The scientific method has a structure: you make **claims**, ground them in **assumptions**, derive **predictions**, run **analyses** to test those predictions, and record what the evidence shows. That structure exists in every research project — but it almost never gets tracked. It lives in Notion pages, email threads, and researcher memory, and it breaks silently. A refuted prediction doesn't update the claims that depend on it. A revised assumption doesn't propagate to its consequences. Nobody can tell, six months later, why a conclusion was drawn.
+
+deSitter makes that structure explicit and machine-enforceable. It is a versioned, graph-structured registry of your epistemic chain — every claim, assumption, prediction, analysis, and theory, with the invariants that hold them together.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -14,11 +16,28 @@ deSitter makes the hidden dependency graph of a research project explicit and ma
 
 ---
 
+## Built for AI Agent Swarms
+
+The primary interface is an [MCP server](https://modelcontextprotocol.io) — the protocol that lets AI agents call typed tools directly. This is intentional.
+
+The long-term vision is a research environment where a **swarm of AI agents** collaborates on a single project: one agent audits derivation chains, another identifies structural gaps, a third proposes new predictions, and a fourth validates that everything is still consistent — all working against the same shared epistemic web, simultaneously. The graph provides the coordination layer. The invariants ensure no agent can introduce inconsistencies. The audit trail records every mutation.
+
+Today, a single Claude or Copilot session can already do this:
+
+```
+Agent: call register_claim(...)      → "registered C-042"
+Agent: call run_health_check()       → "3 invariant violations found"
+Agent: call get_structural_gaps()    → "Assumption A-007 has no tested predictions"
+Agent: call get_derivation_chain("C-042") → [full chain back to foundational claims]
+```
+
+No subprocess wrangling. No screen scraping. Each operation is a structured tool call with typed arguments and a structured response. The CLI provides the same surface for humans and scripts.
+
+---
+
 ## What It Does
 
-Research projects accumulate a hidden graph of epistemic dependencies: claim C depends on assumption A, prediction P follows from C, analysis S tests P. When that graph is implicit and untracked, it breaks silently — a refuted prediction doesn't update the claims that depend on it, a changed assumption doesn't propagate to its consequences.
-
-deSitter makes that graph explicit and keeps it consistent:
+deSitter makes the epistemic graph of a research project explicit and keeps it consistent:
 
 - **Register** claims, assumptions, predictions, analyses, theories, and their relationships
 - **Validate** the epistemic web against hard invariants (bidirectional links, DAG structure, tier constraints, coverage)
@@ -35,8 +54,6 @@ This means:
 - `get_structural_gaps` returns observations ("this assumption has no tested_by prediction"), not advice
 - `health_check` reports invariant violations, not research strategy
 - An AI agent calls traversal tools and applies its own domain knowledge — deSitter provides the map, not the conclusions
-
-The primary interface is an **MCP server** so AI agents (Claude, Cursor, Copilot) can call all operations as typed tools with no subprocess wrangling. A full **CLI** provides the same surface for humans and scripts.
 
 ---
 
