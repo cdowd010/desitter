@@ -11,9 +11,9 @@ Layer cake (top to bottom):
   adapters        — JSON repo, markdown renderer, transaction log
 
 Quick start (programmatic):
-  from desitter import connect
+  import desitter as ds
 
-  client = connect(".")
+  client = connect()
   client.register_claim(
     id="C-001",
     statement="Catalyst X increases yield.",

@@ -50,9 +50,9 @@ deSitter exposes the same core system through three interfaces with different pr
 **Python API, primary for researchers in scripts and notebooks**
 
 ```python
-from desitter import connect
+import dessiter as ds
 
-client = connect(".")
+client = ds.connect()
 result = client.register_claim(
     id="C-001",
     statement="Catalyst X increases yield.",
@@ -95,9 +95,9 @@ pip install "desitter[mcp]"     # + MCP server for AI agent use
 ```
 
 ```python
-from desitter import connect
+import dessiter as ds
 
-client = connect(".")
+client = ds.connect()
 
 client.register_claim(
     id="C-001",

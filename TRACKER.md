@@ -2,7 +2,7 @@
 
 Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` deferred/blocking
 
-Last rebuilt: 2026-04-04
+Last updated: 2026-04-04
 
 Purpose: this file is the current source of truth for where the repo actually is and the shortest path to a product that is usable through the Python API.
 
@@ -35,9 +35,7 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 
 ---
 
-## Current Snapshot
-
-### Confirmed Done
+## Current Tracked Items
 
 - [x] Domain kernel is in place: entities, typed IDs, enums, invariants, copy-on-write web mutations, traversal queries, and `record_analysis_result` on `EpistemicWeb`.
 - [x] Config and runtime context are in place: `load_config`, `build_context`, `ProjectContext`.
@@ -50,9 +48,6 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 - [x] Base Python client exists with `connect()` and entity-specific `register_*`, `get_*`, `list_*`, and `transition_*` helpers.
 - [x] Python client tests exist for round-trip registration, `connect()` wiring, and schema-error surfacing.
 - [x] CLI and MCP paths that currently depend on stubbed services are feature-gated with explicit error responses instead of surfacing raw `NotImplementedError` exceptions.
-
-### Confirmed Missing or Stubbed
-
 - [ ] Entity-specific `set_*` helpers are not present on `DeSitterClient`.
 - [ ] `record_analysis_result` is not exposed through `Gateway`.
 - [ ] `record_analysis_result` is not exposed through `DeSitterClient`.
@@ -82,7 +77,6 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 - [ ] Old tracker content understated current Python API progress and overstated some gaps.
 - [ ] Architecture docs and examples still drift on the result-recording story; current kernel model is `Analysis.last_result`, `last_result_sha`, and `last_result_date`.
 - [ ] Docs/examples still mix `transaction_id` and `tx_id` terminology.
-- [ ] The project needs a tracker centered on the current codebase, not an older idealized phase breakdown.
 
 ---
 
@@ -132,7 +126,7 @@ Goal: produce a Python-first workflow that is genuinely usable in scripts, noteb
 
 ### Milestone 1 Exit Criteria
 
-- [ ] A user can `connect(".")` from Python.
+- [ ] A user can `connect()` from Python.
 - [ ] A user can register common entities through typed helpers.
 - [ ] A user can update existing entities through typed `set_*` helpers.
 - [ ] A user can record an analysis result programmatically.
@@ -234,7 +228,7 @@ Goal: align the repo’s planning docs and onboarding docs with the code that ac
 
 ## Definition of “Usable by Python API”
 
-- [ ] `client = connect(".")` works in a real project workspace.
+- [ ] `client = desitter.connect()` works in a real project workspace.
 - [ ] Common entities can be registered through typed helpers.
 - [ ] Common entities can be updated through typed `set_*` helpers.
 - [ ] Analysis results can be recorded from Python.

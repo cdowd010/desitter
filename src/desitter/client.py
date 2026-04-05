@@ -1032,14 +1032,14 @@ class DeSitterClient:
             return resource
 
 
-def connect(path: str | Path) -> DeSitterClient:
+def connect(path: str | Path = ".") -> DeSitterClient:
     """Build a client from a workspace path containing ``desitter.toml``.
 
     This is the primary convenience entry point for creating a client.
     Loads configuration and builds the full dependency graph automatically.
 
     Args:
-        path: Filesystem path to the project workspace root.
+        path: Filesystem path to the project workspace root. Defaults to current directory.
 
     Returns:
         DeSitterClient: A fully wired client ready for use.
