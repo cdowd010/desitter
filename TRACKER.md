@@ -2,9 +2,7 @@
 
 Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` deferred/blocking
 
-Last updated: 2026-04-04
-
-Purpose: this file is the current source of truth for where the repo actually is and the shortest path to a product that is usable through the Python API.
+Purpose: this file is the current source of truth for where the repo is and the shortest path to a product that is usable through the Python API.
 
 ---
 
@@ -37,17 +35,17 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 
 ## Current Tracked Items
 
-- [x] Domain kernel is in place: entities, typed IDs, enums, invariants, copy-on-write web mutations, traversal queries, and `record_analysis_result` on `EpistemicWeb`.
-- [x] Config and runtime context are in place: `load_config`, `build_context`, `ProjectContext`.
-- [x] Transaction log adapter is implemented.
-- [x] JSON repository `load()` and `save()` are implemented.
-- [x] JSON repository hydration bug fixed: `load()` now binds register methods on the current web per entity, preserving all items in a collection.
-- [x] Payload validation exists as a port plus JSON Schema adapter and is wired in the gateway factory.
-- [x] Payload schema derivation now models `None` explicitly as JSON `null` for `Optional[...]` fields.
-- [x] Core gateway verbs are implemented: `register`, `get`, `list`, `set`, `transition`, `query`.
-- [x] Base Python client exists with `connect()` and entity-specific `register_*`, `get_*`, `list_*`, and `transition_*` helpers.
-- [x] Python client tests exist for round-trip registration, `connect()` wiring, and schema-error surfacing.
-- [x] CLI and MCP paths that currently depend on stubbed services are feature-gated with explicit error responses instead of surfacing raw `NotImplementedError` exceptions.
+- [x] Domain kernel: entities, typed IDs, enums, invariants, copy-on-write web mutations, traversal queries, and `record_analysis_result` on `EpistemicWeb`.
+- [x] Config and runtime context: `load_config`, `build_context`, `ProjectContext`.
+- [x] Transaction log adapter.
+- [x] JSON repository `load()` and `save()`.
+- [x] JSON repository hydration: `load()` binds register methods on the current web per entity, preserving all items in a collection.
+- [x] Payload validation as a port plus JSON Schema adapter, wired in the gateway factory.
+- [x] Payload schema derivation models `None` explicitly as JSON `null` for `Optional[...]` fields.
+- [x] Core gateway verbs: `register`, `get`, `list`, `set`, `transition`, `query`.
+- [x] Base Python client with `connect()` and entity-specific `register_*`, `get_*`, `list_*`, and `transition_*` helpers.
+- [x] Python client tests for round-trip registration, `connect()` wiring, and schema-error surfacing.
+- [x] CLI and MCP paths feature-gated with explicit error responses instead of raw `NotImplementedError` exceptions.
 - [ ] Entity-specific `set_*` helpers are not present on `DeSitterClient`.
 - [ ] `record_analysis_result` is not exposed through `Gateway`.
 - [ ] `record_analysis_result` is not exposed through `DeSitterClient`.
@@ -63,9 +61,9 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 
 ### Audit-Driven Hardening (Scoped)
 
-- [x] Add regression tests proving repository hydration preserves multiple entities per collection and accumulates state across collection boundaries.
-- [x] Add payload-validator tests proving `Optional[str]` rejects object payloads and accepts explicit `null`.
-- [x] Feature-gate currently exposed CLI/MCP commands backed by stubbed read-side services.
+- [x] Regression tests proving repository hydration preserves multiple entities per collection and accumulates state across collection boundaries.
+- [x] Payload-validator tests proving `Optional[str]` rejects object payloads and accepts explicit `null`.
+- [x] Feature-gated CLI/MCP commands backed by stubbed read-side services.
 - [ ] Keep tightening fail-fast type boundaries around `Any`-typed model fields while preserving Python API MVP scope.
 - [ ] Decide post-MVP persistence policy for non-JSON-native values (avoid silent `default=str` coercion unless explicitly intended).
 - [ ] Scope a per-call query index-reuse pass in `EpistemicWeb` (`assumption_support_status`, `parameter_impact`) after Milestone 1 API gates close, without introducing global caches.
@@ -86,7 +84,7 @@ Goal: produce a Python-first workflow that is genuinely usable in scripts, noteb
 
 ### 1A. Core API Ergonomics
 
-- [x] `connect(path)` returns a ready client.
+- [x] `connect()` with optional path returns a ready client.
 - [x] Entity-specific `register_*` helpers exist.
 - [x] Entity-specific `get_*`, `list_*`, and `transition_*` helpers exist.
 - [ ] Add entity-specific `set_*` helpers in `src/desitter/client.py` for:
@@ -222,7 +220,6 @@ Goal: align the repo’s planning docs and onboarding docs with the code that ac
 6. Implement shared read-side services.
 7. Backfill CLI and MCP to delegate to those services.
 8. Align docs to the shipped behavior.
-9. Rebaseline this tracker after each milestone.
 
 ---
 
