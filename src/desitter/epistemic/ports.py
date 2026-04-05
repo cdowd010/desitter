@@ -53,3 +53,11 @@ class TransactionLog(Protocol):
     def append(self, operation: str, identifier: str) -> str:
         """Record an operation and return its transaction ID."""
         ...
+
+
+class PayloadValidator(Protocol):
+    """Validate inbound mutation payloads before the gateway mutates the web."""
+
+    def validate(self, resource: str, payload: dict[str, object]) -> list[Finding]:
+        """Return findings describing payload/schema issues, if any."""
+        ...

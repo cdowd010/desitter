@@ -11,14 +11,18 @@ Layer cake (top to bottom):
   adapters        — JSON repo, markdown renderer, transaction log
 
 Quick start (programmatic):
-    from pathlib import Path
-    from desitter.config import build_context, load_config
-    from desitter.adapters.json_repository import JsonRepository
-    from desitter.epistemic import EpistemicWeb
+  from desitter import connect
 
-    ctx = build_context(Path("."), load_config(Path(".")))
-    repo = JsonRepository(ctx.paths.data_dir)
-    web = repo.load()
+  client = connect(".")
+  client.register_claim(
+    id="C-001",
+    statement="Catalyst X increases yield.",
+    type="foundational",
+    scope="global",
+    falsifiability="A replicated null result would falsify this claim.",
+  )
 """
 
 __version__ = "0.1.0"
+
+from .client import ClientResult, DeSitterClient, DeSitterClientError, connect

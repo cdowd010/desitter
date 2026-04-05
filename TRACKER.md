@@ -1,183 +1,230 @@
-# deSitter — Project Tracker
+# deSitter — Reality Tracker
 
-Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` blocked
+Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` deferred/blocking
 
-Last updated: 2026-04-04
+Last rebuilt: 2026-04-04
 
----
-
-## Phase 1 — Domain Core ✓
-> Goal: fully tested epistemic kernel. Zero I/O. Pure Python.
-
-- [x] `epistemic/types.py` — typed IDs, enums (`ClaimId`, `AssumptionId`, `PredictionId`, `AnalysisId`, `TheoryId`, `IndependenceGroupId`, `PairwiseSeparationId`, `DiscoveryId`, `DeadEndId`, `ParameterId`); `ConfidenceTier`, `DeadEndStatus`, `DiscoveryStatus`, `ClaimStatus`, `AssumptionType`, `ClaimType`, `ClaimCategory`
-- [x] `epistemic/model.py` — 10 entity dataclasses: `Claim`, `Assumption`, `Prediction`, `Theory`, `Discovery`, `Analysis`, `IndependenceGroup`, `PairwiseSeparation`, `DeadEnd`, `Parameter`; `source` field on all research content entities; `Analysis.uses_parameters` + `Parameter.used_in_analyses` for staleness detection
-- [x] `epistemic/web.py` — `EpistemicWeb` aggregate root; copy-on-write mutation semantics; bidirectional maintenance for all 5 link pairs; all `register_*`, `update_*`, `remove_*`, `transition_*`, `add_*` methods; full traversal query surface (`claim_lineage`, `assumption_lineage`, `refutation_impact`, `parameter_impact`, etc.)
-- [x] `epistemic/invariants.py` — tier, independence semantics, coverage, assumption testability validators
-- [x] `epistemic/ports.py` — `WebRepository`, `WebRenderer`, `WebValidator`, `ProseSync`, `TransactionLog` protocols
-- [x] Tests: entity construction and field defaults (19 tests · `test_model.py`)
-- [x] Tests: types and enums (20 tests · `test_types.py`)
-- [x] Tests: ports protocol conformance (5 tests · `test_ports.py`)
-- [x] Tests: register — happy path + duplicate ID + broken reference for all entity types (58 tests · `test_web_register.py`)
-- [x] Tests: update — happy path + nonexistent + broken reference (45 tests · `test_web_update.py`)
-- [x] Tests: remove — blocking refs and backlink teardown (47 tests · `test_web_remove.py`)
-- [x] Tests: transitions — all valid/invalid status arcs (16 tests · `test_web_transitions.py`)
-- [x] Tests: queries — `claim_lineage`, `assumption_lineage`, `refutation_impact`, `parameter_impact`, etc. (37 tests · `test_web_queries.py`)
-- [x] Tests: immutability — mutations return new web, caller isolation (8 tests · `test_web_immutability.py`)
-- [x] Tests: backlink ownership — backlinks stored on correct side of every link pair (3 tests · `test_web_backlink_ownership.py`)
-- [x] Tests: all invariant validators with known violations (31 tests · `test_invariants.py`)
-
-**Exit criteria met:** Kernel suite green. No external deps. Runs in milliseconds.
+Purpose: this file is the current source of truth for where the repo actually is and the shortest path to a product that is usable through the Python API.
 
 ---
 
-## Phase 2 — Persistence and Packaging
-> Goal: JSON adapter, transaction log, config wiring, installable package.
+## Product Target
 
-- [x] `adapters/transaction_log.py` — JSONL provenance log (append/read); tested (8 tests · `test_transaction_log.py`)
-- [x] `config.py` — `load_config` + `build_context`; `desitter.toml` parsing; tested (9 tests · `test_config.py`)
-- [x] `controlplane/automation.py` — render trigger table; `DEFAULT_RENDER_TRIGGERS`; tested (7 tests · `test_automation.py`)
-- [x] `pyproject.toml` — `pip install -e .` works; `desitter` + `desitter[mcp]` extras
-- [ ] `adapters/json_repository.py` — implement `load()`/`save()` (both currently `raise NotImplementedError`); round-trip all 10 entity types including `source`, `uses_parameters`, `used_in_analyses`
-- [ ] `adapters/markdown_renderer.py` — implement `render_claims`, `render_predictions`, `render_assumptions`, `render_theories` (all currently `raise NotImplementedError`); render `doi:` and `arxiv:` sources as links
-- [ ] Tests: round-trip load/save for all 10 entity types including new fields (target: ~12 tests)
-- [ ] Tests: markdown renderer output for each entity type (target: ~8 tests)
-
-**Exit criteria:** `pip install -e .` works. Full round-trip through JSON for every entity type. Markdown renders clean output.
+- Primary release gate: a researcher or agent can use deSitter from Python scripts and notebooks without hand-authoring raw JSON dicts for common workflows.
+- Secondary release gate: CLI and MCP are thin delegates over the same gateway and shared read-side services.
+- Explicit non-goals for the first usable product: polished CLI UX, shell completions, performance indexing, prose sync, separate result-history subsystem, or additional interface layers.
 
 ---
 
-## Phase 3 — Control Plane and View Services
-> Goal: single mutation boundary fully implemented; all view services operational.
+## Architecture Rules
 
-### Gateway (`controlplane/gateway.py`)
-The `Gateway` class and all constants/aliases/boilerplate exist. The 6 core operation methods are stubbed:
+These are execution rules, not just ideals. New work should be rejected if it violates them.
 
-- [ ] `register(resource, payload, *, dry_run)` — parse payload → construct entity → call `web.register_*` → validate after mutation, persist only on success → log transaction → save
-- [ ] `get(resource, identifier)` — resolve alias → load web → look up entity → serialize to dict
-- [ ] `list(resource, **filters)` — resolve alias → load web → return all entities of type, filtered
-- [ ] `set(resource, identifier, payload, *, dry_run)` — load → deep-copy entity → apply payload fields → call `web.update_*` → validate after mutation, persist only on success → log → save
-- [ ] `transition(resource, identifier, new_status, *, dry_run)` — load → call `web.transition_*` → validate after mutation, persist only on success → log → save
-- [ ] `query(query_type, **params)` — load web → dispatch to `web.<query_method>(**params)` → serialize result
-- [ ] Tests: `register` → validation gate before persistence → rollback on violation (~6 tests · `test_gateway.py`)
-- [ ] Tests: `dry_run` — validate but do not write (~3 tests)
-- [ ] Tests: resource alias resolution covers all canonical + plural + hyphenated forms (~4 tests)
-- [ ] Tests: `get` / `list` return correct serialized payloads (~6 tests)
-- [ ] Tests: `set` / `transition` mutate and persist correctly (~6 tests)
-
-### Check and Export (`controlplane/check.py`, `controlplane/export.py`)
-All functions currently `raise NotImplementedError`:
-
-- [ ] `check_refs(context)` — load web; walk all ID references; report broken links
-- [ ] `check_stale(context)` — identify analyses whose `uses_parameters` have changed since last result; report stale prediction chain
-- [ ] `check_missing_results(context)` — analyses with predictions that have no recorded result
-- [ ] `check_assumption_coverage(context)` — assumptions with `falsifiable_consequence` but no `tested_by` predictions
-- [ ] `export_json(context, dest)` — write full web as JSON bundle to `dest`
-- [ ] `export_markdown(context, dest)` — write rendered markdown views to `dest`
-- [ ] Tests: `check_stale` identifies correct stale analyses after parameter change (~3 tests)
-- [ ] Tests: `check_refs` surfaces broken references on synthetic fixture (~3 tests)
-
-### Validate (`controlplane/validate.py`)
-- [ ] Flesh out `validate_project` + `validate_structure` beyond current 2-test stub
-- [ ] Tests: surfaces invalid web state with human-readable findings (~5 tests)
-
-### View Services (`views/`)
-All view functions currently `raise NotImplementedError`:
-
-- [ ] `views/health.py` — `run_health_check` → compose findings from check + validate + refs; return `HealthReport(status="HEALTHY"|"WARNINGS"|"CRITICAL", findings=[...])`
-- [ ] `views/render.py` — SHA-256 fingerprint cache; `render_all`, `render_one`, `load_cache`, `save_cache` (incremental — skip unchanged entities)
-- [ ] `views/status.py` — `get_status` → entity counts, phase, last-mutation timestamp; `format_status_dict`
-- [ ] `views/metrics.py` — `compute_metrics` → tier-A evidence ratio, assumption coverage rate, stale-analysis count; `tier_a_evidence_summary`
-- [ ] Tests: `run_health_check` returns correct severity on fixture data (~4 tests)
-- [ ] Tests: render cache — unchanged fingerprint skip, changed fingerprint write (~4 tests)
-- [ ] Tests: `get_status` / `compute_metrics` return correct values on fixture web (~4 tests)
-
-**Exit criteria:** Gateway fully tested through `InMemoryRepository`. All view services return correct output on fixture data.
+- All writes flow through one mutation boundary: `controlplane/gateway.py`.
+- Python API is the primary interface for the first usable product; CLI and MCP come after and must stay thin.
+- The client changes calling conventions only. It must not add business logic or bypass invariants.
+- `EpistemicWeb` remains the kernel mutation surface. `Gateway` orchestrates persistence, validation, and logging around it.
+- `controlplane/` depends on abstractions from `epistemic/ports.py`; concrete adapter wiring stays in `factory.py`.
+- Payload validation stays behind the `PayloadValidator` port. Do not add inline gateway validation or interface-layer validation rules.
+- Machine-readable payload schemas are allowed only if they stay aligned with `epistemic/model.py` and do not become a competing hand-maintained source of truth.
+- Interface modules parse inputs, call services, and format outputs. If an interface needs logic that another interface also needs, that logic belongs lower.
+- Prefer composition over inheritance. Extend the client by wrapping shared `register`, `set`, `transition`, and `query` methods instead of creating parallel mutation paths.
+- Fail fast: schema errors, broken references, and invariant failures should surface before persistence.
+- Keep modules high-cohesion and low-coupling. Tasks that change together should be grouped together; tasks that do not should not be forced into the same module.
+- YAGNI applies. Do not add concurrency control, indexing, or a result-history model until the Python API MVP ships and proves those needs are real.
 
 ---
 
-## Phase 4 — Interface Layer (CLI + MCP)
-> Goal: two thin interface adapters over the same core. Ships the MCP server.
+## Current Snapshot
 
-### CLI (`interfaces/cli/`)
-The Click command group and command stubs exist in `cli/main.py` (11 handlers raise `NotImplementedError`). `formatters.py` and `__main__.py` exist.
+### Confirmed Done
 
-- [ ] `register` command — route to `gateway.register`; accept JSON string or `--field=value` flags
-- [ ] `get` command — route to `gateway.get`; `--json` flag for machine output
-- [ ] `list` command — route to `gateway.list`; tabular + JSON output
-- [ ] `set` command — route to `gateway.set`; `--dry-run` flag
-- [ ] `transition` command — route to `gateway.transition`; `--dry-run` flag
-- [ ] `validate` command — route to `validate_project`; `--json` flag
-- [ ] `health` command — route to `run_health_check`; exit code 1 on CRITICAL
-- [ ] `status` command — route to `get_status`; summary panel via Rich
-- [ ] `render` command — route to `render_all`; progress bar on large webs
-- [ ] `export` command — route to `export_json` / `export_markdown`; `--format` flag
-- [ ] `init` command — create the standard directory layout for a `desitter.toml`-configured workspace; idempotent
-- [ ] Tests: core CLI commands via CliRunner (~15 tests · `tests/cli/`)
+- [x] Domain kernel is in place: entities, typed IDs, enums, invariants, copy-on-write web mutations, traversal queries, and `record_analysis_result` on `EpistemicWeb`.
+- [x] Config and runtime context are in place: `load_config`, `build_context`, `ProjectContext`.
+- [x] Transaction log adapter is implemented.
+- [x] JSON repository `load()` and `save()` are implemented.
+- [x] Payload validation exists as a port plus JSON Schema adapter and is wired in the gateway factory.
+- [x] Core gateway verbs are implemented: `register`, `get`, `list`, `set`, `transition`, `query`.
+- [x] Base Python client exists with `connect()` and entity-specific `register_*`, `get_*`, `list_*`, and `transition_*` helpers.
+- [x] Python client tests exist for round-trip registration, `connect()` wiring, and schema-error surfacing.
 
-### MCP Server (`interfaces/mcp/`)
-`tools.py` wrappers exist and delegate correctly. The underlying services they call (gateway + views) are the stubs above.
+### Confirmed Missing or Stubbed
 
-- [ ] `interfaces/mcp/server.py` — wire `register_tools(server, context)` with correct context loading + FastMCP startup
-- [ ] `ds-mcp` entry point works end-to-end once gateway is implemented
-- [ ] Tests: MCP tool handlers against fake gateway return correct envelopes (~10 tests · `tests/mcp/`)
-- [ ] Tests: `ds init` creates correct directory layout (~2 tests)
+- [ ] Entity-specific `set_*` helpers are not present on `DeSitterClient`.
+- [ ] `record_analysis_result` is not exposed through `Gateway`.
+- [ ] `record_analysis_result` is not exposed through `DeSitterClient`.
+- [ ] There is no checked-in `schemas/payloads/` directory with machine-readable payload schemas for external tooling.
+- [ ] CLI command handlers in `interfaces/cli/main.py` still raise `NotImplementedError`.
+- [ ] MCP does not expose a `record_result` tool yet.
+- [ ] `controlplane/validate.py` orchestration is still stubbed.
+- [ ] `controlplane/check.py` orchestration is still stubbed.
+- [ ] `controlplane/export.py` is still stubbed.
+- [ ] `views/health.py`, `views/status.py`, `views/metrics.py`, and `views/render.py` are still stubbed.
+- [ ] `adapters/markdown_renderer.py` surface renderers are still stubbed.
+- [ ] CLI and MCP integration tests are effectively missing.
 
-**Exit criteria:** An AI agent can register, validate, health-check, and export through MCP. A human can do the same through the CLI.
+### Known Drift to Resolve
 
----
-
-## Phase 5 — Human-First UX
-> Goal: the web becomes navigable. Researcher can traverse and audit without writing JSON.
-
-- [ ] `ds status` dashboard — color-coded Rich panels; entity counts, health color, last mutation
-- [ ] `ds validate --fix` dry-run suggestions printed as hints
-- [ ] Consistent error messages with actionable hints (missing required field, broken reference, etc.)
-- [ ] `ds add <type>` — interactive prompts for all core entity types; prompts for `source`, `derivation`
-- [ ] `ds show <type> [id]` — human-readable view with relationships; `source` rendered as clickable link
-- [ ] `ds log [id]` — mutation history from transaction log, formatted as table
-- [ ] Shell completions (bash, zsh, fish) with resource-ID tab-completion
-- [ ] `ds config set|get` — read/write `desitter.toml` without editing TOML directly
-- [ ] Quickstart guide: install → init → add theory → add claim → add prediction → record result → render
-
-**Exit criteria:** A researcher unfamiliar with the project can install, init, add a claim, and render views without consulting source code.
+- [ ] Old tracker content understated current Python API progress and overstated some gaps.
+- [ ] Architecture docs and examples still drift on the result-recording story; current kernel model is `Analysis.last_result`, `last_result_sha`, and `last_result_date`.
+- [ ] Docs/examples still mix `transaction_id` and `tx_id` terminology.
+- [ ] The project needs a tracker centered on the current codebase, not an older idealized phase breakdown.
 
 ---
 
-## Phase 6 — Result Recording
-> Goal: deSitter records the latest result reported for an analysis. No execution, no sandboxing, no separate result-history subsystem unless needed.
+## Milestone 1 — Python API MVP `[~]`
 
-- [ ] `controlplane/results.py` — `record_result(context, analysis_id, value, git_sha, result_date, dry_run)`; routes to `web.record_analysis_result(...)`; persists through the existing repository; appends to the transaction log
-- [ ] `ds record <analysis_id>` CLI — `--value`, `--git-sha`, `--date`, `--json`
-- [ ] `record_result` MCP tool — returns standard `GatewayResult` envelope
-- [ ] `desitter.record()` SDK shim — one-line instrumentation for any Python script
-- [ ] Git SHA auto-capture — calls `git rev-parse HEAD`; warns if `Analysis.path` points to code with uncommitted changes
-- [ ] `ds results <analysis_id>` — show the currently recorded `last_result`, `last_result_sha`, and `last_result_date`
-- [ ] Tests: `record_result` persists the latest analysis result correctly (~5 tests)
-- [ ] Tests: git SHA captured in repo; warning on uncommitted changes (~2 tests)
-- [ ] Tests: SDK shim delegates to the same record path as CLI (~2 tests)
+Goal: produce a Python-first workflow that is genuinely usable in scripts, notebooks, and by non-MCP agents.
 
-**Exit criteria:** A researcher can record the latest result for an analysis from a script with one line. An agent can do the same with one MCP tool call.
+### 1A. Core API Ergonomics
+
+- [x] `connect(path)` returns a ready client.
+- [x] Entity-specific `register_*` helpers exist.
+- [x] Entity-specific `get_*`, `list_*`, and `transition_*` helpers exist.
+- [ ] Add entity-specific `set_*` helpers in `src/desitter/client.py` for:
+  claim, assumption, prediction, analysis, theory, discovery, dead_end, parameter, independence_group, pairwise_separation.
+- [ ] Implement those helpers as thin wrappers over the shared `client.set(...)` path.
+- [ ] Keep helper payload assembly DRY: shared conversion helpers stay in shared code, not duplicated per interface.
+
+### 1B. Analysis Result Workflow
+
+- [x] Kernel mutation already exists: `EpistemicWeb.record_analysis_result(...)`.
+- [ ] Add `Gateway.record_analysis_result(...)` in `src/desitter/controlplane/gateway.py` as a narrow wrapper over the kernel mutation.
+- [ ] Add `DeSitterClient.record_analysis_result(...)` in `src/desitter/client.py`.
+- [ ] Decide and document one stable calling convention for programmatic result recording.
+- [ ] Do not add a second write path or a separate result subsystem for this milestone.
+
+### 1C. Formalize Payload Schemas
+
+- [ ] Add checked-in JSON Schema files under `schemas/payloads/`, one per gateway resource payload.
+- [ ] Cover at least: `claim`, `assumption`, `prediction`, `analysis`, `theory`, `discovery`, `dead_end`, `parameter`, `independence_group`, and `pairwise_separation`.
+- [ ] Make required vs optional fields match the kernel dataclasses in `src/desitter/epistemic/model.py`.
+- [ ] Keep the model definitions authoritative. Schema files are generated artifacts, not hand-maintained sources of truth.
+- [ ] Extract schema derivation into one pure shared module, so runtime validation and checked-in artifacts both come from the same builder.
+- [ ] Move the current schema-building logic out of `src/desitter/adapters/payload_validator.py` into a reusable pure module under `src/desitter/epistemic/`.
+- [ ] Have `JsonSchemaPayloadValidator` build its validators from that shared schema map rather than owning a private derivation path.
+- [ ] Add one deterministic regeneration entry point that writes `schemas/payloads/*.schema.json` in stable resource order with sorted keys.
+- [ ] Treat `schemas/payloads/` as committed external-tooling artifacts. Never edit those files by hand.
+- [ ] Keep validation usage behind `PayloadValidator`; do not add inline validation branches to `Gateway`.
+- [ ] Add tests that fail when checked-in schemas drift from the effective payload validator rules.
+
+### 1D. Python API Verification
+
+- [ ] Expand `tests/test_client.py` to cover the new `set_*` helpers.
+- [ ] Add tests for `record_analysis_result` round-trip through gateway, repository, and transaction log.
+- [ ] Add tests for dry-run behavior on update and result-recording paths.
+- [ ] Add tests for schema artifact presence and compatibility with the payload validator.
+- [ ] Add one Python-first usage example once the API shape stabilizes.
+
+### Milestone 1 Exit Criteria
+
+- [ ] A user can `connect(".")` from Python.
+- [ ] A user can register common entities through typed helpers.
+- [ ] A user can update existing entities through typed `set_*` helpers.
+- [ ] A user can record an analysis result programmatically.
+- [ ] External tooling can consume machine-readable payload schemas that match gateway validation behavior.
+- [ ] Reads (`get`, `list`, `query`) return typed objects or structured data appropriate for scripts and notebooks.
+- [ ] Validation failures fail fast and do not write.
+- [ ] The Python API path is covered by automated tests.
 
 ---
 
-## Architecture Guardrail Backlog
-> Integrity checks to add before Phase 4 ships. One-time cost, prevents regressions.
+## Milestone 2 — Shared Read-Side Services `[ ]`
 
-- [x] Fix MCP boundary contract mismatches (`render_all` call shape, `check_refs` args)
-- [x] Remove MCP private reach-through into gateway internals (`gateway._repo`, `gateway._validator`)
-- [ ] Architecture contract test: no private gateway collaborator access from interface adapters
-- [ ] Architecture contract test: MCP wrapper signatures match underlying service signatures
-- [ ] Architecture contract test: status-first envelope present on all MCP tools
+Goal: implement the read/report/render/export layer that both CLI and MCP need, without pushing logic upward into interfaces.
+
+- [ ] Implement `validate_project` and `validate_structure` in `src/desitter/controlplane/validate.py`.
+- [ ] Implement `compute_metrics` and `tier_a_evidence_summary` in `src/desitter/views/metrics.py`.
+- [ ] Implement `get_status` and `format_status_dict` in `src/desitter/views/status.py`.
+- [ ] Implement `run_health_check` in `src/desitter/views/health.py`.
+- [ ] Implement `check_refs` and `check_stale` in `src/desitter/controlplane/check.py`.
+- [ ] Implement render fingerprinting and cache orchestration in `src/desitter/views/render.py`.
+- [ ] Implement markdown surface rendering in `src/desitter/adapters/markdown_renderer.py`.
+- [ ] Implement `export_json` and `export_markdown` in `src/desitter/controlplane/export.py`.
+- [ ] Add focused tests for each read-side service instead of relying on interface smoke tests alone.
+
+### Milestone 2 Exit Criteria
+
+- [ ] The project can validate itself through shared services.
+- [ ] The project can compute status/metrics/health from shared services.
+- [ ] The project can render and export through shared services.
+- [ ] CLI and MCP can consume these services without adding business logic.
 
 ---
 
-## Query Performance Backlog
-> Deferred until Phase 3 is stable. Do not implement speculatively.
+## Milestone 3 — CLI and MCP Backfill `[ ]`
 
-- [ ] `implicit_assumption_to_predictions` reverse index (used by `assumption_support_status`, `validate_implicit_assumption_coverage`)
-- [ ] `claim_to_downstream_claims` reverse-closure index (blast-radius queries)
-- [ ] `analysis_to_predictions` index for direct analysis-linked prediction impact
-- [ ] `parameter_to_constrained_claims` index for parameter threshold blast radius
-- [ ] Lazy-build + per-instance invalidation strategy
-- [ ] Benchmark suite for small/medium/large synthetic graphs with acceptance thresholds
+Goal: make CLI and MCP thin, working delegates over the already-implemented gateway and read-side services.
 
+### 3A. CLI
+
+- [ ] Wire CLI `register`, `get`, `list`, `set`, and `transition` to the gateway in `src/desitter/interfaces/cli/main.py`.
+- [ ] Add CLI `record` command for analysis result recording.
+- [ ] Wire CLI `validate`, `health`, `status`, `render`, `export`, and `init` to shared services only.
+- [ ] Keep `src/desitter/interfaces/cli/formatters.py` formatting-only.
+- [ ] Add CLI tests via `click.testing.CliRunner`.
+
+### 3B. MCP
+
+- [ ] Add `record_result` tool in `src/desitter/interfaces/mcp/tools.py`.
+- [ ] Keep all MCP handlers status-first and envelope-only.
+- [ ] Do not let MCP handlers reach through private collaborators or duplicate gateway logic.
+- [ ] Add MCP handler tests against fake or minimal gateways/services.
+
+### Milestone 3 Exit Criteria
+
+- [ ] CLI and MCP expose the same semantics as the Python API and gateway.
+- [ ] Interface adapters contain parsing/formatting only.
+- [ ] There is no second business-logic path outside the gateway and shared read services.
+
+---
+
+## Milestone 4 — Documentation and Coherence `[ ]`
+
+Goal: align the repo’s planning docs and onboarding docs with the code that actually exists.
+
+- [ ] Keep this tracker current after each milestone closes.
+- [ ] Update `ARCHITECTURE.md` status tables and implementation notes to match the repo.
+- [ ] Update `README.md` to lead with the Python API workflow.
+- [ ] Add one script example and one notebook-style example.
+- [ ] Document where payload schemas live, how they are produced, and how external tools should consume them.
+- [ ] Align terminology: `transaction_id`, result-recording model, `desitter.toml` as config source of truth.
+- [ ] Remove stale roadmap references to a separate result-history subsystem unless it becomes necessary later.
+
+---
+
+## Deferred Until After Python API MVP `[-]`
+
+- [ ] Separate result-history or event-sourcing model.
+- [ ] Optimistic concurrency control or locking.
+- [ ] Prose sync adapter.
+- [ ] Query-performance indexing and benchmark suite.
+- [ ] Rich interactive CLI UX, completions, dashboards, and shell ergonomics.
+- [ ] Additional interface layers such as REST.
+
+---
+
+## Suggested Execution Order
+
+1. Add `Gateway.record_analysis_result(...)`.
+2. Add `DeSitterClient.record_analysis_result(...)`.
+3. Add all client `set_*` helpers.
+4. Formalize checked-in payload schemas behind the existing `PayloadValidator` path.
+5. Expand Python API tests until the script/notebook flow is solid.
+6. Implement shared read-side services.
+7. Backfill CLI and MCP to delegate to those services.
+8. Align docs to the shipped behavior.
+9. Rebaseline this tracker after each milestone.
+
+---
+
+## Definition of “Usable by Python API”
+
+- [ ] `client = connect(".")` works in a real project workspace.
+- [ ] Common entities can be registered through typed helpers.
+- [ ] Common entities can be updated through typed `set_*` helpers.
+- [ ] Analysis results can be recorded from Python.
+- [ ] External tools can discover payload shapes from checked-in schemas without reverse-engineering examples.
+- [ ] Queries and lookups return typed or structured results suitable for notebooks.
+- [ ] Dry-run and validation failures fail fast and do not write.
+- [ ] The above workflow is covered by automated tests and documented in one clear example.

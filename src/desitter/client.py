@@ -1,0 +1,743 @@
+"""Python client API for deSitter.
+
+This module is a thin wrapper over the Gateway. It changes calling
+conventions and result ergonomics only; all mutations still flow through
+the same gateway, repository, validator, and transaction log.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from enum import Enum
+from pathlib import Path
+from typing import Any, Generic, Iterable, Mapping, TypeVar, cast
+
+from .config import ProjectContext, build_context, load_config
+from .controlplane.factory import build_gateway
+from .controlplane.gateway import Gateway, GatewayResult
+from .epistemic.codec import deserialize_entity
+from .epistemic.model import (
+    Analysis,
+    Assumption,
+    Claim,
+    DeadEnd,
+    Discovery,
+    IndependenceGroup,
+    PairwiseSeparation,
+    Parameter,
+    Prediction,
+    Theory,
+)
+from .epistemic.types import (
+    AssumptionType,
+    ClaimCategory,
+    ClaimStatus,
+    ClaimType,
+    ConfidenceTier,
+    DeadEndStatus,
+    DiscoveryStatus,
+    EvidenceKind,
+    Finding,
+    MeasurementRegime,
+    PredictionStatus,
+    TheoryStatus,
+)
+
+
+ResultData = TypeVar("ResultData")
+
+
+@dataclass(frozen=True)
+class ClientResult(Generic[ResultData]):
+    """Typed wrapper over a GatewayResult."""
+
+    status: str
+    changed: bool
+    message: str
+    findings: list[Finding] = field(default_factory=list)
+    transaction_id: str | None = None
+    data: ResultData | None = None
+
+
+class DeSitterClientError(Exception):
+    """Raised when the gateway returns a non-success status."""
+
+    def __init__(
+        self,
+        status: str,
+        message: str,
+        findings: list[Finding] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.message = message
+        self.findings = findings or []
+
+
+class DeSitterClient:
+    """Thin Python wrapper over the gateway boundary."""
+
+    def __init__(self, context: ProjectContext, gateway: Gateway | None = None) -> None:
+        self._context = context
+        self._gateway = gateway or build_gateway(context)
+
+    @property
+    def context(self) -> ProjectContext:
+        """The runtime context used by this client."""
+        return self._context
+
+    @property
+    def gateway(self) -> Gateway:
+        """The gateway instance backing this client."""
+        return self._gateway
+
+    def register(
+        self,
+        resource: str,
+        *,
+        dry_run: bool = False,
+        **payload: object,
+    ) -> ClientResult[Any]:
+        """Register a new resource using keyword arguments instead of a raw dict."""
+        return self._handle_resource_result(
+            resource,
+            self._invoke_gateway(
+                self._gateway.register,
+                resource,
+                payload,
+                dry_run=dry_run,
+            ),
+        )
+
+    def get(self, resource: str, identifier: str) -> ClientResult[Any]:
+        """Retrieve a single resource by ID."""
+        return self._handle_resource_result(
+            resource,
+            self._invoke_gateway(self._gateway.get, resource, identifier),
+        )
+
+    def list(self, resource: str, **filters: object) -> ClientResult[list[Any]]:
+        """List resources, optionally filtering by keyword arguments."""
+        result = self._invoke_gateway(self._gateway.list, resource, **filters)
+        return self._handle_resource_list_result(resource, result)
+
+    def set(
+        self,
+        resource: str,
+        identifier: str,
+        *,
+        dry_run: bool = False,
+        **payload: object,
+    ) -> ClientResult[Any]:
+        """Update a resource using keyword arguments instead of a raw dict."""
+        return self._handle_resource_result(
+            resource,
+            self._invoke_gateway(
+                self._gateway.set,
+                resource,
+                identifier,
+                payload,
+                dry_run=dry_run,
+            ),
+        )
+
+    def transition(
+        self,
+        resource: str,
+        identifier: str,
+        new_status: str | Enum,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Any]:
+        """Transition a status-bearing resource to a new state."""
+        return self._handle_resource_result(
+            resource,
+            self._invoke_gateway(
+                self._gateway.transition,
+                resource,
+                identifier,
+                new_status,
+                dry_run=dry_run,
+            ),
+        )
+
+    def query(self, query_type: str, **params: object) -> ClientResult[Any]:
+        """Run a named gateway query."""
+        result = self._invoke_gateway(self._gateway.query, query_type, **params)
+        return self._handle_query_result(result)
+
+    def register_claim(
+        self,
+        id: str,
+        statement: str,
+        type: ClaimType | str,
+        scope: str,
+        falsifiability: str,
+        *,
+        dry_run: bool = False,
+        status: ClaimStatus | str | None = None,
+        category: ClaimCategory | str | None = None,
+        assumptions: Iterable[str] | None = None,
+        depends_on: Iterable[str] | None = None,
+        analyses: Iterable[str] | None = None,
+        parameter_constraints: Mapping[str, str] | None = None,
+        source: str | None = None,
+    ) -> ClientResult[Claim]:
+        """Register a claim without constructing a payload dict by hand."""
+        return cast(
+            ClientResult[Claim],
+            self.register(
+                "claim",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    statement=statement,
+                    type=type,
+                    scope=scope,
+                    falsifiability=falsifiability,
+                    status=status,
+                    category=category,
+                    assumptions=list(assumptions) if assumptions is not None else None,
+                    depends_on=list(depends_on) if depends_on is not None else None,
+                    analyses=list(analyses) if analyses is not None else None,
+                    parameter_constraints=dict(parameter_constraints)
+                    if parameter_constraints is not None else None,
+                    source=source,
+                ),
+            ),
+        )
+
+    def register_assumption(
+        self,
+        id: str,
+        statement: str,
+        type: AssumptionType | str,
+        scope: str,
+        *,
+        dry_run: bool = False,
+        depends_on: Iterable[str] | None = None,
+        falsifiable_consequence: str | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+    ) -> ClientResult[Assumption]:
+        """Register an assumption."""
+        return cast(
+            ClientResult[Assumption],
+            self.register(
+                "assumption",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    statement=statement,
+                    type=type,
+                    scope=scope,
+                    depends_on=list(depends_on) if depends_on is not None else None,
+                    falsifiable_consequence=falsifiable_consequence,
+                    source=source,
+                    notes=notes,
+                ),
+            ),
+        )
+
+    def register_prediction(
+        self,
+        id: str,
+        observable: str,
+        tier: ConfidenceTier | str,
+        status: PredictionStatus | str,
+        evidence_kind: EvidenceKind | str,
+        measurement_regime: MeasurementRegime | str,
+        predicted: object,
+        *,
+        dry_run: bool = False,
+        specification: str | None = None,
+        derivation: str | None = None,
+        claim_ids: Iterable[str] | None = None,
+        tests_assumptions: Iterable[str] | None = None,
+        analysis: str | None = None,
+        independence_group: str | None = None,
+        correlation_tags: Iterable[str] | None = None,
+        observed: object | None = None,
+        observed_bound: object | None = None,
+        free_params: int | None = None,
+        conditional_on: Iterable[str] | None = None,
+        falsifier: str | None = None,
+        benchmark_source: str | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+    ) -> ClientResult[Prediction]:
+        """Register a prediction."""
+        return cast(
+            ClientResult[Prediction],
+            self.register(
+                "prediction",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    observable=observable,
+                    tier=tier,
+                    status=status,
+                    evidence_kind=evidence_kind,
+                    measurement_regime=measurement_regime,
+                    predicted=predicted,
+                    specification=specification,
+                    derivation=derivation,
+                    claim_ids=list(claim_ids) if claim_ids is not None else None,
+                    tests_assumptions=list(tests_assumptions)
+                    if tests_assumptions is not None else None,
+                    analysis=analysis,
+                    independence_group=independence_group,
+                    correlation_tags=list(correlation_tags)
+                    if correlation_tags is not None else None,
+                    observed=observed,
+                    observed_bound=observed_bound,
+                    free_params=free_params,
+                    conditional_on=list(conditional_on)
+                    if conditional_on is not None else None,
+                    falsifier=falsifier,
+                    benchmark_source=benchmark_source,
+                    source=source,
+                    notes=notes,
+                ),
+            ),
+        )
+
+    def register_analysis(
+        self,
+        id: str,
+        *,
+        dry_run: bool = False,
+        command: str | None = None,
+        path: str | None = None,
+        uses_parameters: Iterable[str] | None = None,
+        notes: str | None = None,
+        last_result: object | None = None,
+        last_result_sha: str | None = None,
+        last_result_date: date | str | None = None,
+    ) -> ClientResult[Analysis]:
+        """Register an analysis."""
+        return cast(
+            ClientResult[Analysis],
+            self.register(
+                "analysis",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    command=command,
+                    path=path,
+                    uses_parameters=list(uses_parameters)
+                    if uses_parameters is not None else None,
+                    notes=notes,
+                    last_result=last_result,
+                    last_result_sha=last_result_sha,
+                    last_result_date=last_result_date,
+                ),
+            ),
+        )
+
+    def register_theory(
+        self,
+        id: str,
+        title: str,
+        status: TheoryStatus | str,
+        *,
+        dry_run: bool = False,
+        summary: str | None = None,
+        related_claims: Iterable[str] | None = None,
+        related_predictions: Iterable[str] | None = None,
+        source: str | None = None,
+    ) -> ClientResult[Theory]:
+        """Register a theory."""
+        return cast(
+            ClientResult[Theory],
+            self.register(
+                "theory",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    title=title,
+                    status=status,
+                    summary=summary,
+                    related_claims=list(related_claims)
+                    if related_claims is not None else None,
+                    related_predictions=list(related_predictions)
+                    if related_predictions is not None else None,
+                    source=source,
+                ),
+            ),
+        )
+
+    def register_discovery(
+        self,
+        id: str,
+        title: str,
+        date: date | str,
+        summary: str,
+        impact: str,
+        status: DiscoveryStatus | str,
+        *,
+        dry_run: bool = False,
+        related_claims: Iterable[str] | None = None,
+        related_predictions: Iterable[str] | None = None,
+        references: Iterable[str] | None = None,
+        source: str | None = None,
+    ) -> ClientResult[Discovery]:
+        """Register a discovery."""
+        return cast(
+            ClientResult[Discovery],
+            self.register(
+                "discovery",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    title=title,
+                    date=date,
+                    summary=summary,
+                    impact=impact,
+                    status=status,
+                    related_claims=list(related_claims)
+                    if related_claims is not None else None,
+                    related_predictions=list(related_predictions)
+                    if related_predictions is not None else None,
+                    references=list(references) if references is not None else None,
+                    source=source,
+                ),
+            ),
+        )
+
+    def register_dead_end(
+        self,
+        id: str,
+        title: str,
+        description: str,
+        status: DeadEndStatus | str,
+        *,
+        dry_run: bool = False,
+        related_predictions: Iterable[str] | None = None,
+        related_claims: Iterable[str] | None = None,
+        references: Iterable[str] | None = None,
+        source: str | None = None,
+    ) -> ClientResult[DeadEnd]:
+        """Register a dead end."""
+        return cast(
+            ClientResult[DeadEnd],
+            self.register(
+                "dead_end",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    title=title,
+                    description=description,
+                    status=status,
+                    related_predictions=list(related_predictions)
+                    if related_predictions is not None else None,
+                    related_claims=list(related_claims)
+                    if related_claims is not None else None,
+                    references=list(references) if references is not None else None,
+                    source=source,
+                ),
+            ),
+        )
+
+    def register_parameter(
+        self,
+        id: str,
+        name: str,
+        value: object,
+        *,
+        dry_run: bool = False,
+        unit: str | None = None,
+        uncertainty: object | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+    ) -> ClientResult[Parameter]:
+        """Register a parameter."""
+        return cast(
+            ClientResult[Parameter],
+            self.register(
+                "parameter",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    name=name,
+                    value=value,
+                    unit=unit,
+                    uncertainty=uncertainty,
+                    source=source,
+                    notes=notes,
+                ),
+            ),
+        )
+
+    def register_independence_group(
+        self,
+        id: str,
+        label: str,
+        *,
+        dry_run: bool = False,
+        claim_lineage: Iterable[str] | None = None,
+        assumption_lineage: Iterable[str] | None = None,
+        measurement_regime: MeasurementRegime | str | None = None,
+        notes: str | None = None,
+    ) -> ClientResult[IndependenceGroup]:
+        """Register an independence group."""
+        return cast(
+            ClientResult[IndependenceGroup],
+            self.register(
+                "independence_group",
+                dry_run=dry_run,
+                **_without_none(
+                    id=id,
+                    label=label,
+                    claim_lineage=list(claim_lineage)
+                    if claim_lineage is not None else None,
+                    assumption_lineage=list(assumption_lineage)
+                    if assumption_lineage is not None else None,
+                    measurement_regime=measurement_regime,
+                    notes=notes,
+                ),
+            ),
+        )
+
+    def register_pairwise_separation(
+        self,
+        id: str,
+        group_a: str,
+        group_b: str,
+        basis: str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[PairwiseSeparation]:
+        """Register a pairwise separation record."""
+        return cast(
+            ClientResult[PairwiseSeparation],
+            self.register(
+                "pairwise_separation",
+                dry_run=dry_run,
+                id=id,
+                group_a=group_a,
+                group_b=group_b,
+                basis=basis,
+            ),
+        )
+
+    def get_claim(self, identifier: str) -> ClientResult[Claim]:
+        return cast(ClientResult[Claim], self.get("claim", identifier))
+
+    def get_assumption(self, identifier: str) -> ClientResult[Assumption]:
+        return cast(ClientResult[Assumption], self.get("assumption", identifier))
+
+    def get_prediction(self, identifier: str) -> ClientResult[Prediction]:
+        return cast(ClientResult[Prediction], self.get("prediction", identifier))
+
+    def get_analysis(self, identifier: str) -> ClientResult[Analysis]:
+        return cast(ClientResult[Analysis], self.get("analysis", identifier))
+
+    def get_theory(self, identifier: str) -> ClientResult[Theory]:
+        return cast(ClientResult[Theory], self.get("theory", identifier))
+
+    def get_discovery(self, identifier: str) -> ClientResult[Discovery]:
+        return cast(ClientResult[Discovery], self.get("discovery", identifier))
+
+    def get_dead_end(self, identifier: str) -> ClientResult[DeadEnd]:
+        return cast(ClientResult[DeadEnd], self.get("dead_end", identifier))
+
+    def get_parameter(self, identifier: str) -> ClientResult[Parameter]:
+        return cast(ClientResult[Parameter], self.get("parameter", identifier))
+
+    def get_independence_group(self, identifier: str) -> ClientResult[IndependenceGroup]:
+        return cast(ClientResult[IndependenceGroup], self.get("independence_group", identifier))
+
+    def get_pairwise_separation(self, identifier: str) -> ClientResult[PairwiseSeparation]:
+        return cast(ClientResult[PairwiseSeparation], self.get("pairwise_separation", identifier))
+
+    def list_claims(self, **filters: object) -> ClientResult[list[Claim]]:
+        return cast(ClientResult[list[Claim]], self.list("claim", **filters))
+
+    def list_assumptions(self, **filters: object) -> ClientResult[list[Assumption]]:
+        return cast(ClientResult[list[Assumption]], self.list("assumption", **filters))
+
+    def list_predictions(self, **filters: object) -> ClientResult[list[Prediction]]:
+        return cast(ClientResult[list[Prediction]], self.list("prediction", **filters))
+
+    def list_analyses(self, **filters: object) -> ClientResult[list[Analysis]]:
+        return cast(ClientResult[list[Analysis]], self.list("analysis", **filters))
+
+    def list_theories(self, **filters: object) -> ClientResult[list[Theory]]:
+        return cast(ClientResult[list[Theory]], self.list("theory", **filters))
+
+    def list_discoveries(self, **filters: object) -> ClientResult[list[Discovery]]:
+        return cast(ClientResult[list[Discovery]], self.list("discovery", **filters))
+
+    def list_dead_ends(self, **filters: object) -> ClientResult[list[DeadEnd]]:
+        return cast(ClientResult[list[DeadEnd]], self.list("dead_end", **filters))
+
+    def list_parameters(self, **filters: object) -> ClientResult[list[Parameter]]:
+        return cast(ClientResult[list[Parameter]], self.list("parameter", **filters))
+
+    def list_independence_groups(self, **filters: object) -> ClientResult[list[IndependenceGroup]]:
+        return cast(ClientResult[list[IndependenceGroup]], self.list("independence_group", **filters))
+
+    def list_pairwise_separations(self, **filters: object) -> ClientResult[list[PairwiseSeparation]]:
+        return cast(ClientResult[list[PairwiseSeparation]], self.list("pairwise_separation", **filters))
+
+    def transition_claim(
+        self,
+        identifier: str,
+        new_status: ClaimStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Claim]:
+        return cast(
+            ClientResult[Claim],
+            self.transition("claim", identifier, new_status, dry_run=dry_run),
+        )
+
+    def transition_prediction(
+        self,
+        identifier: str,
+        new_status: PredictionStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Prediction]:
+        return cast(
+            ClientResult[Prediction],
+            self.transition("prediction", identifier, new_status, dry_run=dry_run),
+        )
+
+    def transition_theory(
+        self,
+        identifier: str,
+        new_status: TheoryStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Theory]:
+        return cast(
+            ClientResult[Theory],
+            self.transition("theory", identifier, new_status, dry_run=dry_run),
+        )
+
+    def transition_discovery(
+        self,
+        identifier: str,
+        new_status: DiscoveryStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Discovery]:
+        return cast(
+            ClientResult[Discovery],
+            self.transition("discovery", identifier, new_status, dry_run=dry_run),
+        )
+
+    def transition_dead_end(
+        self,
+        identifier: str,
+        new_status: DeadEndStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[DeadEnd]:
+        return cast(
+            ClientResult[DeadEnd],
+            self.transition("dead_end", identifier, new_status, dry_run=dry_run),
+        )
+
+    def _invoke_gateway(self, func, *args, **kwargs) -> GatewayResult:
+        try:
+            return func(*args, **kwargs)
+        except DeSitterClientError:
+            raise
+        except Exception as exc:
+            raise DeSitterClientError("error", str(exc)) from exc
+
+    def _handle_resource_result(
+        self,
+        resource: str,
+        result: GatewayResult,
+    ) -> ClientResult[Any]:
+        if result.status not in {"ok", "dry_run"}:
+            raise DeSitterClientError(result.status, result.message, result.findings)
+
+        canonical = self._canonical_resource(resource)
+        decoded = None
+        if result.data is not None:
+            resource_payload = result.data.get("resource")
+            if isinstance(resource_payload, dict):
+                decoded = deserialize_entity(canonical, resource_payload)
+
+        return ClientResult(
+            status=result.status,
+            changed=result.changed,
+            message=result.message,
+            findings=result.findings,
+            transaction_id=result.transaction_id,
+            data=decoded,
+        )
+
+    def _handle_resource_list_result(
+        self,
+        resource: str,
+        result: GatewayResult,
+    ) -> ClientResult[list[Any]]:
+        if result.status not in {"ok", "dry_run"}:
+            raise DeSitterClientError(result.status, result.message, result.findings)
+
+        canonical = self._canonical_resource(resource)
+        items: list[Any] = []
+        if result.data is not None:
+            raw_items = result.data.get("items", [])
+            items = [deserialize_entity(canonical, item) for item in raw_items]
+
+        return ClientResult(
+            status=result.status,
+            changed=result.changed,
+            message=result.message,
+            findings=result.findings,
+            transaction_id=result.transaction_id,
+            data=items,
+        )
+
+    def _handle_query_result(self, result: GatewayResult) -> ClientResult[Any]:
+        if result.status not in {"ok", "dry_run"}:
+            raise DeSitterClientError(result.status, result.message, result.findings)
+
+        decoded: Any = None
+        if result.data is not None:
+            decoded = result.data.get("result", result.data)
+
+        return ClientResult(
+            status=result.status,
+            changed=result.changed,
+            message=result.message,
+            findings=result.findings,
+            transaction_id=result.transaction_id,
+            data=decoded,
+        )
+
+    def _canonical_resource(self, resource: str) -> str:
+        try:
+            return self._gateway.resolve_resource(resource)
+        except KeyError:
+            return resource
+
+
+def connect(path: str | Path) -> DeSitterClient:
+    """Build a client from a workspace path containing desitter.toml."""
+    workspace = Path(path)
+    context = build_context(workspace, load_config(workspace))
+    return DeSitterClient(context)
+
+
+def _without_none(**payload: object) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in payload.items()
+        if value is not None
+    }
+
+
+__all__ = [
+    "ClientResult",
+    "DeSitterClient",
+    "DeSitterClientError",
+    "connect",
+]

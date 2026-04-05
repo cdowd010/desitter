@@ -21,6 +21,12 @@ deSitter makes that structure explicit and machine-enforceable. It is a versione
 
 deSitter is an **audit scaffold**, not a reasoning engine. It surfaces structural facts about the graph: missing links, untested assumptions, stale analyses, uncovered predictions. The researcher — or an AI agent — is the one who decides what to do about them.
 
+For researchers, the primary interface is the Python API: `desitter.connect()` in scripts and notebooks. For AI agent sessions, the primary interface is the MCP server. The CLI remains important, but mainly as an inspection, health-check, render, and audit surface.
+
+Nobody is expected to hand-author JSON payloads in the shell. deSitter's payloads are structured interchange formats for the gateway, external tooling, and file-based ingestion when needed — not the primary authoring workflow.
+
+Every successful mutation is also recorded in the append-only transaction log at `project/data/transaction_log.jsonl`. That log is a first-class public artifact: external tools can watch it, index it, and react to it directly without going through deSitter.
+
 ---
 
 ## Core Capabilities
@@ -39,29 +45,45 @@ deSitter never executes analyses. Researchers run their own tools — Python, R,
 
 ## Interfaces
 
-deSitter exposes the same capabilities through two equal interfaces:
+deSitter exposes the same core system through three interfaces with different primary users:
 
-**CLI — for humans and scripts**
+**Python API — primary for researchers in scripts and notebooks**
+
+```python
+from desitter import connect
+
+client = connect(".")
+result = client.register_claim(
+    id="C-001",
+    statement="Catalyst X increases yield.",
+    type="foundational",
+    scope="global",
+    falsifiability="A replicated null result would falsify this claim.",
+)
+```
+
+The Python API is the intended authoring surface for researchers. It wraps the same gateway used everywhere else, but exposes a programmatic workflow that fits normal Python scripts, notebooks, and research automation.
+
+**MCP server — primary for AI agent sessions**
 
 ```bash
-ds register claim '{"id": "C-001", "statement": "...", "type": "foundational", ...}'
+ds-mcp   # start the MCP server
+```
+
+The [Model Context Protocol](https://modelcontextprotocol.io) lets AI assistants (Claude, Copilot, Cursor, and others) call deSitter tools directly as structured operations — no subprocess, no parsing, no screen-scraping. An agent calls `register_resource`, `health_check`, or `query_web` with typed arguments and receives a structured response. The same gateway that serves the Python API serves the MCP server: there is no divergence in behaviour.
+
+The MCP interface is designed with AI-assisted research in mind. An agent with access to the deSitter tool surface can audit a derivation chain, identify structural gaps, pre-flight a new prediction with `dry_run=True`, and commit it — all within a single session. The epistemic web provides the shared, persistent, invariant-enforced state. The AI provides the reasoning.
+
+**CLI — inspection, health-check, and audit tool**
+
+```bash
 ds health
 ds validate
 ds status
 ds render
 ```
 
-Every command accepts `--json` for machine-readable output. Shell scripts, CI pipelines, and Makefiles work naturally against the CLI.
-
-**MCP server — for AI agents**
-
-```bash
-ds-mcp   # start the MCP server
-```
-
-The [Model Context Protocol](https://modelcontextprotocol.io) lets AI assistants (Claude, Copilot, Cursor, and others) call deSitter tools directly as structured operations — no subprocess, no parsing, no screen-scraping. An agent calls `register_resource`, `health_check`, or `query_web` with typed arguments and receives a structured response. The same gateway that serves the CLI serves the MCP server: there is no divergence in behaviour.
-
-The MCP interface is designed with AI-assisted research in mind. An agent with access to the deSitter tool surface can audit a derivation chain, identify structural gaps, pre-flight a new prediction with `dry_run=True`, and commit it — all within a single session. The epistemic web provides the shared, persistent, invariant-enforced state. The AI provides the reasoning.
+Every command accepts `--json` for machine-readable output. Shell scripts, CI pipelines, and audit tooling work naturally against the CLI. When JSON payloads are involved, the intended path is file-based ingestion or generated artifacts — not hand-written inline shell blobs.
 
 ---
 
@@ -72,22 +94,33 @@ pip install desitter            # CLI + core
 pip install "desitter[mcp]"     # + MCP server for AI agent use
 ```
 
+```python
+from desitter import connect
+
+client = connect(".")
+
+client.register_claim(
+    id="C-001",
+    statement="Catalyst X increases yield.",
+    type="foundational",
+    scope="global",
+    falsifiability="A replicated null result would falsify this claim.",
+)
+
+claims = client.list_claims().data or []
+```
+
 ```bash
-# Initialise a project workspace
-ds init
-
-# Register a claim
-ds register claim '{"id": "C-001", "statement": "...", "type": "foundational", ...}'
-
-# Run all health checks
+# Inspect and audit from the CLI
 ds health
-
-# Check structural gaps
 ds validate
+ds status
 
-# Start the MCP server
+# Start the MCP server for AI agent sessions
 ds-mcp
 ```
+
+If external automation needs to react to changes, it can watch `project/data/transaction_log.jsonl` directly. deSitter writes the log; other tools are free to consume it without using the CLI, Python API, or MCP server.
 
 ---
 
