@@ -60,18 +60,58 @@ gateway.query("refutation_impact", pid="P-001")
 
 **Scenario:** A chemist claims that catalyst X increases reaction yield above 50%. They have one empirical assumption, one parameter, one analysis, and one prediction.
 
-**Entity graph:**
+**Population sequence — registration order and auto-wired backlinks:**
+
+| Step | Entity registered | Backlinks auto-wired by the web |
+|------|------------------|--------------------------------|
+| 1 | `PAR-001` parameter | (none — `used_in_analyses=∅` until AN-001 arrives) |
+| 2 | `A-001` assumption | (none — `used_in_claims=∅`, `tested_by=∅`) |
+| 3 | `AN-001` analysis | `PAR-001.used_in_analyses ← {AN-001}` |
+| 4 | `C-001` claim | `A-001.used_in_claims ← {C-001}` · `AN-001.claims_covered ← {C-001}` |
+| 5 | `IG-001` independence group | (none — `member_predictions=∅` until P-001 joins) |
+| 6 | `P-001` prediction | `IG-001.member_predictions ← {P-001}` |
+| 7 | transition `P-001 → CONFIRMED` | (status change only, no new structural links) |
+
+**Entity graph (final state):**
+
+```mermaid
+graph LR
+classDef bigText font-size:18px,color:#000;
+    PAR001["PAR-001\nα = 0.05\n[Parameter]"]
+    A001["A-001\nConditions controlled\n[Assumption · Methodological]"]
+    AN001["AN-001\nyield_experiment.py\n[Analysis]"]
+    C001["C-001\nCatalyst X raises yield > 0.50\n[Claim · Foundational · Numerical]"]
+    IG001["IG-001\n2024-06 batch\n[IndependenceGroup]"]
+    P001["P-001\npredict yield > 0.50\n✅ CONFIRMED  observed=0.57\n[Prediction]"]
+
+    PAR001 -->|"used_in_analyses"| AN001
+    AN001 -->|"claims_covered"| C001
+    A001 -->|"used_in_claims"| C001
+    C001 -->|"claim_ids"| P001
+    P001 -->|"independence_group"| IG001
+    IG001 -.->|"member_predictions"| P001
+
+    style PAR001 fill:#ffd700,stroke:#b8860b
+    style A001 fill:#ffa07a,stroke:#cd6600
+    style AN001 fill:#87ceeb,stroke:#1e90ff
+    style C001 fill:#90ee90,stroke:#228b22
+    style P001 fill:#dda0dd,stroke:#8b008b
+    style IG001 fill:#e0e0ff,stroke:#6666cc
 ```
-PAR-001 (significance threshold)
-    ↓ uses_parameters
-AN-001 (yield_experiment.py)
-    ↑ analyses (backlink auto-maintained)
-C-001 (catalyst X raises yield)  ←  A-001 (conditions were controlled)
-    ↓ claim_ids
-P-001 (yield > 0.50)
-    ↓ independence_group
-IG-001 (single experimental run)
+
+```mermaid
+graph LR
+classDef bigText font-size:18px,color:#000;
+    LP[" Parameter "] ~~~ LA[" Assumption "] ~~~ LAN[" Analysis "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LIG[" Independence Group "]:::bigText
+    style LP  fill:#ffd700,stroke:#b8860b
+    style LA  fill:#ffa07a,stroke:#cd6600
+    style LAN fill:#87ceeb,stroke:#1e90ff
+    style LC  fill:#90ee90,stroke:#228b22
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LIG fill:#e0e0ff,stroke:#6666cc
 ```
+
+Solid arrows = forward links you set explicitly. Dashed arrows = reverse backlinks the web maintains automatically.
 
 **Step 1: Register the parameter.**
 
@@ -184,6 +224,17 @@ gateway.register("prediction", {
 #   INFO: C-001 is NUMERICAL with AN-001 linked — coverage is satisfied.
 ```
 
+> **Web state after step 6:**
+> ```
+> parameters:  PAR-001 [used_in_analyses={AN-001}]:::bigText
+> assumptions: A-001   [used_in_claims={C-001}, tested_by=∅]:::bigText
+> analyses:    AN-001  [claims_covered={C-001}]:::bigText
+> claims:      C-001   [assumptions={A-001}, analyses={AN-001}]:::bigText
+> ind_groups:  IG-001  [member_predictions={P-001}]  ← auto-wired
+> predictions: P-001   [PENDING, tier=FULLY_SPECIFIED, free_params=0]:::bigText
+> ```
+> All structural links are in place. The web is ready for the observation.
+
 **Step 7: Researcher runs the experiment, result is p=0.02, mean yield=0.57. Transition prediction.**
 
 ```python
@@ -233,6 +284,47 @@ gateway.query("refutation_impact", pid="P-001")
 ```
 
 The full chain is intact: one parameter, one assumption, one analysis, one claim, one prediction — confirmed by a single independent experiment.
+
+**Conclusion chain — how the epistemic path leads to the outcome:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    A001["A-001\nConditions were controlled\n[Methodological assumption — taken as given]"]
+    PAR001["PAR-001\nα = 0.05"]:::bigText
+    AN001["AN-001\nyield_experiment.py"]:::bigText
+    C001["C-001\nCatalyst X raises reaction yield above 0.50"]:::bigText
+    P001["P-001\nPredict: mean yield > 0.50  free_params=0"]:::bigText
+    OBS["Observation\nmean yield = 0.57,  p = 0.02"]:::bigText
+    OUT["✅ CONFIRMED\nThe claim is grounded.\nOne independent experimental run supports it."]:::bigText
+
+    A001 -->|"underpins"| C001
+    PAR001 -->|"parameterises"| AN001
+    AN001 -->|"covers"| C001
+    C001 -->|"grounds"| P001
+    OBS -->|"confirms"| P001
+    P001 --> OUT
+
+    style A001 fill:#ffa07a
+    style PAR001 fill:#ffd700
+    style AN001 fill:#87ceeb
+    style C001 fill:#90ee90
+    style P001 fill:#dda0dd
+    style OBS fill:#fff0f0,stroke:#ff6666
+    style OUT fill:#e8ffe8,stroke:#228b22,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LA[" Assumption "] ~~~ LAN[" Analysis "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LOBS[" Observation "] ~~~ LOUT[" Confirmed outcome "]:::bigText
+    style LA   fill:#ffa07a,stroke:#cd6600
+    style LAN  fill:#87ceeb,stroke:#1e90ff
+    style LC   fill:#90ee90,stroke:#228b22
+    style LPR  fill:#dda0dd,stroke:#8b008b
+    style LOBS fill:#fff0f0,stroke:#ff6666
+    style LOUT fill:#e8ffe8,stroke:#228b22,stroke-width:2px
+```
 
 ---
 
@@ -299,6 +391,42 @@ gateway.query("claim_lineage", cid="C-003")
 gateway.query("claims_depending_on_claim", cid="C-001")
 # data = {"depending": {"C-003"}}
 # "If C-001 is retracted, C-003 is immediately downstream."
+```
+
+**Claim dependency graph and traversal results:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    C001["C-001\nAlloy composition → grain size\n[Foundational]"]
+    C002["C-002\nGrain size → tensile strength\n[Foundational]"]
+    C003["C-003\nAlloy composition → tensile strength ≥ 650 MPa\n[Derived]"]
+
+    C001 -->|"depends_on"| C003
+    C002 -->|"depends_on"| C003
+
+    LIN["claim_lineage(C-003)\n= {C-001, C-002}\n'C-003 rests on both foundational claims'"]:::bigText
+    DEP["claims_depending_on(C-001)\n= {C-003}\n'Retract C-001 → C-003 is downstream'"]:::bigText
+    style LIN color:#000
+    style DEP color:#000
+
+    C003 -.->|"lineage traversal"| LIN
+    C001 -.->|"dependents traversal"| DEP
+
+    style C001 fill:#90ee90,stroke:#228b22
+    style C002 fill:#90ee90,stroke:#228b22
+    style C003 fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style LIN fill:#f5f5f5,stroke:#999
+    style DEP fill:#f5f5f5,stroke:#999
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LCF[" Foundational Claim "] ~~~ LCD[" Derived Claim "] ~~~ LQ[" Query result "]:::bigText
+    style LCF fill:#90ee90,stroke:#228b22,stroke-width:2px
+    style LCD fill:#c8e6c9,stroke:#388e3c
+    style LQ  fill:#f5f5f5,stroke:#999
 ```
 
 **Cycle detection: what happens if you try to create a cycle.**
@@ -402,6 +530,36 @@ gateway.register("prediction", {
 # → ok | P-002 registered
 # P-002 takes A-001 as a given. If A-001 is later falsified, P-002's results are suspect.
 ```
+
+**Semantic distinction between the two valid predictions:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    A001["A-001\nCalorimeter calibration ±2%\n[Assumption · Empirical]"]
+
+    P001["P-001\nZ boson mass reconstruction\ntests_assumptions: A-001\n\nDesigned to VERIFY whether A-001 is true.\nIf CONFIRMED → A-001 is validated.\nIf REFUTED → A-001 is under direct pressure."]:::bigText
+
+    P002["P-002\nHZZ coupling strength κ_Z\nconditional_on: A-001\n\nTakes A-001 as a GIVEN.\nOnly valid if calibration holds.\nDoes not test whether it holds."]:::bigText
+
+    A001 -->|"tested_by  [auto-wired]"| P001
+    A001 -.->|"conditional dependency\n(P-002 is only valid while A-001 holds)"| P002
+
+    style A001 fill:#ffa07a,stroke:#cd6600,stroke-width:2px
+    style P001 fill:#dda0dd,stroke:#228b22,stroke-width:2px
+    style P002 fill:#dda0dd,stroke:#8b008b
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LA[" Assumption "] ~~~ LTEST[" Prediction: tests assumption "] ~~~ LCOND[" Prediction: conditional on assumption "]:::bigText
+    style LA    fill:#ffa07a,stroke:#cd6600
+    style LTEST fill:#dda0dd,stroke:#228b22,stroke-width:2px
+    style LCOND fill:#dda0dd,stroke:#8b008b
+```
+
+If P-001 is later REFUTED, `validate_conditional_assumption_pressure` will emit a WARNING for P-002 — because P-002's conditional basis is now under adversarial pressure.
 
 **P-003 (incorrect) tries to both test and condition on A-001:**
 
@@ -536,6 +694,47 @@ gateway.register("prediction", {
 # → ok
 ```
 
+**Web state after initial registration (before parameter change):**
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    PAR001["PAR-001\nfdr_threshold = 0.05\n[Parameter]"]
+    AN001["AN-001\nrna_seq_deg.py\n[Analysis]"]
+    C001["C-001\nBRCA1 downregulated\n[Claim · Foundational]"]
+    C002["C-002\nATM upregulated\n[Claim · Foundational]"]
+    IG001["IG-001\nTCGA BRCA cohort\n[IndependenceGroup]"]
+    P001["P-001\nBRCA1 log2FC\nCONFIRMED  observed=−1.7\n[Prediction]"]
+    P002["P-002\nATM log2FC\nCONFIRMED  observed=1.1\n[Prediction]"]
+
+    PAR001 -->|"used_in_analyses"| AN001
+    AN001 -->|"claims_covered"| C001
+    AN001 -->|"claims_covered"| C002
+    C001 -->|"claim_ids"| P001
+    C002 -->|"claim_ids"| P002
+    P001 -->|"independence_group"| IG001
+    P002 -->|"independence_group"| IG001
+
+    style PAR001 fill:#ffd700
+    style AN001 fill:#87ceeb
+    style C001 fill:#90ee90
+    style C002 fill:#90ee90
+    style IG001 fill:#e0e0ff
+    style P001 fill:#dda0dd
+    style P002 fill:#dda0dd
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LP[" Parameter "] ~~~ LAN[" Analysis "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LIG[" Independence Group "]:::bigText
+    style LP  fill:#ffd700,stroke:#b8860b
+    style LAN fill:#87ceeb,stroke:#1e90ff
+    style LC  fill:#90ee90,stroke:#228b22
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LIG fill:#e0e0ff,stroke:#6666cc
+```
+
 **Regulatory guidance changes the FDR standard to 0.01.**
 
 ```python
@@ -563,6 +762,48 @@ gateway.query("parameter_impact", pid="PAR-001")
 #   "affected_claims":      {"C-001", "C-002"}, # union of stale_analyses coverage + constrained
 #   "affected_predictions": {"P-001", "P-002"}, # all predictions downstream
 # }
+```
+
+**Blast-radius diagram — what `parameter_impact(PAR-001)` surfaces:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    PAR001["PAR-001\nfdr_threshold: 0.05 → 0.01\n[Parameter changed]"]
+    AN001["AN-001\n⚠️ STALE\n(was run with --fdr 0.05)"]:::bigText
+    C001["C-001  ⚠️ AFFECTED\nparameter_constraints: PAR-001 < 0.05\n→ constraint annotation now stale"]:::bigText
+    C002["C-002  ⚠️ AFFECTED\nparameter_constraints: PAR-001 < 0.05\n→ constraint annotation now stale"]:::bigText
+    P001["P-001  ⚠️ AFFECTED\nCONFIRMED — but based on stale analysis"]:::bigText
+    P002["P-002  ⚠️ AFFECTED\nCONFIRMED — but based on stale analysis"]:::bigText
+    ACTION["Researcher must:\n1. Re-run AN-001 with --fdr 0.01\n2. Record new results\n3. Decide whether to transition P-001/P-002\n4. Update C-001/C-002 constraint annotations"]:::bigText
+
+    PAR001 -->|"stale_analyses"| AN001
+    PAR001 -->|"constrained_claims"| C001
+    PAR001 -->|"constrained_claims"| C002
+    AN001 -->|"affected_claims"| C001
+    AN001 -->|"affected_claims"| C002
+    C001 -->|"affected_predictions"| P001
+    C002 -->|"affected_predictions"| P002
+    P001 & P002 -.->|"researcher decision required"| ACTION
+
+    style PAR001 fill:#ff9999,stroke:#cc0000,stroke-width:2px
+    style AN001 fill:#ffcccc,stroke:#cc3333
+    style C001 fill:#ffe0b2,stroke:#e65100
+    style C002 fill:#ffe0b2,stroke:#e65100
+    style P001 fill:#f3e5f5,stroke:#7b1fa2
+    style P002 fill:#f3e5f5,stroke:#7b1fa2
+    style ACTION fill:#fff9c4,stroke:#f57f17
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LCP[" Changed parameter "] ~~~ LST[" Stale analysis "] ~~~ LAC[" Affected claim "] ~~~ LAP[" Affected prediction "] ~~~ LRA[" Required action "]:::bigText
+    style LCP fill:#ff9999,stroke:#cc0000,stroke-width:2px
+    style LST fill:#ffcccc,stroke:#cc3333
+    style LAC fill:#ffe0b2,stroke:#e65100
+    style LAP fill:#f3e5f5,stroke:#7b1fa2
+    style LRA fill:#fff9c4,stroke:#f57f17
 ```
 
 **What this means:** The analysis `AN-001` was run with `--fdr 0.05`. The threshold is now 0.01. Some genes that were called significant at 0.05 may not meet 0.01. The researcher needs to:
@@ -628,6 +869,41 @@ gateway.register("prediction", {
     "claim_ids":        ["C-001", "C-002", "C-003"],
     "free_params":      0,
 })
+```
+
+**Dependency graph — why the retraction is blocked:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    C001["C-001\nAspirin inhibits COX-1 & COX-2\n[Attempting: RETRACT]"]
+    C002["C-002\nCOX inhibition reduces TXA2\n[depends_on C-001]"]
+    C003["C-003\nAspirin reduces CV risk\n[depends_on C-002]"]
+    P001["P-001\nRR of MI = 0.75\nCONFIRMED\n[claim_ids: C-001, C-002, C-003]"]
+    BLOCK["❌ BLOCKED\nCRITICAL: P-001.claim_ids ∋ C-001\nCRITICAL: C-002.depends_on ∋ C-001\nDisk untouched. Must clear downstream first."]:::bigText
+
+    C001 -->|"depends_on"| C002
+    C002 -->|"depends_on"| C003
+    C001 -.->|"cited by"| P001
+    C002 -.->|"cited by"| P001
+    C003 -.->|"cited by"| P001
+    C001 -->|"validate_retracted_claim_citations fires"| BLOCK
+
+    style C001 fill:#ff6666,stroke:#cc0000,stroke-width:2px
+    style C002 fill:#90ee90
+    style C003 fill:#90ee90
+    style P001 fill:#dda0dd
+    style BLOCK fill:#ffe0e0,stroke:#cc0000,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LR[" Being retracted "] ~~~ LC[" Downstream claim "] ~~~ LPR[" Prediction (cites retracted) "] ~~~ LBK[" BLOCKED "]:::bigText
+    style LR  fill:#ff6666,stroke:#cc0000,stroke-width:2px
+    style LC  fill:#90ee90,stroke:#228b22
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LBK fill:#ffe0e0,stroke:#cc0000,stroke-width:2px
 ```
 
 **Suppose new research suggests COX-2 inhibition is actually reversible in endothelial tissue. The researcher wants to revise C-001 to "REVISED" first, then later retract it entirely.**
@@ -696,50 +972,69 @@ gateway.transition("claim", "C-001", "RETRACTED")
 
 ---
 
-### 2.3 — Independence Group Constraint: A Design Tension
+### 2.3 — Independence Groups: Registration Order
 
-**Scenario:** A researcher wants to register two independent experimental runs as separate independence groups, then document their separation. This exposes a structural constraint in the current design.
+**Scenario:** A researcher wants to register two independent experimental runs as separate independence groups and document why they are independent. The correct registration order is: groups first (empty), then the pairwise separation, then predictions into each group.
 
 ```python
-# Step 1: Register the first group — succeeds.
-gateway.register("independence_group", {
-    "id":    "IG-001",
-    "label": "Lab A: NMR experiment",
-    "claim_lineage":    ["C-001"],
-    "assumption_lineage": [],
-    "measurement_regime": "measured",
-})
-# → ok | only 1 group in web, 0 pairs, 0 separations needed. Validator is satisfied.
+gateway.register("independence_group", {"id": "IG-001", "label": "Lab A: NMR experiment", ...})
+# → ok | 1 group, 0 pairs, 0 separations needed.
 
-# Step 2: Register the second group.
-gateway.register("independence_group", {
-    "id":    "IG-002",
-    "label": "Lab B: independent NMR replication",
-    "claim_lineage":    ["C-001"],
-    "assumption_lineage": [],
-    "measurement_regime": "measured",
+gateway.register("independence_group", {"id": "IG-002", "label": "Lab B: independent NMR replication", ...})
+# → ok | 2 groups, neither has predictions yet — separation check does not fire.
+
+gateway.register("pairwise_separation", {
+    "id": "PS-001", "group_a": "IG-001", "group_b": "IG-002",
+    "basis": "Different instruments at geographically separate sites.",
 })
-# Step 4: web.register_independence_group(IG-002) → new_web (structural check passes)
-# Step 5: validator.validate(new_web)
-#   → validate_independence_semantics: 2 groups exist, need 1 pairwise separation, found 0.
-#   → CRITICAL: Missing PairwiseSeparation between IG-001 and IG-002.
-# → GatewayResult(status="BLOCKED", changed=False)
+# → ok | both groups exist; separation documented.
+
+gateway.register("prediction", {
+    "id": "P-001", ..., "independence_group": "IG-001",
+})
+# → ok | IG-001 now has 1 prediction; IG-002 still has 0 — separation check does not fire.
+
+gateway.register("prediction", {
+    "id": "P-002", ..., "independence_group": "IG-002",
+})
+# → ok | IG-002 now has 1 prediction; both groups active; PS-001 already exists — clean.
 ```
 
-**The deadlock:** `PS-001` cannot be registered before `IG-002` exists (referential integrity would block it). But `IG-002` cannot be registered before `PS-001` exists (the validator blocks it). The gateway currently has no atomic multi-entity operation.
+The validator rule: *a PairwiseSeparation is required for every pair of independence groups where **both** have at least one member prediction. Empty groups are declarations of intent — no separation is required until predictions join them.*
 
-**Current workaround:** Bypass the pairwise separation requirement by using a single independence group until the design gap is addressed. If you need to capture that two experiments are independent, annotate the independence group's `notes` field temporarily.
+**The consequence of skipping the separation:** if you add predictions to both groups without first registering a PairwiseSeparation, the next mutation will be blocked.
 
-**The clean fix (not yet implemented):** The `validate_independence_semantics` validator should only require pairwise separations for groups that have at least one member prediction. An empty group is a declaration of intent, not yet an evidentiary claim — requiring a separation before any predictions exist is premature. This is a genuine design gap discovered through these examples. The validator should read:
+```python
+# Wrong order: predictions first, separation never registered.
+gateway.register("prediction", {"id": "P-001", ..., "independence_group": "IG-001"})
+# → ok (IG-002 is still empty — no check fires yet)
+gateway.register("prediction", {"id": "P-002", ..., "independence_group": "IG-002"})
+# Step 5: validator.validate(new_web)
+#   → validate_independence_semantics: both groups now have predictions, 0 separations.
+#   → CRITICAL: Missing PairwiseSeparation for (IG-001, IG-002).
+# → GatewayResult(status="BLOCKED", changed=False)
+# Fix: register PS-001 first, then retry P-002.
+```
 
-> *For every pair of independence groups where BOTH groups have at least one member prediction, a PairwiseSeparation record must exist.*
+**Correct registration sequence:**
 
-With this change, the registration sequence becomes:
-1. Register IG-001 → ok
-2. Register IG-002 → ok (neither group has predictions yet)
-3. Register PS-001 → ok (both groups now exist)
-4. Register P-001 into IG-001 → ok
-5. Register P-002 into IG-002 → validator checks: 2 groups with predictions, 1 separation exists — ok
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    S1["1. Register IG-001  (empty)  ✓"]:::bigText
+    S2["2. Register IG-002  (empty)  ✓\n   Neither group has predictions yet —\n   separation check does not fire"]:::bigText
+    S3["3. Register PS-001  ✓\n   (basis: different instruments, different sites)"]:::bigText
+    S4["4. Register P-001 → IG-001  ✓\n   (IG-002 still empty — check skipped)"]:::bigText
+    S5["5. Register P-002 → IG-002  ✓\n   Both groups now active + PS-001 exists\n   → validator satisfied"]:::bigText
+    S1 --> S2 --> S3 --> S4 --> S5
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LS[" Registration step "]:::bigText
+    style LS fill:#f0f0f0,stroke:#888
+```
 
 ---
 
@@ -750,6 +1045,25 @@ With this change, the registration sequence becomes:
 **Context:** Einstein's General Relativity (1915) predicted that light passing near a massive body would be deflected. The predicted angle — 1.75 arcseconds at the solar limb — was exactly twice the Newtonian prediction. In May 1919, Arthur Eddington led expeditions to Sobral (Brazil) to photograph stars near the solar limb during a total eclipse. The Sobral result confirmed the GR prediction.
 
 This example shows: foundational + derived claim chain, FULLY_SPECIFIED prediction from a pure theoretical deduction, NOVEL_PREDICTION evidence kind (prediction made in 1915, measured in 1919), and a parameter carrying the numerical forecast.
+
+**Population sequence:**
+
+| Step | Entity | Backlinks auto-wired |
+|------|--------|---------------------|
+| 1 | `PAR-001` 1.75 arcsec | — |
+| 2 | `A-001` plate accuracy | — |
+| 3 | `A-002` reference stars stable | — |
+| 4 | `T-001` General Relativity | — |
+| 5 | `C-001` spacetime curvature | — |
+| 6 | `C-002` null geodesics | — |
+| 7 | `C-003` 1.75 arcsec deflection (derived) | `A-001.used_in_claims ← {C-003}` · `A-002.used_in_claims ← {C-003}` |
+| 8 | `AN-001` eddington_sobral_1919.py | `PAR-001.used_in_analyses ← {AN-001}` |
+| 9 | update `C-003` to link `AN-001` | `AN-001.claims_covered ← {C-003}` |
+| 10 | `IG-001` Sobral expedition | — |
+| 11 | `P-001` predict 1.75 arcsec | `IG-001.member_predictions ← {P-001}` · `A-001.tested_by ← {P-001}` |
+| 12 | record observed=1.98, transition `P-001 → CONFIRMED` | — |
+| 13 | update `T-001` with related entities | — |
+| 14 | register `D-001` Discovery | — |
 
 **Entities registered in order:**
 
@@ -929,6 +1243,62 @@ gateway.register("prediction", {
 #                  A-001.tested_by = {P-001}
 ```
 
+**Full entity relationship graph (before transition):**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    PAR001["PAR-001\n1.75 arcsec\n[Parameter]"]
+    A001["A-001\nPlate accuracy sufficient\n[Assumption · Empirical]"]
+    A002["A-002\nRef. stars not displaced\n[Assumption · Methodological]"]
+    T001["T-001\nGeneral Relativity\n[Theory]"]
+    C001["C-001\nGravity = spacetime curvature\n[Claim · Foundational]"]
+    C002["C-002\nLight follows null geodesics\n[Claim · Foundational]"]
+    C003["C-003\n1.75 arcsec solar limb deflection\n[Claim · Derived · Numerical]"]
+    AN001["AN-001\neddington_sobral_1919.py\n[Analysis]"]
+    IG001["IG-001\nSobral 1919 expedition\n[IndependenceGroup]"]
+    P001["P-001\npredict 1.75 arcsec deflection\n[Prediction · FULLY_SPECIFIED]"]
+
+    T001 -->|"related_claims"| C001
+    T001 -->|"related_claims"| C002
+    C001 -->|"depends_on"| C003
+    C002 -->|"depends_on"| C003
+    A001 -->|"used_in_claims"| C003
+    A002 -->|"used_in_claims"| C003
+    PAR001 -->|"used_in_analyses"| AN001
+    AN001 -->|"claims_covered"| C003
+    C001 & C002 & C003 -->|"claim_ids"| P001
+    P001 -->|"tests_assumptions"| A001
+    P001 -.->|"conditional_on"| A002
+    P001 -->|"independence_group"| IG001
+    IG001 -.->|"member_predictions"| P001
+
+    style PAR001 fill:#ffd700
+    style A001 fill:#ffa07a,stroke:#cd6600,stroke-width:2px
+    style A002 fill:#ffa07a
+    style T001 fill:#b0c4de,stroke:#4682b4
+    style C001 fill:#90ee90
+    style C002 fill:#90ee90
+    style C003 fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style AN001 fill:#87ceeb
+    style IG001 fill:#e0e0ff
+    style P001 fill:#dda0dd,stroke:#8b008b
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LP[" Parameter "] ~~~ LA[" Assumption "] ~~~ LT[" Theory "] ~~~ LAN[" Analysis "] ~~~ LCF[" Foundational Claim "] ~~~ LCD[" Derived Claim "] ~~~ LPR[" Prediction "] ~~~ LIG[" Independence Group "]:::bigText
+    style LP  fill:#ffd700,stroke:#b8860b
+    style LA  fill:#ffa07a,stroke:#cd6600
+    style LT  fill:#b0c4de,stroke:#4682b4
+    style LAN fill:#87ceeb,stroke:#1e90ff
+    style LCF fill:#90ee90,stroke:#228b22
+    style LCD fill:#c8e6c9,stroke:#388e3c
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LIG fill:#e0e0ff,stroke:#6666cc
+```
+
 **Transition to CONFIRMED after the Sobral plates are measured.**
 
 ```python
@@ -1000,7 +1370,54 @@ gateway.query("refutation_impact", pid="P-001")
 # If P-001 were refuted, ALL THREE claims and BOTH assumptions would be called into question.
 ```
 
-**Note on the second expedition (Principe):** Eddington's Principe expedition also measured the deflection but with lower precision. It would ideally form a second independence group `IG-002` with a `PairwiseSeparation` documenting why the two sites constitute independent evidence (different telescopes, different locations, different observers). The current independence group deadlock described in Section 2.3 prevents registering `IG-002` cleanly. Once the validator fix is applied (only require separations when both groups have member predictions), the full two-site chain can be modeled.
+**Conclusion chain — how the epistemic path leads to confirmation:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    GR["T-001: General Relativity\nEinstein 1915\ngravity = spacetime curvature"]:::bigText
+    C1["C-001\ngravity curves spacetime\n[Foundational]"]
+    C2["C-002\nlight follows null geodesics\n[Foundational]"]
+    C3["C-003\n1.75 arcsec deflection at solar limb\n[Derived — mathematically computed\nfrom C-001 + C-002]"]
+    P001["P-001  FULLY_SPECIFIED  free_params=0\npredict 1.75 arcsec deflection\nNOVEL_PREDICTION: made 1915, measured 1919"]:::bigText
+    A001["A-001\nplate accuracy ±0.3 arcsec\n[Empirical — tested by P-001]"]
+    A002["A-002\nref. stars stable\n[Methodological — P-001 conditional on this]"]
+    OBS["Sobral, 29 May 1919\nobserved = 1.98 arcsec\n(within error bars of 1.75 arcsec)"]:::bigText
+    OUT["✅ CONFIRMED\nGR prediction validated\nNewtonian prediction (0.875 arcsec) excluded\nD-001 Discovery registered"]:::bigText
+
+    GR --> C1 & C2
+    C1 & C2 -->|"derive"| C3
+    C3 -->|"quantified by PAR-001"| P001
+    A001 -->|"tested by P-001"| P001
+    A002 -.->|"P-001 conditional on"| P001
+    P001 -->|"compared against"| OBS
+    OBS --> OUT
+
+    style GR fill:#b0c4de
+    style C1 fill:#90ee90
+    style C2 fill:#90ee90
+    style C3 fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style A001 fill:#ffa07a,stroke:#228b22,stroke-width:2px
+    style A002 fill:#ffa07a
+    style P001 fill:#dda0dd,stroke:#8b008b,stroke-width:2px
+    style OBS fill:#fff0f0,stroke:#ff6666
+    style OUT fill:#e8ffe8,stroke:#228b22,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LT[" Theory "] ~~~ LCF[" Foundational Claim "] ~~~ LCD[" Derived Claim "] ~~~ LA[" Assumption "] ~~~ LPR[" Prediction "] ~~~ LOBS[" Observation "] ~~~ LOUT[" Confirmed outcome "]:::bigText
+    style LT   fill:#b0c4de,stroke:#4682b4
+    style LCF  fill:#90ee90,stroke:#228b22
+    style LCD  fill:#c8e6c9,stroke:#388e3c
+    style LA   fill:#ffa07a,stroke:#cd6600
+    style LPR  fill:#dda0dd,stroke:#8b008b
+    style LOBS fill:#fff0f0,stroke:#ff6666
+    style LOUT fill:#e8ffe8,stroke:#228b22,stroke-width:2px
+```
+
+**Note on the second expedition (Principe):** Eddington's Principe expedition also measured the deflection but with lower precision. It forms a natural second independence group `IG-002`. Using the registration order from Section 2.3: register IG-001 and IG-002 (both empty), then register a `PairwiseSeparation` documenting why the two sites are independent (different telescopes, different locations, different observers), then add predictions to each group. The full two-site chain models cleanly.
 
 ---
 
@@ -1147,6 +1564,57 @@ gateway.register("prediction", {
 # A-001.tested_by → {P-001}, A-002.tested_by → {P-001}
 ```
 
+**Full entity graph (before the measurement):**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    PAR001["PAR-001\nexpected_fringe_shift = 0.4\n[Parameter]"]
+    PAR002["PAR-002\nsensitivity = 0.01 fringes\n[Parameter]"]
+    A001["A-001\nEther exists as absolute rest frame\n[Assumption · Empirical  ← central hypothesis]"]
+    A002["A-002\nNo local ether drag on apparatus\n[Assumption · Empirical]"]
+    C001["C-001\nLight speed is relative to ether\n[Claim · Foundational]"]
+    C002["C-002\nEarth's motion → detectable ether wind\n[Claim · Derived · Numerical]"]
+    AN001["AN-001\nmm_interferometer_1887.py\n[Analysis · 36 observations]"]
+    IG001["IG-001\nMichelson-Morley apparatus  July 1887\n[IndependenceGroup]"]
+    P001["P-001\npredict 0.4 fringe shift\n[Prediction · FULLY_SPECIFIED · NOVEL]"]
+
+    PAR001 -->|"used_in_analyses"| AN001
+    PAR002 -->|"used_in_analyses"| AN001
+    A001 -->|"used_in_claims"| C001
+    A001 -->|"used_in_claims"| C002
+    A002 -->|"used_in_claims"| C002
+    C001 -->|"depends_on"| C002
+    AN001 -->|"claims_covered"| C002
+    C001 & C002 -->|"claim_ids"| P001
+    P001 -->|"tests_assumptions"| A001
+    P001 -->|"tests_assumptions"| A002
+    P001 -->|"independence_group"| IG001
+
+    style PAR001 fill:#ffd700
+    style PAR002 fill:#ffd700
+    style A001 fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style A002 fill:#ffa07a
+    style C001 fill:#90ee90
+    style C002 fill:#90ee90
+    style AN001 fill:#87ceeb
+    style IG001 fill:#e0e0ff
+    style P001 fill:#dda0dd,stroke:#8b008b
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LP[" Parameter "] ~~~ LAH[" Assumption: central hypothesis "] ~~~ LA[" Assumption "] ~~~ LAN[" Analysis "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LIG[" Independence Group "]:::bigText
+    style LP  fill:#ffd700,stroke:#b8860b
+    style LAH fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style LA  fill:#ffa07a,stroke:#cd6600
+    style LAN fill:#87ceeb,stroke:#1e90ff
+    style LC  fill:#90ee90,stroke:#228b22
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LIG fill:#e0e0ff,stroke:#6666cc
+```
+
 **The measurement returns 0.01 fringes. The prediction is refuted.**
 
 ```python
@@ -1194,6 +1662,94 @@ gateway.query("assumption_support_status", aid="A-002")
 #   "dependent_predictions": {"P-001"},
 #   "tested_by":             {"P-001"},
 # }
+```
+
+**Refutation impact — what the queries surface:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    P001["P-001 → ❌ REFUTED\nobserved = 0.01 fringes\nexpected = 0.4 fringes  (40× above noise floor)"]:::bigText
+
+    subgraph ri["refutation_impact(P-001)"]:::bigText
+        C001["C-001  ⚠️ called into question\nLight requires ether medium"]:::bigText
+        C002["C-002  ⚠️ called into question\nDetectable ether wind  [ancestor: C-001]"]
+        A001["A-001  ⚠️ DIRECT PRESSURE\ntested_by = {P-001 — REFUTED}\nEther as absolute rest frame"]:::bigText
+        A002["A-002  ⚠️ DIRECT PRESSURE\ntested_by = {P-001 — REFUTED}\nNo local ether drag"]:::bigText
+    end
+
+    DE001["DE-001\nLuminiferous ether abandoned\n[DeadEnd · resolved]"]
+
+    P001 -->|"claim_ids"| C001
+    P001 -->|"claim_ids"| C002
+    P001 -->|"tests_assumptions"| A001
+    P001 -->|"tests_assumptions"| A002
+    A001 -.->|"concept abandoned → "| DE001
+
+    NOTE["The web surfaces these connections.\nIt does NOT automatically retract C-001/C-002\nor mark A-001 false.\nResearcher judgment required."]:::bigText
+
+    style P001 fill:#ffcccc,stroke:#cc0000,stroke-width:2px
+    style C001 fill:#ffe0b2,stroke:#e65100
+    style C002 fill:#ffe0b2,stroke:#e65100
+    style A001 fill:#ff9966,stroke:#cc3300,stroke-width:2px
+    style A002 fill:#ff9966,stroke:#cc3300
+    style DE001 fill:#ffe4e4,stroke:#cc0000
+    style NOTE fill:#f5f5f5,stroke:#999,stroke-dasharray:4
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LREF[" Refuted prediction "] ~~~ LCQ[" Claim under question "] ~~~ LAP[" Assumption under pressure "] ~~~ LDE[" Dead end "] ~~~ LN[" Note "]:::bigText
+    style LREF fill:#ffcccc,stroke:#cc0000,stroke-width:2px
+    style LCQ  fill:#ffe0b2,stroke:#e65100
+    style LAP  fill:#ff9966,stroke:#cc3300,stroke-width:2px
+    style LDE  fill:#ffe4e4,stroke:#cc0000
+    style LN   fill:#f5f5f5,stroke:#999,stroke-dasharray:4
+```
+
+**Conclusion chain — how null result leads to paradigm shift:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    A001["A-001\nEther exists as absolute rest frame\n[Empirical assumption — the central hypothesis]"]
+    A002["A-002\nNo local ether drag\n[Empirical — structural control]"]
+    C001["C-001\nLight speed is relative to ether\n[Foundational claim]"]
+    C002["C-002\nEarth's orbital velocity → 0.4 fringe shift\n[Derived — PAR-001 = 0.4 fringes]"]
+    P001["P-001  FULLY_SPECIFIED  free_params=0\npredict 0.4 fringe shift across full rotation"]:::bigText
+    OBS["Measurement\nCase Western Reserve, July 8-12 1887\nobserved = 0.01 fringes\n(apparatus sensitivity = 0.01 — at the noise floor)"]:::bigText
+    REFUTED["❌ REFUTED\nNull result: fringe shift is 40× below prediction\nP-001 → STRESSED → REFUTED"]:::bigText
+    AFTERMATH["A-001 tested_by = {P-001 — REFUTED}\nA-002 tested_by = {P-001 — REFUTED}\nC-001, C-002 called into question\nDE-001 registered — ether hypothesis abandoned\n→ Einstein 1905: special relativity, no ether needed"]:::bigText
+
+    A001 -->|"grounds"| C001
+    A001 & A002 -->|"underpins"| C002
+    C001 -->|"depends_on"| C002
+    C002 -->|"grounds"| P001
+    P001 -->|"compared against"| OBS
+    OBS --> REFUTED
+    REFUTED --> AFTERMATH
+
+    style A001 fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style A002 fill:#ffa07a
+    style C001 fill:#90ee90
+    style C002 fill:#90ee90
+    style P001 fill:#dda0dd,stroke:#8b008b
+    style OBS fill:#fff0f0,stroke:#ff6666
+    style REFUTED fill:#ffcccc,stroke:#cc0000,stroke-width:2px
+    style AFTERMATH fill:#f0f0ff,stroke:#6666cc,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LA[" Assumption "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LOBS[" Observation "] ~~~ LREF[" Refuted outcome "] ~~~ LAFT[" Aftermath / paradigm shift "]:::bigText
+    style LA   fill:#ffa07a,stroke:#cd6600
+    style LC   fill:#90ee90,stroke:#228b22
+    style LPR  fill:#dda0dd,stroke:#8b008b
+    style LOBS fill:#fff0f0,stroke:#ff6666
+    style LREF fill:#ffcccc,stroke:#cc0000,stroke-width:2px
+    style LAFT fill:#f0f0ff,stroke:#6666cc
 ```
 
 **The researcher records the ether hypothesis as a dead end.**
@@ -1370,6 +1926,58 @@ gateway.register("prediction", {
 # Validator: CONDITIONAL prediction must have conditional_on — it does. ok.
 ```
 
+**Full entity graph (after initial registration, before any parameter changes):**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    PAR001["PAR-001\ntest_split_ratio = 0.20\n[Parameter]"]
+    PAR002["PAR-002\nmin_precision_threshold = 0.85\n[Parameter]"]
+    A001["A-001\nDistribution stable: train ≈ deploy\n[Assumption · Empirical]\nfalsifiable_consequence: ✓  tested_by: ∅ ← gap"]
+    A002["A-002\nTemporal split is unbiased\n[Assumption · Methodological]"]
+    C001["C-001\nFraudNet learned genuine patterns\n[Claim · Foundational]"]
+    C002["C-002\nPatterns generalise at precision ≥ 0.85\n[Claim · Derived · Numerical]"]
+    AN001["AN-001\nmodel_evaluation.py\n--split 0.20 --threshold 0.85\n[Analysis]"]
+    IG001["IG-001\nFraudNet v1.0 temporal split eval\n[IndependenceGroup]"]
+    P001["P-001\npredict precision ≥ 0.85\n[Prediction · CONDITIONAL]"]
+
+    PAR001 -->|"used_in_analyses"| AN001
+    PAR002 -->|"used_in_analyses"| AN001
+    A001 -->|"used_in_claims"| C001
+    A001 & A002 -->|"used_in_claims"| C002
+    C001 -->|"depends_on"| C002
+    AN001 -->|"claims_covered"| C002
+    C001 & C002 -->|"claim_ids"| P001
+    P001 -.->|"conditional_on"| A001
+    P001 -.->|"conditional_on"| A002
+    P001 -->|"independence_group"| IG001
+    PAR002 -.->|"parameter_constraints ≥ 0.85"| C002
+
+    style PAR001 fill:#ffd700
+    style PAR002 fill:#ffd700
+    style A001 fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style A002 fill:#ffa07a
+    style C001 fill:#90ee90
+    style C002 fill:#c8e6c9,stroke:#388e3c
+    style AN001 fill:#87ceeb
+    style IG001 fill:#e0e0ff
+    style P001 fill:#dda0dd,stroke:#8b008b
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LP[" Parameter "] ~~~ LAR[" Assumption: unmonitored risk "] ~~~ LA[" Assumption "] ~~~ LAN[" Analysis "] ~~~ LCF[" Foundational Claim "] ~~~ LCD[" Derived Claim "] ~~~ LPR[" Prediction "] ~~~ LIG[" Independence Group "]:::bigText
+    style LP  fill:#ffd700,stroke:#b8860b
+    style LAR fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style LA  fill:#ffa07a,stroke:#cd6600
+    style LAN fill:#87ceeb,stroke:#1e90ff
+    style LCF fill:#90ee90,stroke:#228b22
+    style LCD fill:#c8e6c9,stroke:#388e3c
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LIG fill:#e0e0ff,stroke:#6666cc
+```
+
 **Evaluation runs. Precision = 0.91. Prediction confirmed.**
 
 ```python
@@ -1465,6 +2073,55 @@ gateway.transition("prediction", "P-001", "STRESSED")
 # This is a WARNING, not a CRITICAL — it calls for review, not a block.
 ```
 
+**Two-parameter cascade diagram — which change is benign and which is not:**
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    subgraph par2["PAR-002: precision threshold  0.85 → 0.90"]:::bigText
+        direction TB
+        PAR2["PAR-002 updated"]:::bigText
+        AN1a["AN-001  ⚠️ stale"]:::bigText
+        C2a["C-002  ⚠️ constrained\nannotation says '≥ 0.85'\n→ update to '≥ 0.90'"]:::bigText
+        P1a["P-001\nobserved = 0.91 > 0.90  ✓\n→ still CONFIRMED"]:::bigText
+        OK["✅ BENIGN\nCurrent result still passes\nUpdate C-002 annotation only"]:::bigText
+        PAR2 --> AN1a --> C2a --> P1a --> OK
+    end
+
+    subgraph par1["PAR-001: test split ratio  0.20 → 0.30"]:::bigText
+        direction TB
+        PAR1["PAR-001 updated"]:::bigText
+        AN1b["AN-001  ⚠️ stale\n(was run with --split 0.20)"]:::bigText
+        C2b["C-002  ⚠️ affected"]:::bigText
+        P1b["P-001  ⚠️ affected\nobserved=0.91 was on 0.20 split\n→ rerun with 0.30 → 0.87"]:::bigText
+        STRESS["⚠️ NOT BENIGN\n0.87 < new threshold 0.90\nP-001 → STRESSED\nvalidate_coverage flags it"]:::bigText
+        PAR1 --> AN1b --> C2b --> P1b --> STRESS
+    end
+
+    style PAR1 fill:#ff9999,stroke:#cc0000
+    style PAR2 fill:#ffd700,stroke:#b8860b
+    style AN1a fill:#ffcccc
+    style AN1b fill:#ffcccc
+    style C2a fill:#ffe0b2
+    style C2b fill:#ffe0b2
+    style P1a fill:#dda0dd
+    style P1b fill:#dda0dd
+    style OK fill:#e8ffe8,stroke:#228b22
+    style STRESS fill:#fff3e0,stroke:#e65100,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LCP[" Changed parameter "] ~~~ LST[" Stale analysis "] ~~~ LAC[" Affected claim "] ~~~ LPR[" Affected prediction "] ~~~ LOK[" Benign — result still passes "] ~~~ LWN[" Warning — result now fails threshold "]:::bigText
+    style LCP fill:#ff9999,stroke:#cc0000
+    style LST fill:#ffcccc,stroke:#cc3333
+    style LAC fill:#ffe0b2,stroke:#e65100
+    style LPR fill:#dda0dd,stroke:#8b008b
+    style LOK fill:#e8ffe8,stroke:#228b22
+    style LWN fill:#fff3e0,stroke:#e65100,stroke-width:2px
+```
+
 **What the health check now shows:**
 
 ```python
@@ -1491,6 +2148,52 @@ gateway.query("assumption_support_status", aid="A-001")
 # Validator: validate_assumption_testability will flag A-001 as WARNING.
 ```
 
+**Full epistemic chain — from initial claim to stressed conclusion:**
+
+```mermaid
+graph TD
+classDef bigText font-size:18px;
+    A001["A-001\nDistribution stable: train ≈ deploy\n[Empirical · tested_by=∅  ← unmonitored risk]"]
+    A002["A-002\nTemporal split is unbiased\n[Methodological]"]
+    C001["C-001\nFraudNet learned genuine patterns"]:::bigText
+    C002["C-002\nPatterns generalise at precision ≥ 0.85\n→ updated to ≥ 0.90 after PAR-002 change"]:::bigText
+    P001_init["P-001  CONDITIONAL on A-001, A-002\npredict precision ≥ 0.85\nCONFIRMED  observed=0.91\n[based on split=0.20]"]
+    PAR1["PAR-001\n0.20 → 0.30"]:::bigText
+    RERUN["Re-run AN-001 with split=0.30\nnew observed = 0.87\n(Q3 seasonality not in training window)"]:::bigText
+    P001_final["P-001 → STRESSED\n0.87 < threshold 0.90\nA-001 conditional basis showing strain"]:::bigText
+    GAP["Structural gaps exposed:\n1. A-001 has falsifiable_consequence\n   but tested_by=∅\n   → validate_assumption_testability: WARNING\n2. P-001 is CONDITIONAL on A-001\n   but A-001 is never formally tested\n   → the risk was always there, now visible"]:::bigText
+
+    A001 & A002 -->|"underpin"| C001 & C002
+    C001 & C002 -->|"ground"| P001_init
+    P001_init -->|"PAR-001 change triggers rerun"| PAR1
+    PAR1 --> RERUN
+    RERUN -->|"result drops below threshold"| P001_final
+    P001_final -.->|"exposes"| GAP
+
+    style A001 fill:#ffa07a,stroke:#cc3300,stroke-width:2px
+    style A002 fill:#ffa07a
+    style C001 fill:#90ee90
+    style C002 fill:#c8e6c9
+    style P001_init fill:#dda0dd
+    style PAR1 fill:#ff9999,stroke:#cc0000
+    style RERUN fill:#fff0f0,stroke:#ff6666
+    style P001_final fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style GAP fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+```
+
+```mermaid
+graph LR
+classDef bigText font-size:18px;
+    LA[" Assumption "] ~~~ LC[" Claim "] ~~~ LPR[" Prediction "] ~~~ LCP[" Changed parameter "] ~~~ LOBS[" Rerun / observation "] ~~~ LST[" Stressed outcome "] ~~~ LGP[" Structural gap exposed "]:::bigText
+    style LA   fill:#ffa07a,stroke:#cd6600
+    style LC   fill:#90ee90,stroke:#228b22
+    style LPR  fill:#dda0dd,stroke:#8b008b
+    style LCP  fill:#ff9999,stroke:#cc0000,stroke-width:2px
+    style LOBS fill:#fff0f0,stroke:#ff6666
+    style LST  fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style LGP  fill:#fff9c4,stroke:#f57f17
+```
+
 **The web has revealed two structural gaps that pre-existed the parameter changes:**
 1. A-001 has a `falsifiable_consequence` but no prediction in `tested_by`. The team never formally instrumented the distribution monitoring.
 2. P-001 is CONDITIONAL on A-001 but A-001 is not being actively tested. The conditional dependency is a known risk that was never formally tracked.
@@ -1511,7 +2214,7 @@ These are not bugs introduced by the examples. They are real design gaps that th
 | Transition claim to RETRACTED while predictions still cite it | `status="BLOCKED"` (CRITICAL finding) |
 | Prediction has same assumption in both `tests_assumptions` and `conditional_on` | `status="BLOCKED"` (CRITICAL finding) |
 | `FULLY_SPECIFIED` prediction with `free_params != 0` | `status="BLOCKED"` (CRITICAL finding) |
-| Register second independence group without a pairwise separation | `status="BLOCKED"` (CRITICAL finding) — see design gap below |
+| Both independence groups have member predictions but no pairwise separation exists | `status="BLOCKED"` (CRITICAL finding) |
 
 ### Things the gateway does NOT do automatically
 
@@ -1522,10 +2225,3 @@ These are not bugs introduced by the examples. They are real design gaps that th
 | Assumption under pressure from a refuted prediction | Explicitly review the assumption; the web flags it, it does not change the assumption's status |
 | Analysis re-run with new parameters | Record the new result; transition the prediction status if warranted |
 
-### Design gaps discovered
-
-1. **Independence group registration deadlock.** The current `validate_independence_semantics` validator blocks the registration of a second independence group if no pairwise separation exists, but a pairwise separation cannot be registered before both groups exist. The fix: only require pairwise separations between groups that have at least one member prediction. Until this is resolved, use a single independence group for multi-site or multi-experiment evidence.
-
-2. **No `record_result` operation yet.** The `Analysis` entity has `path` and `command` for provenance, but there is no implemented mechanism to record the result of running the analysis (including git SHA capture). `check_stale` and staleness-based findings depend on this. The `ds record` CLI command and `record_result` MCP tool are specified but not yet implemented.
-
-3. **`conditional_on` predictions do not automatically surface as suspect when their condition assumption is under pressure.** If A-001 is tested by P-001 and P-001 is REFUTED, P-002 (which is `conditional_on` A-001) does not automatically become STRESSED. The researcher must query `assumption_support_status` to find P-002 and decide whether to transition it. A future health-check rule could surface all CONDITIONAL predictions whose `conditional_on` assumptions have active REFUTED predictions as tests as automatic WARNING findings.

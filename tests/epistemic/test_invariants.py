@@ -6,6 +6,7 @@ import pytest
 from desitter.epistemic.invariants import (
     validate_all,
     validate_assumption_testability,
+    validate_conditional_assumption_pressure,
     validate_coverage,
     validate_evidence_consistency,
     validate_foundational_claim_deps,
@@ -113,16 +114,41 @@ class TestTierConstraints:
 
 class TestIndependenceSemantics:
     def test_missing_pairwise_separation(self):
+        # Both groups must have member predictions before the separation
+        # requirement kicks in.
+        web = EpistemicWeb()
+        web = web.register_independence_group(make_group(1))
+        web = web.register_independence_group(make_group(2))
+        web = web.register_prediction(make_prediction(1, independence_group=make_group_id(1)))
+        web = web.register_prediction(make_prediction(2, independence_group=make_group_id(2)))
+        findings = validate_independence_semantics(web)
+        assert any("Missing pairwise" in f.message for f in findings)
+
+    def test_groups_without_predictions_require_no_separation(self):
+        # Two empty groups: no separation needed — prevents the registration
+        # deadlock where the separation requires both groups and the second
+        # group requires the separation.
         web = EpistemicWeb()
         web = web.register_independence_group(make_group(1))
         web = web.register_independence_group(make_group(2))
         findings = validate_independence_semantics(web)
-        assert any("Missing pairwise" in f.message for f in findings)
+        assert not any("Missing pairwise" in f.message for f in findings)
+
+    def test_one_empty_group_no_separation_needed(self):
+        # IG-001 has predictions, IG-002 does not — no separation required yet.
+        web = EpistemicWeb()
+        web = web.register_independence_group(make_group(1))
+        web = web.register_independence_group(make_group(2))
+        web = web.register_prediction(make_prediction(1, independence_group=make_group_id(1)))
+        findings = validate_independence_semantics(web)
+        assert not any("Missing pairwise" in f.message for f in findings)
 
     def test_complete_pairwise(self):
         web = EpistemicWeb()
         web = web.register_independence_group(make_group(1))
         web = web.register_independence_group(make_group(2))
+        web = web.register_prediction(make_prediction(1, independence_group=make_group_id(1)))
+        web = web.register_prediction(make_prediction(2, independence_group=make_group_id(2)))
         web = web.add_pairwise_separation(make_separation(1))
         findings = validate_independence_semantics(web)
         assert not any("Missing pairwise" in f.message for f in findings)
@@ -146,6 +172,10 @@ class TestIndependenceSemantics:
         web = web.register_independence_group(make_group(1))
         web = web.register_independence_group(make_group(2))
         web = web.register_independence_group(make_group(3))
+        # Populate all three groups so the separation requirement applies.
+        web = web.register_prediction(make_prediction(1, independence_group=make_group_id(1)))
+        web = web.register_prediction(make_prediction(2, independence_group=make_group_id(2)))
+        web = web.register_prediction(make_prediction(3, independence_group=make_group_id(3)))
         # Only (1,2) exists, so (1,3) and (2,3) should be flagged.
         web = web.add_pairwise_separation(make_separation(1, group_a=make_group_id(1), group_b=make_group_id(2)))
 
@@ -389,3 +419,120 @@ class TestValidateAll:
         """An empty web should produce no findings."""
         findings = validate_all(EpistemicWeb())
         assert findings == []
+
+
+# ── validate_conditional_assumption_pressure ──────────────────────
+
+class TestConditionalAssumptionPressure:
+    def test_confirmed_conditional_flagged_when_tester_refuted(self):
+        """CONFIRMED prediction conditional on A should be flagged when A's tester is REFUTED."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        # P-001 tests A-001 and has been refuted.
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        # P-002 is CONFIRMED but conditional on A-001.
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.CONFIRMED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.severity == Severity.WARNING
+        assert "P-002" in f.source
+        assert "REFUTED" in f.message
+
+    def test_stressed_conditional_also_flagged(self):
+        """STRESSED predictions are also in scope — they are still active results."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.STRESSED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert any("P-002" in f.source for f in findings)
+
+    def test_pending_conditional_not_flagged(self):
+        """PENDING predictions are not flagged — they haven't been confirmed yet."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.PENDING)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert findings == []
+
+    def test_already_refuted_conditional_not_double_flagged(self):
+        """A REFUTED conditional prediction is already terminal — no need to flag."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert findings == []
+
+    def test_no_refuted_testers_clean(self):
+        """If no predictions testing the conditional assumption are REFUTED, no finding."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.CONFIRMED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert findings == []
+
+    def test_only_pending_tester_not_flagged(self):
+        """A PENDING tester does not put the assumption under pressure."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.PENDING)
+        )
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.CONFIRMED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        assert findings == []
+
+    def test_multiple_conditional_predictions_each_flagged(self):
+        """Each CONFIRMED prediction conditional on a pressured assumption gets its own finding."""
+        web = EpistemicWeb()
+        web = web.register_assumption(make_assumption(1))
+        web = web.register_prediction(
+            make_prediction(1, tests_assumptions={make_assumption_id(1)},
+                            status=PredictionStatus.REFUTED)
+        )
+        web = web.register_prediction(
+            make_prediction(2, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.CONFIRMED)
+        )
+        web = web.register_prediction(
+            make_prediction(3, conditional_on={make_assumption_id(1)},
+                            status=PredictionStatus.CONFIRMED)
+        )
+        findings = validate_conditional_assumption_pressure(web)
+        sources = {f.source for f in findings}
+        assert "predictions/P-002" in sources
+        assert "predictions/P-003" in sources

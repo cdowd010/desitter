@@ -219,7 +219,7 @@ Choosing IDs is the researcher's responsibility. Pick them to be stable and huma
 
 **`Analysis`** represents a piece of work the researcher has run (or will run) using their own tools. deSitter never executes it. The `path` and `command` fields are provenance documentation only — a record of where the code lives and how to invoke it. The `uses_parameters` field links to every `Parameter` the analysis depends on. When any of those parameters change, the health check surfaces this analysis as stale and flags all predictions linked to it. Bidirectional with `Parameter.used_in_analyses`.
 
-Recording an analysis result — capturing the output and the git SHA of the code at the time it ran — will be done via `ds record` (CLI) or `record_result` (MCP tool). These operations are planned and documented in the entity design but not yet implemented; see the [Implementation Status](#implementation-status) section.
+Recording an analysis result is done via `web.record_analysis_result(anid, result, git_sha, result_date)`. This narrow mutation sets three fields on the analysis — `last_result`, `last_result_sha`, and `last_result_date` — without touching any structural fields (path, command, uses_parameters). The `ds record` CLI command and `record_result` MCP tool will route to this web method once the gateway verbs are implemented.
 
 **`IndependenceGroup`** exists because of a subtle statistical requirement: if two predictions both follow from the same data source, they are not independent evidence for the shared claim. Overcounting correlated confirmations inflates the apparent evidentiary support. An `IndependenceGroup` clusters predictions that share a common derivation chain. Every pair of groups must then supply explicit justification for why they are genuinely independent — recorded as a `PairwiseSeparation`. This makes the independence structure of evidence visible and machine-checkable.
 
@@ -825,6 +825,9 @@ The architecture is fully specified and the kernel is fully implemented and test
 | `config.py` — load_config, build_context | Complete |
 | `controlplane/factory.py` — build_gateway | Complete |
 | `controlplane/automation.py` — trigger table, should_render | Complete |
+| `epistemic/model.py` — `Analysis.last_result`, `last_result_sha`, `last_result_date` | Complete |
+| `epistemic/web.py` — `record_analysis_result` | Complete |
+| `epistemic/invariants.py` — `validate_conditional_assumption_pressure` | Complete |
 | `controlplane/gateway.py` — all six verbs | Stub |
 | `controlplane/validate.py` — validate_project, validate_structure | Stub |
 | `controlplane/check.py` — check_stale, check_refs | Stub |
@@ -838,7 +841,7 @@ The architecture is fully specified and the kernel is fully implemented and test
 | `interfaces/mcp/server.py` — create_server, run | Complete |
 | `interfaces/mcp/tools.py` — all tool handlers | Complete (delegates to gateway, which is stub) |
 | `ProseSync` concrete adapter | Not started |
-| `ds record` / `record_result` (analysis result recording) | Not started |
+| `ds record` CLI command / `record_result` MCP tool (gateway wiring) | Not started |
 | Optimistic concurrency control | Not started |
 
 "Stub" means the function signature, docstring, and return type are defined and the design intent is documented, but the body raises `NotImplementedError`. All stubs have passing type checks. The kernel and adapter tests are green.

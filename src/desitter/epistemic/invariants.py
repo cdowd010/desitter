@@ -73,7 +73,12 @@ def validate_independence_semantics(web: EpistemicWeb) -> list[Finding]:
                     f"Prediction {pid} listed but doesn't back-reference this group",
                 ))
 
-    # Check pairwise separation completeness
+    # Check pairwise separation completeness.
+    # A separation is only required once BOTH groups have at least one member
+    # prediction. An empty group is a declaration of intent — requiring a
+    # separation before any predictions exist creates an unresolvable
+    # registration deadlock (the separation needs both groups, the second
+    # group needs the separation to pass validation).
     group_ids = sorted(web.independence_groups.keys())
     seen_pairs: set[tuple[str, str]] = set()
     for ps in web.pairwise_separations.values():
@@ -82,6 +87,9 @@ def validate_independence_semantics(web: EpistemicWeb) -> list[Finding]:
 
     for i, a in enumerate(group_ids):
         for b in group_ids[i + 1:]:
+            if (not web.independence_groups[a].member_predictions
+                    or not web.independence_groups[b].member_predictions):
+                continue
             pair = (min(a, b), max(a, b))
             if pair not in seen_pairs:
                 findings.append(Finding(
@@ -259,6 +267,55 @@ def validate_evidence_consistency(web: EpistemicWeb) -> list[Finding]:
     return findings
 
 
+def validate_conditional_assumption_pressure(web: EpistemicWeb) -> list[Finding]:
+    """WARNING: CONFIRMED/STRESSED predictions conditional on assumptions under active pressure.
+
+    If prediction P is conditional on assumption A (A in P.conditional_on),
+    and some other prediction Q that explicitly tests A (A in Q.tests_assumptions)
+    has been REFUTED, then A is under adversarial pressure. P's status was
+    established when A was considered sound; that basis is now in question.
+
+    Only CONFIRMED and STRESSED predictions are flagged — PENDING predictions
+    haven't been confirmed yet (no false sense of security to break), and
+    REFUTED predictions are already in a terminal state.
+
+    This does NOT automatically change any prediction's status. It surfaces
+    the structural connection so the researcher cannot silently overlook it.
+    """
+    findings: list[Finding] = []
+
+    # Build: assumption → set of REFUTED predictions that test it
+    refuted_tests: dict = {}
+    for pid, pred in web.predictions.items():
+        if pred.status == PredictionStatus.REFUTED:
+            for aid in pred.tests_assumptions:
+                refuted_tests.setdefault(aid, set()).add(pid)
+
+    if not refuted_tests:
+        return findings
+
+    active_statuses = {PredictionStatus.CONFIRMED, PredictionStatus.STRESSED}
+    for pid, pred in web.predictions.items():
+        if pred.status not in active_statuses:
+            continue
+        pressured = pred.conditional_on & refuted_tests.keys()
+        if not pressured:
+            continue
+        refuting_preds: set = set()
+        for aid in pressured:
+            refuting_preds.update(refuted_tests[aid])
+        findings.append(Finding(
+            Severity.WARNING,
+            f"predictions/{pid}",
+            f"Prediction {pid} is {pred.status.value} but is conditional on "
+            f"assumption(s) {sorted(pressured)} whose tester(s) "
+            f"{sorted(refuting_preds)} have been REFUTED. "
+            f"The conditional basis of this prediction is now under pressure.",
+        ))
+
+    return findings
+
+
 def validate_all(web: EpistemicWeb) -> list[Finding]:
     """Run all domain validators."""
     return (
@@ -271,4 +328,5 @@ def validate_all(web: EpistemicWeb) -> list[Finding]:
         + validate_assumption_testability(web)
         + validate_implicit_assumption_coverage(web)
         + validate_foundational_claim_deps(web)
+        + validate_conditional_assumption_pressure(web)
     )

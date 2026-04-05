@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from datetime import date
 
 from .model import (
     Analysis,
@@ -485,6 +486,32 @@ class EpistemicWeb:
             raise BrokenReferenceError(f"Discovery {did} does not exist")
         new = self._copy()
         new.discoveries[did].status = new_status
+        return new
+
+    def record_analysis_result(
+        self,
+        anid: AnalysisId,
+        result: object,
+        *,
+        git_sha: str | None = None,
+        result_date: date | None = None,
+    ) -> EpistemicWeb:
+        """Record the output of a completed analysis run.
+
+        Sets last_result, last_result_sha, and last_result_date on the
+        Analysis while preserving every other field (path, command,
+        uses_parameters, claims_covered) exactly as-is.
+
+        This is intentionally a narrow mutation — the researcher records
+        what came out of running the analysis without touching any of the
+        provenance or structural metadata.
+        """
+        if anid not in self.analyses:
+            raise BrokenReferenceError(f"Analysis {anid} does not exist")
+        new = self._copy()
+        new.analyses[anid].last_result = result
+        new.analyses[anid].last_result_sha = git_sha
+        new.analyses[anid].last_result_date = result_date
         return new
 
     # ── Update mutations — re-links bidirectional relationships ───

@@ -394,3 +394,65 @@ class TestUpdateDeadEnd:
         with pytest.raises(BrokenReferenceError):
             rich_web.update_dead_end(updated)
 
+
+# ── record_analysis_result ────────────────────────────────────────
+
+class TestRecordAnalysisResult:
+    def test_sets_result_fields(self):
+        web = EpistemicWeb()
+        web = web.register_analysis(make_analysis(1))
+        web2 = web.record_analysis_result(make_analysis_id(1), result=0.91, git_sha="abc123")
+        analysis = web2.analyses[make_analysis_id(1)]
+        assert analysis.last_result == 0.91
+        assert analysis.last_result_sha == "abc123"
+        assert analysis.last_result_date is None
+
+    def test_sets_result_date(self):
+        from datetime import date
+        web = EpistemicWeb()
+        web = web.register_analysis(make_analysis(1))
+        d = date(2024, 6, 15)
+        web2 = web.record_analysis_result(make_analysis_id(1), result="pass", result_date=d)
+        assert web2.analyses[make_analysis_id(1)].last_result_date == d
+
+    def test_original_web_unchanged(self):
+        web = EpistemicWeb()
+        web = web.register_analysis(make_analysis(1))
+        _ = web.record_analysis_result(make_analysis_id(1), result=42)
+        assert web.analyses[make_analysis_id(1)].last_result is None
+
+    def test_preserves_structural_fields(self):
+        web = EpistemicWeb()
+        web = web.register_parameter(make_parameter(1))
+        web = web.register_analysis(
+            make_analysis(1, uses_parameters={make_parameter_id(1)}, path="foo.py")
+        )
+        web2 = web.record_analysis_result(make_analysis_id(1), result="done")
+        analysis = web2.analyses[make_analysis_id(1)]
+        assert analysis.path == "foo.py"
+        assert make_parameter_id(1) in analysis.uses_parameters
+
+    def test_preserves_parameter_backlink(self):
+        """recording a result must not corrupt the parameter staleness index."""
+        web = EpistemicWeb()
+        web = web.register_parameter(make_parameter(1))
+        web = web.register_analysis(
+            make_analysis(1, uses_parameters={make_parameter_id(1)})
+        )
+        web2 = web.record_analysis_result(make_analysis_id(1), result=1.0)
+        assert make_analysis_id(1) in web2.parameters[make_parameter_id(1)].used_in_analyses
+
+    def test_nonexistent_analysis_raises(self):
+        web = EpistemicWeb()
+        with pytest.raises(BrokenReferenceError):
+            web.record_analysis_result(make_analysis_id(99), result=0)
+
+    def test_overwrites_previous_result(self):
+        web = EpistemicWeb()
+        web = web.register_analysis(make_analysis(1))
+        web = web.record_analysis_result(make_analysis_id(1), result=0.80, git_sha="old")
+        web = web.record_analysis_result(make_analysis_id(1), result=0.91, git_sha="new")
+        assert web.analyses[make_analysis_id(1)].last_result == 0.91
+        assert web.analyses[make_analysis_id(1)].last_result_sha == "new"
+
+

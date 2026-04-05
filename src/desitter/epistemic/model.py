@@ -177,6 +177,11 @@ class Analysis:
     claims_covered: set[ClaimId] = field(default_factory=set)
     uses_parameters: set[ParameterId] = field(default_factory=set)
     notes: str | None = None
+    # Result fields — populated by record_analysis_result once the researcher
+    # runs the analysis and records the output.
+    last_result: Any = None                      # the recorded output value
+    last_result_sha: str | None = None           # git SHA of the code at run time
+    last_result_date: date | None = None         # date the result was recorded
 
 
 @dataclass
