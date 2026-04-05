@@ -45,7 +45,6 @@ These are execution rules, not just ideals. New work should be rejected if it vi
 - [x] Core gateway verbs: `register`, `get`, `list`, `set`, `transition`, `query`.
 - [x] Base Python client with `connect()` and entity-specific `register_*`, `get_*`, `list_*`, and `transition_*` helpers.
 - [x] Python client tests for round-trip registration, `connect()` wiring, and schema-error surfacing.
-- [x] CLI and MCP paths feature-gated with explicit error responses instead of raw `NotImplementedError` exceptions.
 - [ ] Entity-specific `set_*` helpers are not present on `DeSitterClient`.
 - [ ] `record_analysis_result` is not exposed through `Gateway`.
 - [ ] `record_analysis_result` is not exposed through `DeSitterClient`.
