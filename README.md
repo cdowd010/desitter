@@ -184,38 +184,45 @@ All domain exceptions inherit from `EpistemicError`:
 
 ## Architecture
 
-Episteme is built in layers, from the inside out. The innermost layer, the
-**epistemic kernel**, is pure Python with zero external dependencies. It
-defines the entity model, the `EpistemicGraph` aggregate root, and all
-invariant rules. Nothing in the kernel touches a file, a database, or a
-network socket.
+Episteme is built around a pure **epistemic kernel** with zero external
+dependencies. It defines the entity model, the `EpistemicGraph` aggregate
+root, and all invariant rules. Nothing in the kernel touches a file, a
+database, or a network socket.
+
+Dependencies form a directed acyclic graph with the kernel at the center --
+not a strict linear onion:
 
 ```
 +---------------------------------------------------------+
 |  Interface Layer                                        |
 |  cli, humans & scripts    mcp, AI agents                |
-+--------------------------+------------------------------+
-                           |
-+--------------------------v------------------------------+
-|  View Services                                          |
-|  health . status . metrics . evidence                   |
-+--------------------------+------------------------------+
-                           |
-+--------------------------v------------------------------+
-|  Control Plane (single gateway for all mutations)       |
-|  gateway . validate . check . export . prose . render   |
-+--------------------------+------------------------------+
-                           |
-+--------------------------v------------------------------+
-|  Adapters                                               |
-|  json_repository . transaction_log . renderer           |
-+--------------------------+------------------------------+
-                           |
-+--------------------------v------------------------------+
++-------------+------------------+------------------------+
+              |                  |
++-------------v-----------+  +--v--------------------------+
+|  Client                 |  |  View Services              |
+|  EpistemeClient,        |  |  health . status .          |
+|  persistence, typed     |  |  metrics . evidence         |
+|  helpers                |  |  (read-only, kernel only)   |
++-------------+-----------+  +--+------ ------------------+
+              |                  |
++-------------v-----------+     |
+|  Control Plane          |     |
+|  gateway . validate .   |     |
+|  check . export .       |     |
+|  prose . render         |     |
++-------------+-----------+     |
+              |                 |
++-------------v-----------------v---------+
 |  Epistemic Kernel -- pure Python, no I/O                |
 |  types . model . graph . invariants . errors . ports    |
 +---------------------------------------------------------+
 ```
+
+The **client** calls the control plane for mutations and the kernel for types.
+**Views** depend *only* on kernel protocols (`EpistemicGraphPort`,
+`GraphValidator`) -- they have zero imports from the control plane or client.
+**Adapters** (json_repository, transaction_log, renderer) implement kernel
+protocols and are injected at runtime.
 
 All mutations route through a single `Gateway`. A bug fixed at the gateway is
 fixed for every interface simultaneously.
