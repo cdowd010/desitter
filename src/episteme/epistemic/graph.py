@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from datetime import date
+from enum import Enum
 
 from .model import (
     Analysis,
@@ -35,6 +36,9 @@ from .errors import (
 from .types import (
     AnalysisId,
     AssumptionId,
+    AssumptionStatus,
+    ConfidenceTier,
+    EvidenceKind,
     HypothesisId,
     HypothesisStatus,
     DeadEndId,
@@ -42,6 +46,7 @@ from .types import (
     DiscoveryId,
     DiscoveryStatus,
     IndependenceGroupId,
+    MeasurementRegime,
     ObservationId,
     ObservationStatus,
     ParameterId,
@@ -50,6 +55,13 @@ from .types import (
     PredictionStatus,
     ObjectiveId,
     ObjectiveStatus,
+    PREDICTION_TRANSITIONS,
+    HYPOTHESIS_TRANSITIONS,
+    OBJECTIVE_TRANSITIONS,
+    ASSUMPTION_TRANSITIONS,
+    OBSERVATION_TRANSITIONS,
+    DISCOVERY_TRANSITIONS,
+    DEAD_END_TRANSITIONS,
 )
 
 
@@ -526,6 +538,10 @@ class EpistemicGraph:
         independence group exist. Updates bidirectional backlinks:
         ``Assumption.tested_by`` and ``IndependenceGroup.member_predictions``.
 
+        If ``prediction.supersedes`` is set and the referenced prediction
+        exists, the predecessor is automatically transitioned to
+        ``SUPERSEDED`` (if the transition is allowed by the status table).
+
         Args:
             prediction: The prediction to register. Must have a unique ``id``.
 
@@ -534,7 +550,11 @@ class EpistemicGraph:
 
         Raises:
             DuplicateIdError: If ``prediction.id`` already exists.
-            BrokenReferenceError: If any referenced ID does not exist.
+            BrokenReferenceError: If any referenced ID does not exist,
+                including ``supersedes``.
+            InvariantViolation: If prediction fields are logically inconsistent
+                (e.g. FULLY_SPECIFIED with free params, FIT_CHECK with
+                NOVEL_PREDICTION, overlapping tests/conditional assumptions).
         """
         if prediction.id in self.predictions:
             raise DuplicateIdError(f"Prediction {prediction.id} already exists")
@@ -551,6 +571,14 @@ class EpistemicGraph:
                     f"Independence group {prediction.independence_group} does not exist"
                 )
 
+        self._validate_prediction_consistency(prediction)
+
+        if prediction.supersedes:
+            if prediction.supersedes not in self.predictions:
+                raise BrokenReferenceError(
+                    f"Superseded prediction {prediction.supersedes} does not exist"
+                )
+
         new = self._copy()
         new.predictions[prediction.id] = copy.deepcopy(prediction)
 
@@ -564,6 +592,16 @@ class EpistemicGraph:
             gid = prediction.independence_group
             new.independence_groups[gid] = copy.deepcopy(new.independence_groups[gid])
             new.independence_groups[gid].member_predictions.add(prediction.id)
+
+        # Auto-transition predecessor to SUPERSEDED
+        if prediction.supersedes:
+            old_pid = prediction.supersedes
+            old_pred = new.predictions[old_pid]
+            if old_pred.status != PredictionStatus.SUPERSEDED:
+                allowed = PREDICTION_TRANSITIONS.get(old_pred.status, frozenset())
+                if PredictionStatus.SUPERSEDED in allowed:
+                    new.predictions[old_pid] = copy.deepcopy(old_pred)
+                    new.predictions[old_pid].status = PredictionStatus.SUPERSEDED
 
         return new
 
@@ -771,9 +809,43 @@ class EpistemicGraph:
 
         Raises:
             BrokenReferenceError: If the prediction does not exist.
+            InvariantViolation: If the transition is not allowed, or if
+                transitioning to an adjudicated status without the
+                required observed evidence.
         """
         if pid not in self.predictions:
             raise BrokenReferenceError(f"Prediction {pid} does not exist")
+
+        pred = self.predictions[pid]
+        self._check_transition(
+            pred.status, new_status, PREDICTION_TRANSITIONS, "prediction", pid
+        )
+
+        adjudicated = {
+            PredictionStatus.CONFIRMED,
+            PredictionStatus.STRESSED,
+            PredictionStatus.REFUTED,
+        }
+        if new_status in adjudicated:
+            if (
+                pred.measurement_regime == MeasurementRegime.MEASURED
+                and pred.observed is None
+            ):
+                raise InvariantViolation(
+                    f"Cannot transition prediction {pid} to "
+                    f"{new_status.value}: MEASURED regime requires "
+                    f"an observed value"
+                )
+            if (
+                pred.measurement_regime == MeasurementRegime.BOUND_ONLY
+                and pred.observed_bound is None
+            ):
+                raise InvariantViolation(
+                    f"Cannot transition prediction {pid} to "
+                    f"{new_status.value}: BOUND_ONLY regime requires "
+                    f"observed_bound"
+                )
+
         new = self._copy()
         new.predictions[pid] = copy.deepcopy(new.predictions[pid])
         new.predictions[pid].status = new_status
@@ -795,9 +867,14 @@ class EpistemicGraph:
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         if did not in self.dead_ends:
             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
+        self._check_transition(
+            self.dead_ends[did].status, new_status,
+            DEAD_END_TRANSITIONS, "dead_end", did,
+        )
         new = self._copy()
         new.dead_ends[did] = copy.deepcopy(new.dead_ends[did])
         new.dead_ends[did].status = new_status
@@ -808,16 +885,21 @@ class EpistemicGraph:
 
         Args:
             cid: The hypothesis ID to transition.
-            new_status: The new status (ACTIVE, REVISED, or RETRACTED).
+            new_status: The new status (ACTIVE, REVISED, RETRACTED, or DEFERRED).
 
         Returns:
             EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the hypothesis does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         if cid not in self.hypotheses:
             raise BrokenReferenceError(f"Hypothesis {cid} does not exist")
+        self._check_transition(
+            self.hypotheses[cid].status, new_status,
+            HYPOTHESIS_TRANSITIONS, "hypothesis", cid,
+        )
         new = self._copy()
         new.hypotheses[cid] = copy.deepcopy(new.hypotheses[cid])
         new.hypotheses[cid].status = new_status
@@ -828,19 +910,52 @@ class EpistemicGraph:
 
         Args:
             tid: The objective ID to transition.
-            new_status: The new status (ACTIVE, REFINED, ABANDONED, or SUPERSEDED).
+            new_status: The new status.
 
         Returns:
             EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the objective does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         if tid not in self.objectives:
             raise BrokenReferenceError(f"Objective {tid} does not exist")
+        self._check_transition(
+            self.objectives[tid].status, new_status,
+            OBJECTIVE_TRANSITIONS, "objective", tid,
+        )
         new = self._copy()
         new.objectives[tid] = copy.deepcopy(new.objectives[tid])
         new.objectives[tid].status = new_status
+        return new
+
+    def transition_assumption(
+        self, aid: AssumptionId, new_status: AssumptionStatus
+    ) -> EpistemicGraph:
+        """Change an assumption's lifecycle status.
+
+        Args:
+            aid: The assumption ID to transition.
+            new_status: The new status (ACTIVE, QUESTIONED, FALSIFIED,
+                or RETIRED).
+
+        Returns:
+            EpistemicGraph: A new graph instance with the updated status.
+
+        Raises:
+            BrokenReferenceError: If the assumption does not exist.
+            InvariantViolation: If the transition is not allowed.
+        """
+        if aid not in self.assumptions:
+            raise BrokenReferenceError(f"Assumption {aid} does not exist")
+        self._check_transition(
+            self.assumptions[aid].status, new_status,
+            ASSUMPTION_TRANSITIONS, "assumption", aid,
+        )
+        new = self._copy()
+        new.assumptions[aid] = copy.deepcopy(new.assumptions[aid])
+        new.assumptions[aid].status = new_status
         return new
 
     def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicGraph:
@@ -855,9 +970,14 @@ class EpistemicGraph:
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         if did not in self.discoveries:
             raise BrokenReferenceError(f"Discovery {did} does not exist")
+        self._check_transition(
+            self.discoveries[did].status, new_status,
+            DISCOVERY_TRANSITIONS, "discovery", did,
+        )
         new = self._copy()
         new.discoveries[did] = copy.deepcopy(new.discoveries[did])
         new.discoveries[did].status = new_status
@@ -1016,6 +1136,9 @@ class EpistemicGraph:
         Raises:
             BrokenReferenceError: If the prediction does not exist or if
                 any newly referenced ID does not exist.
+            InvariantViolation: If prediction fields are logically inconsistent
+                (e.g. FULLY_SPECIFIED with free params, FIT_CHECK with
+                NOVEL_PREDICTION, overlapping tests/conditional assumptions).
         """
         if new_prediction.id not in self.predictions:
             raise BrokenReferenceError(f"Prediction {new_prediction.id} does not exist")
@@ -1027,6 +1150,8 @@ class EpistemicGraph:
             raise BrokenReferenceError(f"Analysis {new_prediction.analysis} does not exist")
         if new_prediction.independence_group and new_prediction.independence_group not in self.independence_groups:
             raise BrokenReferenceError(f"Independence group {new_prediction.independence_group} does not exist")
+
+        self._validate_prediction_consistency(new_prediction)
 
         new = self._copy()
         new.predictions[new_prediction.id] = copy.deepcopy(new_prediction)
@@ -1756,15 +1881,69 @@ class EpistemicGraph:
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         if oid not in self.observations:
             raise BrokenReferenceError(f"Observation {oid} does not exist")
+        self._check_transition(
+            self.observations[oid].status, new_status,
+            OBSERVATION_TRANSITIONS, "observation", oid,
+        )
         new = self._copy()
         new.observations[oid] = copy.deepcopy(new.observations[oid])
         new.observations[oid].status = new_status
         return new
 
     # ── Invariant checks ──────────────────────────────────────────
+
+    @staticmethod
+    def _validate_prediction_consistency(prediction: Prediction) -> None:
+        """Guard against logically impossible prediction field combinations.
+
+        These are single-entity structural impossibilities that can never
+        be valid regardless of graph context. Enforced at mutation time
+        (Fail Fast) so the graph never contains an incoherent prediction.
+
+        Raises:
+            InvariantViolation: If any field combination is logically impossible.
+        """
+        if prediction.tier == ConfidenceTier.FULLY_SPECIFIED and prediction.free_params != 0:
+            raise InvariantViolation(
+                f"FULLY_SPECIFIED prediction {prediction.id} has "
+                f"{prediction.free_params} free params (must be 0)"
+            )
+        overlap = prediction.tests_assumptions & prediction.conditional_on
+        if overlap:
+            raise InvariantViolation(
+                f"Prediction {prediction.id} cannot both test and condition "
+                f"on the same assumptions: {overlap}"
+            )
+        if (
+            prediction.tier == ConfidenceTier.FIT_CHECK
+            and prediction.evidence_kind
+            in {EvidenceKind.NOVEL_PREDICTION, EvidenceKind.RETRODICTION}
+        ):
+            raise InvariantViolation(
+                f"FIT_CHECK prediction {prediction.id} cannot have "
+                f"evidence_kind={prediction.evidence_kind.value} — "
+                f"only FIT_CONSISTENCY is valid"
+            )
+
+    @staticmethod
+    def _check_transition(
+        current: Enum, new: Enum, table: dict, entity_label: str, entity_id: str
+    ) -> None:
+        """Validate a status transition against an allowed-transitions table.
+
+        Raises:
+            InvariantViolation: If the transition is not allowed.
+        """
+        allowed = table.get(current, frozenset())
+        if new not in allowed:
+            raise InvariantViolation(
+                f"Cannot transition {entity_label} {entity_id} from "
+                f"{current.value} to {new.value}"
+            )
 
     def _check_refs_exist(self, ids: set, registry: dict, label: str) -> None:
         """Ensure every referenced ID exists in the target registry.

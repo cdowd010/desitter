@@ -21,6 +21,7 @@ from .model import (
 from .types import (
     AnalysisId,
     AssumptionId,
+    AssumptionStatus,
     HypothesisId,
     HypothesisStatus,
     DeadEndId,
@@ -640,6 +641,7 @@ class EpistemicGraphPort(Protocol):
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         ...
 
@@ -685,6 +687,23 @@ class EpistemicGraphPort(Protocol):
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
+            InvariantViolation: If the transition is not allowed.
+        """
+        ...
+
+    def transition_assumption(self, aid: AssumptionId, new_status: AssumptionStatus) -> EpistemicGraphPort:
+        """Change an assumption's lifecycle status. Returns a new graph instance.
+
+        Args:
+            aid: The assumption ID to transition.
+            new_status: The target ``AssumptionStatus`` value.
+
+        Returns:
+            EpistemicGraphPort: New graph with the updated assumption status.
+
+        Raises:
+            BrokenReferenceError: If the assumption does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         ...
 
@@ -700,6 +719,7 @@ class EpistemicGraphPort(Protocol):
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
+            InvariantViolation: If the transition is not allowed.
         """
         ...
 

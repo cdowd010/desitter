@@ -99,9 +99,10 @@ class ConfidenceTier(Enum):
     CONDITIONAL: Valid only if explicitly stated assumptions hold, or
         parameterized with free degrees of freedom (``free_params > 0``).
     FIT_CHECK: Agreement unsurprising — the model was tuned/calibrated
-        to match this data. Use ``EvidenceKind`` to distinguish fit
-        (``FIT_CONSISTENCY``) from retrodiction (``RETRODICTION``),
-        which is a separate and stronger form of evidence.
+        to match this data. The only valid ``EvidenceKind`` pairing is
+        ``FIT_CONSISTENCY``. Retrodiction (``RETRODICTION``) is a
+        distinct and stronger form of evidence that belongs under
+        ``FULLY_SPECIFIED`` or ``CONDITIONAL``, not ``FIT_CHECK``.
     """
     FULLY_SPECIFIED = "fully_specified"
     CONDITIONAL = "conditional"
@@ -315,6 +316,30 @@ class AssumptionType(Enum):
     METHODOLOGICAL = "methodological"   # a choice of method or modelling convention
 
 
+class AssumptionStatus(Enum):
+    """Lifecycle state of an assumption in the epistemic graph.
+
+    ACTIVE:
+        Assumption is accepted and in use. Default state.
+    QUESTIONED:
+        Evidence or analysis has cast doubt on this assumption, but it
+        has not been decisively falsified. Downstream entities should be
+        reviewed.
+    FALSIFIED:
+        Testing evidence has shown this assumption does not hold.
+        Predictions conditional on it and hypotheses referencing it
+        should be re-evaluated.
+    RETIRED:
+        No longer relevant to the current research scope. Kept for
+        provenance only.
+    """
+
+    ACTIVE = "active"
+    QUESTIONED = "questioned"
+    FALSIFIED = "falsified"
+    RETIRED = "retired"
+
+
 class Criticality(Enum):
     """How load-bearing an assumption is within the epistemic graph.
 
@@ -354,3 +379,144 @@ class ObservationStatus(Enum):
     VALIDATED = "validated"
     DISPUTED = "disputed"
     RETRACTED = "retracted"
+
+
+# ── Status transition tables ──────────────────────────────────────
+# Each mapping defines the set of statuses reachable from a given status.
+# A missing key or empty set means the status is terminal.
+
+
+PREDICTION_TRANSITIONS: dict[PredictionStatus, frozenset[PredictionStatus]] = {
+    PredictionStatus.PENDING: frozenset({
+        PredictionStatus.CONFIRMED,
+        PredictionStatus.STRESSED,
+        PredictionStatus.REFUTED,
+        PredictionStatus.NOT_YET_TESTABLE,
+        PredictionStatus.SUPERSEDED,
+    }),
+    PredictionStatus.NOT_YET_TESTABLE: frozenset({
+        PredictionStatus.PENDING,
+    }),
+    PredictionStatus.CONFIRMED: frozenset({
+        PredictionStatus.STRESSED,
+        PredictionStatus.REFUTED,
+        PredictionStatus.PENDING,           # re-evaluation
+        PredictionStatus.SUPERSEDED,
+    }),
+    PredictionStatus.STRESSED: frozenset({
+        PredictionStatus.CONFIRMED,
+        PredictionStatus.REFUTED,
+        PredictionStatus.PENDING,           # re-evaluation
+        PredictionStatus.SUPERSEDED,
+    }),
+    PredictionStatus.REFUTED: frozenset({
+        PredictionStatus.PENDING,           # re-test with new evidence
+        PredictionStatus.SUPERSEDED,
+    }),
+    PredictionStatus.SUPERSEDED: frozenset(),   # terminal
+}
+
+
+HYPOTHESIS_TRANSITIONS: dict[HypothesisStatus, frozenset[HypothesisStatus]] = {
+    HypothesisStatus.ACTIVE: frozenset({
+        HypothesisStatus.REVISED,
+        HypothesisStatus.RETRACTED,
+        HypothesisStatus.DEFERRED,
+    }),
+    HypothesisStatus.REVISED: frozenset({
+        HypothesisStatus.ACTIVE,            # further revision accepted
+        HypothesisStatus.RETRACTED,
+        HypothesisStatus.DEFERRED,
+    }),
+    HypothesisStatus.DEFERRED: frozenset({
+        HypothesisStatus.ACTIVE,            # resume
+        HypothesisStatus.RETRACTED,
+    }),
+    HypothesisStatus.RETRACTED: frozenset(),    # terminal
+}
+
+
+OBJECTIVE_TRANSITIONS: dict[ObjectiveStatus, frozenset[ObjectiveStatus]] = {
+    ObjectiveStatus.ACTIVE: frozenset({
+        ObjectiveStatus.REFINED,
+        ObjectiveStatus.ABANDONED,
+        ObjectiveStatus.SUPERSEDED,
+        ObjectiveStatus.ACHIEVED,
+        ObjectiveStatus.INFEASIBLE,
+        ObjectiveStatus.DEFERRED,
+    }),
+    ObjectiveStatus.REFINED: frozenset({
+        ObjectiveStatus.ACTIVE,
+        ObjectiveStatus.ABANDONED,
+        ObjectiveStatus.SUPERSEDED,
+        ObjectiveStatus.ACHIEVED,
+        ObjectiveStatus.INFEASIBLE,
+        ObjectiveStatus.DEFERRED,
+    }),
+    ObjectiveStatus.DEFERRED: frozenset({
+        ObjectiveStatus.ACTIVE,             # resume
+        ObjectiveStatus.ABANDONED,
+    }),
+    ObjectiveStatus.ABANDONED: frozenset(),     # terminal
+    ObjectiveStatus.SUPERSEDED: frozenset(),    # terminal
+    ObjectiveStatus.ACHIEVED: frozenset(),      # terminal
+    ObjectiveStatus.INFEASIBLE: frozenset(),    # terminal
+}
+
+
+ASSUMPTION_TRANSITIONS: dict[AssumptionStatus, frozenset[AssumptionStatus]] = {
+    AssumptionStatus.ACTIVE: frozenset({
+        AssumptionStatus.QUESTIONED,
+        AssumptionStatus.FALSIFIED,
+        AssumptionStatus.RETIRED,
+    }),
+    AssumptionStatus.QUESTIONED: frozenset({
+        AssumptionStatus.ACTIVE,            # doubt resolved
+        AssumptionStatus.FALSIFIED,
+        AssumptionStatus.RETIRED,
+    }),
+    AssumptionStatus.FALSIFIED: frozenset(),    # terminal
+    AssumptionStatus.RETIRED: frozenset(),      # terminal
+}
+
+
+OBSERVATION_TRANSITIONS: dict[ObservationStatus, frozenset[ObservationStatus]] = {
+    ObservationStatus.PRELIMINARY: frozenset({
+        ObservationStatus.VALIDATED,
+        ObservationStatus.DISPUTED,
+        ObservationStatus.RETRACTED,
+    }),
+    ObservationStatus.VALIDATED: frozenset({
+        ObservationStatus.DISPUTED,
+        ObservationStatus.RETRACTED,
+    }),
+    ObservationStatus.DISPUTED: frozenset({
+        ObservationStatus.VALIDATED,         # dispute resolved
+        ObservationStatus.RETRACTED,
+    }),
+    ObservationStatus.RETRACTED: frozenset(),   # terminal
+}
+
+
+DISCOVERY_TRANSITIONS: dict[DiscoveryStatus, frozenset[DiscoveryStatus]] = {
+    DiscoveryStatus.NEW: frozenset({
+        DiscoveryStatus.INTEGRATED,
+        DiscoveryStatus.ARCHIVED,
+    }),
+    DiscoveryStatus.INTEGRATED: frozenset({
+        DiscoveryStatus.ARCHIVED,
+    }),
+    DiscoveryStatus.ARCHIVED: frozenset(),      # terminal
+}
+
+
+DEAD_END_TRANSITIONS: dict[DeadEndStatus, frozenset[DeadEndStatus]] = {
+    DeadEndStatus.ACTIVE: frozenset({
+        DeadEndStatus.RESOLVED,
+        DeadEndStatus.ARCHIVED,
+    }),
+    DeadEndStatus.RESOLVED: frozenset({
+        DeadEndStatus.ARCHIVED,
+    }),
+    DeadEndStatus.ARCHIVED: frozenset(),        # terminal
+}

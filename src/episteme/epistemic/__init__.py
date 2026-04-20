@@ -31,6 +31,7 @@ from .model import (
 from .types import (
     AnalysisId,
     AssumptionId,
+    AssumptionStatus,
     AssumptionType,
     HypothesisCategory,
     HypothesisId,
@@ -73,7 +74,7 @@ __all__ = [
     "PairwiseSeparationId", "ObservationId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
     "PredictionStatus", "DeadEndStatus", "HypothesisStatus", "ObjectiveStatus", "ObjectiveKind", "DiscoveryStatus",
-    "ObservationStatus", "Criticality",
+    "ObservationStatus", "Criticality", "AssumptionStatus",
     "AssumptionType", "HypothesisType", "HypothesisCategory",
     # model
     "Hypothesis", "Assumption", "Prediction", "Objective", "IndependenceGroup",

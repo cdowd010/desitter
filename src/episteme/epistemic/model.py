@@ -15,6 +15,7 @@ from typing import Any
 from .types import (
     AnalysisId,
     AssumptionId,
+    AssumptionStatus,
     AssumptionType,
     HypothesisCategory,
     HypothesisId,
@@ -67,7 +68,8 @@ class Hypothesis:
             this hypothesis. Optional at registration to support early-stage
             or exploratory workflows; should be filled in as the hypothesis
             matures.
-        status: Lifecycle state — ``ACTIVE``, ``REVISED``, or ``RETRACTED``.
+        status: Lifecycle state — ``ACTIVE``, ``REVISED``, ``RETRACTED``,
+            or ``DEFERRED``.
         category: Whether the hypothesis is ``QUANTITATIVE`` (quantitative) or
             ``QUALITATIVE`` (conceptual/structural).
         assumptions: IDs of assumptions this hypothesis depends on. Bidirectional
@@ -140,31 +142,37 @@ class Assumption:
             ``MODERATE``, ``HIGH``, or ``LOAD_BEARING``. Defaults to
             ``MODERATE`` — researchers should explicitly upgrade assumptions
             that are single points of failure.
+        status: Lifecycle state — ``ACTIVE``, ``QUESTIONED``, ``FALSIFIED``,
+            or ``RETIRED``. Defaults to ``ACTIVE``.
+        falsifiable_consequence: A description of what evidence would
+            falsify this assumption. Required for empirical assumptions
+            to pass coverage validation.
         used_in_hypotheses: IDs of hypotheses that reference this assumption.
             Backlink maintained by hypothesis operations — not set by callers.
         depends_on: IDs of other assumptions this one presupposes.
             Forms a DAG enforced by the graph's cycle-detection logic.
-        falsifiable_consequence: A description of what evidence would
-            falsify this assumption. Required for empirical assumptions
-            to pass coverage validation.
         tested_by: IDs of predictions explicitly designed to test this
             assumption. Backlink maintained by prediction operations.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
         created: Date the assumption was first recorded.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: AssumptionId
     statement: str
     type: AssumptionType
     scope: str = "global"
     criticality: Criticality = Criticality.MODERATE
+    status: AssumptionStatus = AssumptionStatus.ACTIVE
+    falsifiable_consequence: str | None = None
     used_in_hypotheses: set[HypothesisId] = field(default_factory=set)
     depends_on: set[AssumptionId] = field(default_factory=set)
-    falsifiable_consequence: str | None = None
     tested_by: set[PredictionId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
     notes: str | None = None
     created: date | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -198,7 +206,8 @@ class Prediction:
         observable: What is being measured or observed.
         predicted: The predicted value or outcome (type varies).
         status: Lifecycle state — ``PENDING``, ``CONFIRMED``, ``STRESSED``,
-            ``REFUTED``, or ``NOT_YET_TESTABLE``. Defaults to ``PENDING``.
+            ``REFUTED``, ``NOT_YET_TESTABLE``, or ``SUPERSEDED``.
+            Defaults to ``PENDING``.
         tier: Confidence classification — ``FULLY_SPECIFIED``,
             ``CONDITIONAL``, or ``FIT_CHECK``. Defaults to
             ``FULLY_SPECIFIED``.
@@ -245,6 +254,11 @@ class Prediction:
             ``predicted_uncertainty`` so the adjudication comparison
             is symmetric: $\hat{y} \pm \delta_\text{pred}$ vs
             $y \pm \delta_\text{obs}$.
+        adjudication_rationale: Prose explaining *why* the prediction was
+            adjudicated to its current status (CONFIRMED, STRESSED, or
+            REFUTED). Distinct from ``refutation_criteria`` (threshold)
+            and ``stress_criteria`` (threshold) — this records the actual
+            reasoning and evidence that led to the decision.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
     """
@@ -276,6 +290,7 @@ class Prediction:
     supersedes: PredictionId | None = None
     predicted_uncertainty: Any = None
     observed_uncertainty: Any = None
+    adjudication_rationale: str | None = None
     tags: set[str] = field(default_factory=set)
 
 
@@ -423,6 +438,7 @@ class Objective:
         superseded_by: ID of the objective that replaced this one when
             status is ``SUPERSEDED``. Enables provenance chain
             reconstruction.
+        notes: Free-form notes for the researcher.
         created: Date the objective was first recorded.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
@@ -430,7 +446,7 @@ class Objective:
     id: ObjectiveId
     title: str
     kind: ObjectiveKind
-    status: ObjectiveStatus
+    status: ObjectiveStatus = ObjectiveStatus.ACTIVE
     success_criteria: str | None = None          # what counts as achieved
     summary: str | None = None
     motivates_hypotheses: set[HypothesisId] = field(default_factory=set)
@@ -439,6 +455,7 @@ class Objective:
     related_discoveries: set[DiscoveryId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
     superseded_by: ObjectiveId | None = None
+    notes: str | None = None
     created: date | None = None
     tags: set[str] = field(default_factory=set)
 
@@ -465,17 +482,22 @@ class Discovery:
             Soft navigational link — scrubbed on prediction removal.
         references: List of external reference strings (DOIs, URLs, etc.).
         source: Primary provenance string.
+        notes: Free-form notes for the researcher.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: DiscoveryId
     title: str
     date: date
     summary: str
     impact: str
-    status: DiscoveryStatus
+    status: DiscoveryStatus = DiscoveryStatus.NEW
     related_hypotheses: set[HypothesisId] = field(default_factory=set)
     related_predictions: set[PredictionId] = field(default_factory=set)
     references: list[str] = field(default_factory=list)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
+    notes: str | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -500,15 +522,22 @@ class DeadEnd:
             Soft navigational link — scrubbed on hypothesis removal.
         references: List of external reference strings.
         source: Provenance string — DOI, arXiv ID, URL, or analysis reference.
+        notes: Free-form notes for the researcher.
+        created: Date the dead end was first recorded.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: DeadEndId
     title: str
     description: str
-    status: DeadEndStatus
+    status: DeadEndStatus = DeadEndStatus.ACTIVE
     related_predictions: set[PredictionId] = field(default_factory=set)
     related_hypotheses: set[HypothesisId] = field(default_factory=set)
     references: list[str] = field(default_factory=list)
     source: str | None = None                    # doi:..., arxiv:..., url, or analysis reference
+    notes: str | None = None
+    created: date | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -606,7 +635,7 @@ class Observation:
     description: str
     value: Any
     date: date
-    status: ObservationStatus
+    status: ObservationStatus = ObservationStatus.PRELIMINARY
     uncertainty: Any = None
     systematic_uncertainty: Any = None
     methodology: str | None = None
