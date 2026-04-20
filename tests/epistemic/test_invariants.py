@@ -1062,3 +1062,145 @@ def test_dead_end_with_prediction_link_no_finding(base_graph):
     findings = validate_disconnected_dead_ends(graph)
     de003 = [f for f in findings if "DE-003" in f.source]
     assert de003 == []
+
+
+# ── validate_experiment_coverage ─────────────────────────────────
+
+
+def test_complete_experiment_no_observations_warns():
+    """A COMPLETE experiment with no observations should produce a WARNING."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.invariants import validate_experiment_coverage
+    from episteme.epistemic.types import ExperimentStatus
+    from episteme.epistemic.graph import EpistemicGraph
+
+    graph = EpistemicGraph()
+    graph = graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Empty run", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.RUNNING)
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.COMPLETE)
+    findings = validate_experiment_coverage(graph)
+    assert any("no recorded observations" in f.message for f in findings)
+    assert findings[0].severity == Severity.WARNING
+
+
+def test_complete_experiment_with_observations_no_finding():
+    """A COMPLETE experiment with observations should not warn."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.invariants import validate_experiment_coverage
+    from episteme.epistemic.types import ExperimentStatus
+    from episteme.epistemic.graph import EpistemicGraph
+
+    graph = EpistemicGraph()
+    graph = graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Good run", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.RUNNING)
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.COMPLETE)
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-001"),
+            description="Measured output",
+            value=3.14,
+            date=date(2026, 4, 20),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    findings = validate_experiment_coverage(graph)
+    no_obs = [f for f in findings if "no recorded observations" in f.message]
+    assert no_obs == []
+
+
+# ── validate_replicate_coherence ──────────────────────────────────
+
+
+def test_replicate_of_abandoned_parent_warns():
+    """Replicating an ABANDONED experiment should produce a WARNING."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.invariants import validate_replicate_coherence
+    from episteme.epistemic.types import ExperimentStatus
+    from episteme.epistemic.graph import EpistemicGraph
+
+    graph = EpistemicGraph()
+    graph = graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Original", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.ABANDONED)
+    graph = graph.register_experiment(
+        Experiment(
+            id=ExperimentId("EXP-002"),
+            title="Replicate",
+            replicate_of=ExperimentId("EXP-001"),
+        )
+    )
+    findings = validate_replicate_coherence(graph)
+    assert any("ABANDONED" in f.message for f in findings)
+    assert findings[0].severity == Severity.WARNING
+
+
+def test_replicate_of_active_parent_no_finding():
+    """Replicating a non-abandoned experiment should not produce a finding."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.invariants import validate_replicate_coherence
+    from episteme.epistemic.graph import EpistemicGraph
+
+    graph = EpistemicGraph()
+    graph = graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Original")
+    )
+    graph = graph.register_experiment(
+        Experiment(
+            id=ExperimentId("EXP-002"),
+            title="Replicate",
+            replicate_of=ExperimentId("EXP-001"),
+        )
+    )
+    findings = validate_replicate_coherence(graph)
+    assert findings == []
+
+
+def test_replicate_disjoint_predictions_warns():
+    """Replicate with no overlapping predictions_tested should warn."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.invariants import validate_replicate_coherence
+    from episteme.epistemic.graph import EpistemicGraph
+
+    graph = EpistemicGraph()
+    # Need two predictions to make them disjoint; reuse conftest fixture won't work
+    # so build a minimal standalone graph
+    from episteme.epistemic.model import (
+        Hypothesis, HypothesisId, Prediction, PredictionId
+    )
+    graph = graph.register_hypothesis(
+        Hypothesis(id=HypothesisId("H-A"), statement="H A")
+    )
+    graph = graph.register_hypothesis(
+        Hypothesis(id=HypothesisId("H-B"), statement="H B")
+    )
+    graph = graph.register_prediction(
+        Prediction(id=PredictionId("P-A"), observable="x", predicted=1,
+                   hypothesis_ids={HypothesisId("H-A")})
+    )
+    graph = graph.register_prediction(
+        Prediction(id=PredictionId("P-B"), observable="y", predicted=2,
+                   hypothesis_ids={HypothesisId("H-B")})
+    )
+    graph = graph.register_experiment(
+        Experiment(
+            id=ExperimentId("EXP-001"),
+            title="Original",
+            predictions_tested={PredictionId("P-A")},
+        )
+    )
+    graph = graph.register_experiment(
+        Experiment(
+            id=ExperimentId("EXP-002"),
+            title="Replicate — wrong predictions",
+            replicate_of=ExperimentId("EXP-001"),
+            predictions_tested={PredictionId("P-B")},  # disjoint
+        )
+    )
+    findings = validate_replicate_coherence(graph)
+    assert any("no predictions_tested" in f.message for f in findings)

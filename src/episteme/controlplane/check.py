@@ -80,7 +80,7 @@ def check_stale(
         # Find downstream predictions linked to this analysis
         affected_predictions = {
             pid for pid, pred in graph.predictions.items()
-            if pred.analysis == an_id
+            if an_id in pred.analyses
         }
         # Also find predictions via hypotheses covered by this analysis
         for cid in analysis.hypotheses_covered:

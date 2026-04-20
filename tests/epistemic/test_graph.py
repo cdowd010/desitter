@@ -10,6 +10,7 @@ from episteme.epistemic.model import (
     AssumptionType,
     HypothesisId,
     HypothesisStatus,
+    Observation,
     ObservationId,
     Prediction,
     PredictionId,
@@ -602,3 +603,386 @@ def test_remove_observation_scrubs_objective_related_observations(base_graph):
     graph = graph.remove_observation(ObservationId("OBS-001"))
     obj = graph.objectives[ObjectiveId("OBJ-EXPLORE")]
     assert ObservationId("OBS-001") not in obj.related_observations
+
+
+# ── Experiment ────────────────────────────────────────────────────
+
+
+def test_register_experiment_stores_entity(base_graph):
+    """Registering an experiment makes it accessible in experiments dict."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    exp = Experiment(
+        id=ExperimentId("EXP-001"),
+        title="Catalyst yield test",
+        status=ExperimentStatus.PLANNED,
+        predictions_tested={PredictionId("P-001")},
+    )
+    graph = base_graph.register_experiment(exp)
+    assert ExperimentId("EXP-001") in graph.experiments
+    assert graph.experiments[ExperimentId("EXP-001")].title == "Catalyst yield test"
+
+
+def test_register_experiment_rejects_duplicate(base_graph):
+    """Registering an experiment with a duplicate ID raises DuplicateIdError."""
+    from episteme.epistemic.errors import DuplicateIdError
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    exp = Experiment(id=ExperimentId("EXP-001"), title="First")
+    graph = base_graph.register_experiment(exp)
+    with pytest.raises(DuplicateIdError):
+        graph.register_experiment(Experiment(id=ExperimentId("EXP-001"), title="Dup"))
+
+
+def test_register_experiment_rejects_broken_prediction_ref(base_graph):
+    """Registering an experiment with a non-existent prediction raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    with pytest.raises(BrokenReferenceError, match="prediction"):
+        base_graph.register_experiment(
+            Experiment(
+                id=ExperimentId("EXP-BAD"),
+                title="Bad ref",
+                predictions_tested={PredictionId("P-NOPE")},
+            )
+        )
+
+
+def test_register_experiment_rejects_broken_assumption_ref(base_graph):
+    """Registering an experiment with a non-existent assumption raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import AssumptionId
+
+    with pytest.raises(BrokenReferenceError, match="assumption"):
+        base_graph.register_experiment(
+            Experiment(
+                id=ExperimentId("EXP-BAD"),
+                title="Bad ref",
+                assumptions_tested={AssumptionId("A-NOPE")},
+            )
+        )
+
+
+def test_register_experiment_observations_backlink_starts_empty(base_graph):
+    """Experiment.observations backlink is always reset to empty on registration."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    exp = Experiment(
+        id=ExperimentId("EXP-001"),
+        title="Test",
+        # Caller supplies an observations set — must be ignored
+        observations={ObservationId("OBS-001")},
+    )
+    graph = base_graph.register_experiment(exp)
+    assert graph.experiments[ExperimentId("EXP-001")].observations == set()
+
+
+def test_observation_with_experiment_populates_backlink(base_graph):
+    """Registering an Observation with experiment= populates Experiment.observations."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run")
+    )
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-EXP"),
+            description="Yield at t=60min",
+            value=14.2,
+            date=date(2026, 4, 16),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    assert ObservationId("OBS-EXP") in graph.experiments[ExperimentId("EXP-001")].observations
+
+
+def test_observation_with_bad_experiment_ref_raises(base_graph):
+    """Registering an Observation with a non-existent experiment raises."""
+    from datetime import date
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import ExperimentId
+
+    with pytest.raises(BrokenReferenceError, match="experiment"):
+        base_graph.register_observation(
+            Observation(
+                id=ObservationId("OBS-BAD"),
+                description="Bad ref",
+                value=1.0,
+                date=date(2026, 4, 16),
+                experiment=ExperimentId("EXP-NOPE"),
+            )
+        )
+
+
+def test_remove_observation_scrubs_experiment_backlink(base_graph):
+    """Removing an observation clears it from Experiment.observations."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run")
+    )
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-EXP"),
+            description="Yield measurement",
+            value=14.2,
+            date=date(2026, 4, 16),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    graph = graph.remove_observation(ObservationId("OBS-EXP"))
+    assert ObservationId("OBS-EXP") not in graph.experiments[ExperimentId("EXP-001")].observations
+
+
+def test_remove_experiment_scrubs_observation_experiment_field(base_graph):
+    """Removing an experiment clears Observation.experiment for all linked observations."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run")
+    )
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-EXP"),
+            description="Yield measurement",
+            value=14.2,
+            date=date(2026, 4, 16),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    graph = graph.remove_experiment(ExperimentId("EXP-001"))
+    assert ExperimentId("EXP-001") not in graph.experiments
+    assert graph.observations[ObservationId("OBS-EXP")].experiment is None
+
+
+def test_transition_experiment_planned_to_running(base_graph):
+    """PLANNED experiments can transition to RUNNING."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.RUNNING)
+    assert graph.experiments[ExperimentId("EXP-001")].status == ExperimentStatus.RUNNING
+
+
+def test_transition_experiment_running_to_complete(base_graph):
+    """RUNNING experiments can transition to COMPLETE."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.RUNNING)
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.COMPLETE)
+    assert graph.experiments[ExperimentId("EXP-001")].status == ExperimentStatus.COMPLETE
+
+
+def test_transition_experiment_complete_is_terminal(base_graph):
+    """COMPLETE experiments cannot be re-transitioned."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run", status=ExperimentStatus.PLANNED)
+    )
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.RUNNING)
+    graph = graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.COMPLETE)
+    with pytest.raises(InvariantViolation, match="Cannot transition"):
+        graph.transition_experiment(ExperimentId("EXP-001"), ExperimentStatus.PLANNED)
+
+
+def test_update_experiment_preserves_observations_backlink(base_graph):
+    """update_experiment preserves the observations backlink from the old record."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+    from episteme.epistemic.types import ExperimentStatus
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Yield run")
+    )
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-EXP"),
+            description="Measurement",
+            value=14.2,
+            date=date(2026, 4, 16),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    updated = Experiment(
+        id=ExperimentId("EXP-001"),
+        title="Yield run (updated)",
+        status=ExperimentStatus.RUNNING,
+        protocol="Updated protocol description",
+    )
+    graph = graph.update_experiment(updated)
+    assert graph.experiments[ExperimentId("EXP-001")].title == "Yield run (updated)"
+    assert ObservationId("OBS-EXP") in graph.experiments[ExperimentId("EXP-001")].observations
+
+
+def test_update_observation_experiment_diffs_backlinks(base_graph):
+    """Updating Observation.experiment correctly moves the backlink."""
+    from datetime import date
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Run 1")
+    )
+    graph = graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-002"), title="Run 2")
+    )
+    graph = graph.register_observation(
+        Observation(
+            id=ObservationId("OBS-EXP"),
+            description="Measurement",
+            value=14.2,
+            date=date(2026, 4, 16),
+            experiment=ExperimentId("EXP-001"),
+        )
+    )
+    old_obs = graph.observations[ObservationId("OBS-EXP")]
+    updated_obs = Observation(
+        id=old_obs.id,
+        description=old_obs.description,
+        value=old_obs.value,
+        date=old_obs.date,
+        experiment=ExperimentId("EXP-002"),
+    )
+    graph = graph.update_observation(updated_obs)
+    assert ObservationId("OBS-EXP") not in graph.experiments[ExperimentId("EXP-001")].observations
+    assert ObservationId("OBS-EXP") in graph.experiments[ExperimentId("EXP-002")].observations
+
+
+# ── Prediction.analyses (set) ────────────────────────────────────
+
+
+def test_prediction_analyses_stored(base_graph):
+    """Registering a prediction with analyses= stores the set."""
+    from episteme.epistemic.model import Analysis, AnalysisId
+
+    graph = base_graph.register_analysis(Analysis(id=AnalysisId("AN-999")))
+    pred = Prediction(
+        id=PredictionId("P-MULTI"),
+        observable="yield",
+        predicted=1.0,
+        analyses={AnalysisId("AN-999")},
+    )
+    graph = graph.register_prediction(pred)
+    assert AnalysisId("AN-999") in graph.predictions[PredictionId("P-MULTI")].analyses
+
+
+def test_prediction_analyses_multiple(base_graph):
+    """A prediction can reference multiple analyses simultaneously."""
+    from episteme.epistemic.model import Analysis, AnalysisId
+
+    graph = base_graph.register_analysis(Analysis(id=AnalysisId("AN-999")))
+    graph = graph.register_analysis(Analysis(id=AnalysisId("AN-998")))
+    pred = Prediction(
+        id=PredictionId("P-MULTI"),
+        observable="yield",
+        predicted=1.0,
+        analyses={AnalysisId("AN-999"), AnalysisId("AN-998")},
+    )
+    graph = graph.register_prediction(pred)
+    assert graph.predictions[PredictionId("P-MULTI")].analyses == {
+        AnalysisId("AN-999"), AnalysisId("AN-998")
+    }
+
+
+def test_prediction_broken_analysis_ref_raises(base_graph):
+    """Registering a prediction with a non-existent analysis ID raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import AnalysisId
+
+    with pytest.raises(BrokenReferenceError, match="analysis"):
+        base_graph.register_prediction(
+            Prediction(
+                id=PredictionId("P-BAD"),
+                observable="x",
+                predicted=0,
+                analyses={AnalysisId("AN-NOPE")},
+            )
+        )
+
+
+def test_remove_analysis_blocked_by_prediction_analyses(base_graph):
+    """Removing an analysis that is referenced in Prediction.analyses raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Analysis, AnalysisId
+
+    graph = base_graph.register_analysis(Analysis(id=AnalysisId("AN-999")))
+    graph = graph.register_prediction(
+        Prediction(
+            id=PredictionId("P-LINKED"),
+            observable="x",
+            predicted=0,
+            analyses={AnalysisId("AN-999")},
+        )
+    )
+    with pytest.raises(BrokenReferenceError):
+        graph.remove_analysis(AnalysisId("AN-999"))
+
+
+# ── Experiment.replicate_of ───────────────────────────────────────
+
+
+def test_register_experiment_replicate_of_stored(base_graph):
+    """Registering a replicate experiment stores the replicate_of field."""
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Original run")
+    )
+    graph = graph.register_experiment(
+        Experiment(
+            id=ExperimentId("EXP-002"),
+            title="Replicate run",
+            replicate_of=ExperimentId("EXP-001"),
+        )
+    )
+    assert graph.experiments[ExperimentId("EXP-002")].replicate_of == ExperimentId("EXP-001")
+
+
+def test_register_experiment_replicate_of_broken_ref_raises(base_graph):
+    """Registering a replicate whose parent doesn't exist raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    with pytest.raises(BrokenReferenceError, match="replicate_of"):
+        base_graph.register_experiment(
+            Experiment(
+                id=ExperimentId("EXP-002"),
+                title="Replicate run",
+                replicate_of=ExperimentId("EXP-NOPE"),
+            )
+        )
+
+
+def test_update_experiment_replicate_of_broken_ref_raises(base_graph):
+    """Updating an experiment with a non-existent replicate_of raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Experiment, ExperimentId
+
+    graph = base_graph.register_experiment(
+        Experiment(id=ExperimentId("EXP-001"), title="Original")
+    )
+    with pytest.raises(BrokenReferenceError, match="replicate_of"):
+        graph.update_experiment(
+            Experiment(
+                id=ExperimentId("EXP-001"),
+                title="Updated",
+                replicate_of=ExperimentId("EXP-NOPE"),
+            )
+        )

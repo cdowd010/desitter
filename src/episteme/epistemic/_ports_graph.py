@@ -8,6 +8,7 @@ from typing import Protocol
 from .model import (
     Analysis,
     Assumption,
+    Experiment,
     Hypothesis,
     DeadEnd,
     Discovery,
@@ -23,6 +24,8 @@ from .types import (
     AssumptionId,
     AssumptionStatus,
     AssumptionSupportStatus,
+    ExperimentId,
+    ExperimentStatus,
     HypothesisId,
     HypothesisStatus,
     DeadEndId,
@@ -94,6 +97,7 @@ class EpistemicGraphPort(Protocol):
     dead_ends: Mapping[DeadEndId, DeadEnd]
     parameters: Mapping[ParameterId, Parameter]
     observations: Mapping[ObservationId, Observation]
+    experiments: Mapping[ExperimentId, Experiment]
 
     # ── Point lookups ─────────────────────────────────────────────
 
@@ -417,8 +421,9 @@ class EpistemicGraphPort(Protocol):
     def register_observation(self, observation: Observation) -> EpistemicGraphPort:
         """Register a new observation. Returns a new graph instance.
 
-        Validates that all referenced predictions, hypotheses, and assumptions
-        exist. Updates ``Prediction.observations`` backlinks.
+        Validates that all referenced predictions, hypotheses, assumptions, and
+        experiment exist. Updates ``Prediction.observations`` and
+        ``Experiment.observations`` backlinks.
 
         Args:
             observation: The observation to add. Must have a unique ``id``.
@@ -429,6 +434,25 @@ class EpistemicGraphPort(Protocol):
         Raises:
             DuplicateIdError: If ``observation.id`` already exists.
             BrokenReferenceError: If any referenced ID does not exist.
+        """
+        ...
+
+    def register_experiment(self, experiment: Experiment) -> EpistemicGraphPort:
+        """Register a new experiment. Returns a new graph instance.
+
+        Validates that all referenced predictions and assumptions exist.
+        The ``observations`` field is a backlink and is ignored on registration.
+
+        Args:
+            experiment: The experiment to add. Must have a unique ``id``.
+
+        Returns:
+            EpistemicGraphPort: New graph containing the registered experiment.
+
+        Raises:
+            DuplicateIdError: If ``experiment.id`` already exists.
+            BrokenReferenceError: If any ``predictions_tested`` or
+                ``assumptions_tested`` ID does not exist.
         """
         ...
 
@@ -604,7 +628,8 @@ class EpistemicGraphPort(Protocol):
         """Replace an observation's fields. Returns a new graph instance.
 
         Diffs ``predictions`` links and updates ``Prediction.observations``
-        backlinks accordingly.
+        backlinks accordingly. Also diffs the ``experiment`` link and updates
+        ``Experiment.observations`` backlinks.
 
         Args:
             new_observation: The updated observation. Must match an existing ``id``.
@@ -615,6 +640,23 @@ class EpistemicGraphPort(Protocol):
         Raises:
             BrokenReferenceError: If the observation does not exist or if
                 any referenced ID does not exist.
+        """
+        ...
+
+    def update_experiment(self, new_experiment: Experiment) -> EpistemicGraphPort:
+        """Replace an experiment's fields. Returns a new graph instance.
+
+        The ``observations`` backlink is preserved from the existing record.
+
+        Args:
+            new_experiment: The updated experiment. Must match an existing ``id``.
+
+        Returns:
+            EpistemicGraphPort: New graph with the updated experiment.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist or if any
+                ``predictions_tested`` or ``assumptions_tested`` ID does not exist.
         """
         ...
 
@@ -725,6 +767,22 @@ class EpistemicGraphPort(Protocol):
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
+            InvariantViolation: If the transition is not allowed.
+        """
+        ...
+
+    def transition_experiment(self, eid: ExperimentId, new_status: ExperimentStatus) -> EpistemicGraphPort:
+        """Change an experiment's lifecycle status. Returns a new graph instance.
+
+        Args:
+            eid: The experiment ID to transition.
+            new_status: The target ``ExperimentStatus`` value.
+
+        Returns:
+            EpistemicGraphPort: New graph with the updated experiment status.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist.
             InvariantViolation: If the transition is not allowed.
         """
         ...
@@ -930,8 +988,9 @@ class EpistemicGraphPort(Protocol):
     def remove_observation(self, oid: ObservationId) -> EpistemicGraphPort:
         """Remove an observation from the graph. Returns a new graph instance.
 
-        Tears down ``Prediction.observations`` backlinks. Observations are
-        provenance records. Nothing hard-blocks their removal.
+        Tears down ``Prediction.observations`` and ``Experiment.observations``
+        backlinks. Observations are provenance records. Nothing hard-blocks
+        their removal.
 
         Args:
             oid: The observation ID to remove.
@@ -941,6 +1000,23 @@ class EpistemicGraphPort(Protocol):
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
+        """
+        ...
+
+    def remove_experiment(self, eid: ExperimentId) -> EpistemicGraphPort:
+        """Remove an experiment from the graph. Returns a new graph instance.
+
+        Clears ``Observation.experiment`` for all observations that
+        referenced this experiment.
+
+        Args:
+            eid: The experiment ID to remove.
+
+        Returns:
+            EpistemicGraphPort: New graph without the experiment.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist.
         """
         ...
 

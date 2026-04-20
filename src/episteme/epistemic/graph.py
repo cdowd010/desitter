@@ -16,6 +16,7 @@ from enum import Enum
 from .model import (
     Analysis,
     Assumption,
+    Experiment,
     Hypothesis,
     DeadEnd,
     Discovery,
@@ -40,6 +41,8 @@ from .types import (
     AssumptionStatus,
     ConfidenceTier,
     EvidenceKind,
+    ExperimentId,
+    ExperimentStatus,
     HypothesisId,
     HypothesisStatus,
     DeadEndId,
@@ -65,6 +68,7 @@ from .types import (
     OBSERVATION_TRANSITIONS,
     DISCOVERY_TRANSITIONS,
     DEAD_END_TRANSITIONS,
+    EXPERIMENT_TRANSITIONS,
 )
 
 
@@ -119,6 +123,7 @@ class EpistemicGraph:
     dead_ends: dict[DeadEndId, DeadEnd] = field(default_factory=dict)
     parameters: dict[ParameterId, Parameter] = field(default_factory=dict)
     observations: dict[ObservationId, Observation] = field(default_factory=dict)
+    experiments: dict[ExperimentId, Experiment] = field(default_factory=dict)
 
     # ── Queries ───────────────────────────────────────────────────
 
@@ -432,7 +437,7 @@ class EpistemicGraph:
             affected_predictions.update(self.predictions_depending_on_hypothesis(cid))
         # Also predictions directly linked to stale analyses
         for pred_id, pred in self.predictions.items():
-            if pred.analysis in stale_analyses:
+            if pred.analyses & stale_analyses:
                 affected_predictions.add(pred_id)
         return ParameterImpact(
             stale_analyses=stale_analyses,
@@ -557,10 +562,7 @@ class EpistemicGraph:
         self._check_refs_exist(prediction.hypothesis_ids, self.hypotheses, "hypothesis")
         self._check_refs_exist(prediction.tests_assumptions, self.assumptions, "assumption")
         self._check_refs_exist(prediction.conditional_on, self.assumptions, "assumption")
-        if prediction.analysis and prediction.analysis not in self.analyses:
-            raise BrokenReferenceError(
-                f"Analysis {prediction.analysis} does not exist"
-            )
+        self._check_refs_exist(prediction.analyses, self.analyses, "analysis")
         if prediction.independence_group:
             if prediction.independence_group not in self.independence_groups:
                 raise BrokenReferenceError(
@@ -1143,8 +1145,7 @@ class EpistemicGraph:
         self._check_refs_exist(new_prediction.hypothesis_ids, self.hypotheses, "hypothesis")
         self._check_refs_exist(new_prediction.tests_assumptions, self.assumptions, "assumption")
         self._check_refs_exist(new_prediction.conditional_on, self.assumptions, "assumption")
-        if new_prediction.analysis and new_prediction.analysis not in self.analyses:
-            raise BrokenReferenceError(f"Analysis {new_prediction.analysis} does not exist")
+        self._check_refs_exist(new_prediction.analyses, self.analyses, "analysis")
         if new_prediction.independence_group and new_prediction.independence_group not in self.independence_groups:
             raise BrokenReferenceError(f"Independence group {new_prediction.independence_group} does not exist")
 
@@ -1615,7 +1616,7 @@ class EpistemicGraph:
             cid for cid, c in self.hypotheses.items() if anid in c.analyses
         ]
         blocking_preds = [
-            pid for pid, p in self.predictions.items() if p.analysis == anid
+            pid for pid, p in self.predictions.items() if anid in p.analyses
         ]
         if blocking_hypotheses or blocking_preds:
             raise BrokenReferenceError(
@@ -1784,6 +1785,10 @@ class EpistemicGraph:
         self._check_refs_exist(observation.predictions, self.predictions, "prediction")
         self._check_refs_exist(observation.related_hypotheses, self.hypotheses, "hypothesis")
         self._check_refs_exist(observation.related_assumptions, self.assumptions, "assumption")
+        if observation.experiment is not None and observation.experiment not in self.experiments:
+            raise BrokenReferenceError(
+                f"Observation references experiment {observation.experiment} which does not exist"
+            )
 
         new = self._copy()
         new.observations[observation.id] = copy.deepcopy(observation)
@@ -1792,6 +1797,11 @@ class EpistemicGraph:
         for pid in observation.predictions:
             new.predictions[pid] = copy.deepcopy(new.predictions[pid])
             new.predictions[pid].observations.add(observation.id)
+
+        # Maintain bidirectional: experiment.observations
+        if observation.experiment is not None:
+            new.experiments[observation.experiment] = copy.deepcopy(new.experiments[observation.experiment])
+            new.experiments[observation.experiment].observations.add(observation.id)
 
         return new
 
@@ -1818,6 +1828,10 @@ class EpistemicGraph:
         self._check_refs_exist(new_observation.predictions, self.predictions, "prediction")
         self._check_refs_exist(new_observation.related_hypotheses, self.hypotheses, "hypothesis")
         self._check_refs_exist(new_observation.related_assumptions, self.assumptions, "assumption")
+        if new_observation.experiment is not None and new_observation.experiment not in self.experiments:
+            raise BrokenReferenceError(
+                f"Observation references experiment {new_observation.experiment} which does not exist"
+            )
 
         new = self._copy()
         new.observations[new_observation.id] = copy.deepcopy(new_observation)
@@ -1830,6 +1844,15 @@ class EpistemicGraph:
         for pid in new_observation.predictions - old.predictions:
             new.predictions[pid] = copy.deepcopy(new.predictions[pid])
             new.predictions[pid].observations.add(new_observation.id)
+
+        # Diff experiment.observations backlinks
+        if old.experiment != new_observation.experiment:
+            if old.experiment is not None and old.experiment in new.experiments:
+                new.experiments[old.experiment] = copy.deepcopy(new.experiments[old.experiment])
+                new.experiments[old.experiment].observations.discard(new_observation.id)
+            if new_observation.experiment is not None:
+                new.experiments[new_observation.experiment] = copy.deepcopy(new.experiments[new_observation.experiment])
+                new.experiments[new_observation.experiment].observations.add(new_observation.id)
 
         return new
 
@@ -1858,6 +1881,10 @@ class EpistemicGraph:
             if pid in new.predictions:
                 new.predictions[pid] = copy.deepcopy(new.predictions[pid])
                 new.predictions[pid].observations.discard(oid)
+        # Tear down experiment.observations backlink
+        if obs.experiment is not None and obs.experiment in new.experiments:
+            new.experiments[obs.experiment] = copy.deepcopy(new.experiments[obs.experiment])
+            new.experiments[obs.experiment].observations.discard(oid)
         # Scrub soft navigational link: hypothesis.observations
         for hid, hyp in list(new.hypotheses.items()):
             if oid in hyp.observations:
@@ -1868,6 +1895,124 @@ class EpistemicGraph:
             if oid in obj.related_observations:
                 new.objectives[tid] = copy.deepcopy(obj)
                 new.objectives[tid].related_observations.discard(oid)
+        return new
+
+    def register_experiment(self, experiment: Experiment) -> EpistemicGraph:
+        """Register a new experiment in the graph.
+
+        Validates that all referenced predictions and assumptions exist.
+        The ``observations`` field on the incoming entity is reset to an
+        empty set: it is a backlink populated when ``Observation`` entities
+        are registered with this experiment's ID.
+
+        Args:
+            experiment: The experiment to register. Must have a unique ``id``.
+
+        Returns:
+            EpistemicGraph: A new graph instance containing the registered experiment.
+
+        Raises:
+            DuplicateIdError: If ``experiment.id`` already exists.
+            BrokenReferenceError: If any ``predictions_tested`` or
+                ``assumptions_tested`` ID does not exist.
+        """
+        if experiment.id in self.experiments:
+            raise DuplicateIdError(f"Experiment {experiment.id} already exists")
+        self._check_refs_exist(experiment.predictions_tested, self.predictions, "prediction")
+        self._check_refs_exist(experiment.assumptions_tested, self.assumptions, "assumption")
+        if experiment.replicate_of and experiment.replicate_of not in self.experiments:
+            raise BrokenReferenceError(
+                f"Experiment {experiment.replicate_of} (replicate_of) does not exist"
+            )
+
+        new = self._copy()
+        stored = copy.deepcopy(experiment)
+        stored.observations = set()   # backlink — always starts empty
+        new.experiments[experiment.id] = stored
+        return new
+
+    def update_experiment(self, new_experiment: Experiment) -> EpistemicGraph:
+        """Replace an experiment's fields while preserving the observations backlink.
+
+        Args:
+            new_experiment: The updated experiment. Must have the same ``id``
+                as an existing experiment.
+
+        Returns:
+            EpistemicGraph: A new graph instance with the updated experiment.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist or if any
+                ``predictions_tested`` or ``assumptions_tested`` ID does not exist.
+        """
+        if new_experiment.id not in self.experiments:
+            raise BrokenReferenceError(f"Experiment {new_experiment.id} does not exist")
+        self._check_refs_exist(new_experiment.predictions_tested, self.predictions, "prediction")
+        self._check_refs_exist(new_experiment.assumptions_tested, self.assumptions, "assumption")
+        if new_experiment.replicate_of and new_experiment.replicate_of not in self.experiments:
+            raise BrokenReferenceError(
+                f"Experiment {new_experiment.replicate_of} (replicate_of) does not exist"
+            )
+
+        old = self.experiments[new_experiment.id]
+        new = self._copy()
+        stored = copy.deepcopy(new_experiment)
+        stored.observations = old.observations.copy()  # preserve backlink
+        new.experiments[new_experiment.id] = stored
+        return new
+
+    def remove_experiment(self, eid: ExperimentId) -> EpistemicGraph:
+        """Remove an experiment from the graph.
+
+        Clears ``Observation.experiment`` for all observations that referenced
+        this experiment. The observations themselves are preserved.
+
+        Args:
+            eid: The experiment ID to remove.
+
+        Returns:
+            EpistemicGraph: A new graph instance without the experiment.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist.
+        """
+        if eid not in self.experiments:
+            raise BrokenReferenceError(f"Experiment {eid} does not exist")
+        exp = self.experiments[eid]
+        new = self._copy()
+        del new.experiments[eid]
+        # Scrub Observation.experiment backlink
+        for oid in exp.observations:
+            if oid in new.observations:
+                new.observations[oid] = copy.deepcopy(new.observations[oid])
+                new.observations[oid].experiment = None
+        return new
+
+    def transition_experiment(
+        self, eid: ExperimentId, new_status: ExperimentStatus
+    ) -> EpistemicGraph:
+        """Change an experiment's lifecycle status.
+
+        Args:
+            eid: The experiment ID to transition.
+            new_status: The new status to assign.
+
+        Returns:
+            EpistemicGraph: A new graph instance with the updated status.
+
+        Raises:
+            BrokenReferenceError: If the experiment does not exist.
+            InvariantViolation: If the transition is not allowed.
+        """
+        if eid not in self.experiments:
+            raise BrokenReferenceError(f"Experiment {eid} does not exist")
+        self._check_transition(
+            self.experiments[eid].status, new_status,
+            EXPERIMENT_TRANSITIONS, "experiment", eid,
+        )
+        new = self._copy()
+        new.experiments[eid] = copy.deepcopy(new.experiments[eid])
+        new.experiments[eid].status = new_status
         return new
 
     def transition_observation(
@@ -2048,6 +2193,7 @@ class EpistemicGraph:
             dead_ends=dict(self.dead_ends),
             parameters=dict(self.parameters),
             observations=dict(self.observations),
+            experiments=dict(self.experiments),
         )
 
 

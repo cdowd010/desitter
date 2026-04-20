@@ -14,6 +14,7 @@ from .types import (
     AssumptionStatus,
     AssumptionType,
     DiscoveryStatus,
+    ExperimentStatus,
     HypothesisCategory,
     HypothesisStatus,
     HypothesisType,
@@ -1451,6 +1452,8 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         29. Supersession cycles
         30. Hypothesis empirical interface
         31. Disconnected dead ends
+        32. Experiment coverage
+        33. Replicate coherence
 
     Args:
         graph: The epistemic graph to validate.
@@ -1491,4 +1494,101 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         + validate_supersession_cycles(graph)
         + validate_hypothesis_empirical_interface(graph)
         + validate_disconnected_dead_ends(graph)
+        + validate_experiment_coverage(graph)
+        + validate_replicate_coherence(graph)
     )
+
+
+def validate_experiment_coverage(graph: EpistemicGraphPort) -> list[Finding]:
+    """Validate structural completeness of experiment records.
+
+    Enforces the following rules:
+
+    - A ``COMPLETE`` experiment with no recorded observations is suspicious:
+      it concluded but nothing was captured. Severity: WARNING.
+    - A ``PLANNED`` or ``RUNNING`` experiment whose every ``predictions_tested``
+      is already in a terminal adjudicated state (CONFIRMED, REFUTED, or
+      SUPERSEDED) may represent a stale plan. Severity: WARNING.
+
+    Args:
+        graph: The epistemic graph to validate.
+
+    Returns:
+        list[Finding]: All experiment coverage findings.
+    """
+    findings: list[Finding] = []
+    terminal_statuses = {
+        PredictionStatus.CONFIRMED,
+        PredictionStatus.REFUTED,
+        PredictionStatus.SUPERSEDED,
+    }
+    active_statuses = {
+        ExperimentStatus.PLANNED,
+        ExperimentStatus.RUNNING,
+    }
+    for eid, exp in graph.experiments.items():
+        if exp.status == ExperimentStatus.COMPLETE and not exp.observations:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"experiments/{eid}",
+                "COMPLETE experiment has no recorded observations",
+            ))
+        if exp.status in active_statuses and exp.predictions_tested:
+            all_terminal = all(
+                graph.predictions[pid].status in terminal_statuses
+                for pid in exp.predictions_tested
+                if pid in graph.predictions
+            )
+            if all_terminal:
+                findings.append(Finding(
+                    Severity.WARNING,
+                    f"experiments/{eid}",
+                    f"{exp.status.value.upper()} experiment targets only terminal predictions"
+                    " — plan may be stale",
+                ))
+    return findings
+
+
+def validate_replicate_coherence(graph: EpistemicGraphPort) -> list[Finding]:
+    """Flag replication relationships that are structurally incoherent.
+
+    - A replicate that points to an ``ABANDONED`` parent experiment is
+      suspicious: if the original was abandoned, replicating it is
+      unlikely to be intentional. Severity: WARNING.
+    - A replicate whose ``predictions_tested`` set shares no overlap
+      with its parent's ``predictions_tested`` is likely a misconfigured
+      link. Severity: WARNING.
+
+    Args:
+        graph: The epistemic graph to validate.
+
+    Returns:
+        list[Finding]: All replication coherence findings.
+    """
+    findings: list[Finding] = []
+    for eid, exp in graph.experiments.items():
+        if exp.replicate_of is None:
+            continue
+        parent = graph.experiments.get(exp.replicate_of)
+        if parent is None:
+            # BrokenReferenceError would have been raised at registration;
+            # this is a defensive no-op for removed experiments.
+            continue
+        if parent.status == ExperimentStatus.ABANDONED:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"experiments/{eid}",
+                f"Replicates ABANDONED experiment {exp.replicate_of}",
+            ))
+        if (
+            exp.predictions_tested
+            and parent.predictions_tested
+            and not (exp.predictions_tested & parent.predictions_tested)
+        ):
+            findings.append(Finding(
+                Severity.WARNING,
+                f"experiments/{eid}",
+                f"Replicate {eid} shares no predictions_tested with parent "
+                f"{exp.replicate_of} — check replicate_of link",
+            ))
+    return findings

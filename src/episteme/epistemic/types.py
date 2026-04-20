@@ -46,6 +46,9 @@ PairwiseSeparationId = NewType("PairwiseSeparationId", str)
 ObservationId = NewType("ObservationId", str)
 """Nominal identifier for an :class:`~episteme.epistemic.model.Observation`."""
 
+ExperimentId = NewType("ExperimentId", str)
+"""Nominal identifier for an :class:`~episteme.epistemic.model.Experiment`."""
+
 
 
 # ── Severity ──────────────────────────────────────────────────────
@@ -572,4 +575,39 @@ DEAD_END_TRANSITIONS: dict[DeadEndStatus, frozenset[DeadEndStatus]] = {
         DeadEndStatus.ARCHIVED,
     }),
     DeadEndStatus.ARCHIVED: frozenset(),        # terminal
+}
+
+
+class ExperimentStatus(Enum):
+    """Lifecycle state of a physical experiment.
+
+    PLANNED:
+        The experiment has been designed and recorded but not yet run.
+        Allows AI agents and researchers to express intent before execution.
+    RUNNING:
+        The experiment is actively being conducted.
+    COMPLETE:
+        The experiment concluded and observations have been recorded.
+    ABANDONED:
+        The experiment was halted before completion. Observations recorded
+        up to that point remain valid.
+    """
+
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    ABANDONED = "abandoned"
+
+
+EXPERIMENT_TRANSITIONS: dict[ExperimentStatus, frozenset[ExperimentStatus]] = {
+    ExperimentStatus.PLANNED: frozenset({
+        ExperimentStatus.RUNNING,
+        ExperimentStatus.ABANDONED,
+    }),
+    ExperimentStatus.RUNNING: frozenset({
+        ExperimentStatus.COMPLETE,
+        ExperimentStatus.ABANDONED,
+    }),
+    ExperimentStatus.COMPLETE: frozenset(),     # terminal
+    ExperimentStatus.ABANDONED: frozenset(),    # terminal
 }

@@ -18,6 +18,7 @@ Public surface:
 from .model import (
     Analysis,
     Assumption,
+    Experiment,
     Hypothesis,
     DeadEnd,
     Discovery,
@@ -44,6 +45,8 @@ from .types import (
     DiscoveryId,
     DiscoveryStatus,
     EvidenceKind,
+    ExperimentId,
+    ExperimentStatus,
     Finding,
     RefutationImpact,
     AssumptionSupportStatus,
@@ -74,16 +77,16 @@ __all__ = [
     # types
     "HypothesisId", "AssumptionId", "PredictionId", "ObjectiveId", "DiscoveryId",
     "AnalysisId", "IndependenceGroupId", "ParameterId", "DeadEndId",
-    "PairwiseSeparationId", "ObservationId",
+    "PairwiseSeparationId", "ObservationId", "ExperimentId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
     "PredictionStatus", "DeadEndStatus", "HypothesisStatus", "ObjectiveStatus", "ObjectiveKind", "DiscoveryStatus",
-    "ObservationStatus", "Criticality", "AssumptionStatus",
+    "ObservationStatus", "ExperimentStatus", "Criticality", "AssumptionStatus",
     "AssumptionType", "HypothesisType", "HypothesisCategory",
     "RefutationImpact", "AssumptionSupportStatus", "ParameterImpact",
     # model
     "Hypothesis", "Assumption", "Prediction", "Objective", "IndependenceGroup",
     "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Parameter",
-    "Observation",
+    "Observation", "Experiment",
     # graph
     "EpistemicGraph", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
     "CycleError", "InvariantViolation",
