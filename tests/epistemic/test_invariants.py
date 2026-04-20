@@ -14,8 +14,18 @@ from episteme.epistemic.model import (
     PredictionId,
     PredictionStatus,
 )
-from episteme.epistemic.invariants import validate_all, validate_supersession_chains
-from episteme.epistemic.types import Severity
+from episteme.epistemic.invariants import (
+    validate_all,
+    validate_goal_objective_criteria,
+    validate_supersession_chains,
+    validate_testability_regime_consistency,
+)
+from episteme.epistemic.types import (
+    ConfidenceTier,
+    EvidenceKind,
+    MeasurementRegime,
+    Severity,
+)
 
 
 def test_objective_abandonment_impact(base_graph):
@@ -107,4 +117,69 @@ def test_valid_supersession_chain_no_findings(base_graph):
         )
     )
     findings = validate_supersession_chains(graph)
+    assert not findings
+
+
+# ── Testability / regime consistency ──────────────────────────────
+
+
+def test_not_yet_testable_with_measured_regime(base_graph):
+    """NOT_YET_TESTABLE + MEASURED regime is a contradictory combination."""
+    graph = base_graph.register_prediction(
+        Prediction(
+            id=PredictionId("P-NYT"),
+            observable="dark matter flux",
+            predicted=42,
+            status=PredictionStatus.NOT_YET_TESTABLE,
+            measurement_regime=MeasurementRegime.MEASURED,
+        )
+    )
+    findings = validate_testability_regime_consistency(graph)
+    assert any("NOT_YET_TESTABLE" in f.message and "P-NYT" in f.source for f in findings)
+
+
+def test_not_yet_testable_with_unmeasured_is_fine(base_graph):
+    """NOT_YET_TESTABLE + UNMEASURED is the expected pairing — no finding."""
+    graph = base_graph.register_prediction(
+        Prediction(
+            id=PredictionId("P-NYT"),
+            observable="dark matter flux",
+            predicted=42,
+            status=PredictionStatus.NOT_YET_TESTABLE,
+            measurement_regime=MeasurementRegime.UNMEASURED,
+        )
+    )
+    findings = validate_testability_regime_consistency(graph)
+    assert not findings
+
+
+# ── Goal objective criteria ───────────────────────────────────────
+
+
+def test_goal_objective_missing_success_criteria(base_graph):
+    """A GOAL objective without success_criteria triggers a WARNING."""
+    graph = base_graph.register_objective(
+        Objective(
+            id=ObjectiveId("OBJ-GOAL"),
+            title="Reduce latency by 50%",
+            kind=ObjectiveKind.GOAL,
+            status=ObjectiveStatus.ACTIVE,
+        )
+    )
+    findings = validate_goal_objective_criteria(graph)
+    assert any("success_criteria" in f.message and "OBJ-GOAL" in f.source for f in findings)
+
+
+def test_goal_objective_with_success_criteria_is_fine(base_graph):
+    """A GOAL objective with success_criteria produces no finding."""
+    graph = base_graph.register_objective(
+        Objective(
+            id=ObjectiveId("OBJ-GOAL"),
+            title="Reduce latency by 50%",
+            kind=ObjectiveKind.GOAL,
+            status=ObjectiveStatus.ACTIVE,
+            success_criteria="p99 latency < 50ms over 7 days",
+        )
+    )
+    findings = validate_goal_objective_criteria(graph)
     assert not findings

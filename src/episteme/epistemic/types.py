@@ -95,7 +95,7 @@ class Finding:
 class ConfidenceTier(Enum):
     """How strongly a prediction is constrained.
 
-    FULLY_SPECIFIED: Zero free parameters — pure prediction from objective.
+    FULLY_SPECIFIED: Zero free parameters — pure prediction from hypotheses.
     CONDITIONAL: Valid only if explicitly stated assumptions hold.
     FIT_CHECK: Agreement unsurprising — model was fit to this data, or data
         predates the model (retrodiction). Use evidence_kind to distinguish
@@ -161,13 +161,16 @@ class PredictionStatus(Enum):
         Awaiting decisive evidence.
     NOT_YET_TESTABLE:
         No feasible experiment or observation currently exists.
+    SUPERSEDED:
+        Replaced by a refined or updated prediction via ``supersedes``.
     """
 
-    CONFIRMED = "CONFIRMED"
-    STRESSED = "STRESSED"
-    REFUTED = "REFUTED"
-    PENDING = "PENDING"
-    NOT_YET_TESTABLE = "NOT_YET_TESTABLE"
+    CONFIRMED = "confirmed"
+    STRESSED = "stressed"
+    REFUTED = "refuted"
+    PENDING = "pending"
+    NOT_YET_TESTABLE = "not_yet_testable"
+    SUPERSEDED = "superseded"
 
 
 class DeadEndStatus(Enum):
@@ -259,11 +262,14 @@ class HypothesisStatus(Enum):
         Hypothesis text/semantics changed; dependent entities may require review.
     RETRACTED:
         Hypothesis is invalidated and should not be relied upon.
+    DEFERRED:
+        Investigation paused but not abandoned — may be resumed later.
     """
 
     ACTIVE = "active"        # normal, in-use
     REVISED = "revised"      # statement updated; downstream may need re-evaluation
     RETRACTED = "retracted"  # found to be wrong; predictions citing it are broken
+    DEFERRED = "deferred"    # paused, not abandoned
 
 
 class HypothesisType(Enum):
@@ -289,7 +295,7 @@ class HypothesisCategory(Enum):
         Hypothesis is conceptual, structural, or descriptive rather than numeric.
     """
 
-    QUANTITATIVE = "numerical"    # a quantitative assertion; should have linked analyses
+    QUANTITATIVE = "quantitative"    # a quantitative assertion; should have linked analyses
     QUALITATIVE = "qualitative"
 
 
@@ -303,8 +309,8 @@ class AssumptionType(Enum):
         assumption.
     """
 
-    EMPIRICAL = "E"        # can in principle be falsified by observation
-    METHODOLOGICAL = "M"   # a choice of method or modelling convention
+    EMPIRICAL = "empirical"        # can in principle be falsified by observation
+    METHODOLOGICAL = "methodological"   # a choice of method or modelling convention
 
 
 class Criticality(Enum):

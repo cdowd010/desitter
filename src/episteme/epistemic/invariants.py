@@ -20,6 +20,7 @@ from .types import (
     EvidenceKind,
     Finding,
     MeasurementRegime,
+    ObjectiveKind,
     ObservationStatus,
     PredictionStatus,
     Severity,
@@ -601,6 +602,62 @@ def validate_load_bearing_assumption_coverage(graph: EpistemicGraphPort) -> list
     return findings
 
 
+def validate_testability_regime_consistency(graph: EpistemicGraphPort) -> list[Finding]:
+    """Flag NOT_YET_TESTABLE predictions whose measurement regime contradicts their status.
+
+    A ``NOT_YET_TESTABLE`` prediction that declares ``MEASURED`` or
+    ``BOUND_ONLY`` regime is contradictory — the regime claims evidence
+    form is known, but the status says no feasible test exists.
+    ``UNMEASURED`` is the expected regime for ``NOT_YET_TESTABLE``.
+    Severity: WARNING.
+
+    Args:
+        graph: The epistemic graph to validate.
+
+    Returns:
+        list[Finding]: One WARNING per inconsistent prediction.
+    """
+    findings: list[Finding] = []
+    for pid, pred in graph.predictions.items():
+        if (
+            pred.status == PredictionStatus.NOT_YET_TESTABLE
+            and pred.measurement_regime != MeasurementRegime.UNMEASURED
+        ):
+            findings.append(Finding(
+                Severity.WARNING,
+                f"predictions/{pid}",
+                f"NOT_YET_TESTABLE prediction has measurement_regime="
+                f"{pred.measurement_regime.value} — expected UNMEASURED",
+            ))
+    return findings
+
+
+def validate_goal_objective_criteria(graph: EpistemicGraphPort) -> list[Finding]:
+    """Flag GOAL objectives without success criteria.
+
+    GOAL objectives represent concrete target outcomes. Without
+    ``success_criteria``, there is no way to determine when the
+    objective has been achieved. Severity: WARNING.
+
+    Args:
+        graph: The epistemic graph to validate.
+
+    Returns:
+        list[Finding]: One WARNING per GOAL objective missing
+            ``success_criteria``.
+    """
+    findings: list[Finding] = []
+    for oid, obj in graph.objectives.items():
+        if obj.kind == ObjectiveKind.GOAL and not obj.success_criteria:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"objectives/{oid}",
+                "GOAL objective has no success_criteria — "
+                "there is no way to determine when this objective is achieved",
+            ))
+    return findings
+
+
 def validate_supersession_chains(graph: EpistemicGraphPort) -> list[Finding]:
     """Validate supersession provenance chains across hypotheses, predictions, and objectives.
 
@@ -694,6 +751,8 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         13. Objective abandonment impact
         14. Load-bearing assumption coverage
         15. Supersession chains
+        16. Testability/regime consistency
+        17. Goal objective criteria
 
     Args:
         graph: The epistemic graph to validate.
@@ -718,4 +777,6 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         + validate_objective_abandonment_impact(graph)
         + validate_load_bearing_assumption_coverage(graph)
         + validate_supersession_chains(graph)
+        + validate_testability_regime_consistency(graph)
+        + validate_goal_objective_criteria(graph)
     )

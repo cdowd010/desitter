@@ -145,6 +145,8 @@ class EvidenceSummary:
         refuted_count: Number of predictions with REFUTED status.
         pending_count: Number of predictions with PENDING status.
         stressed_count: Number of predictions with STRESSED status.
+        not_yet_testable_count: Number of predictions with NOT_YET_TESTABLE status.
+        superseded_count: Number of predictions with SUPERSEDED status.
     """
 
     hypothesis_id: HypothesisId
@@ -158,6 +160,8 @@ class EvidenceSummary:
     refuted_count: int = 0
     pending_count: int = 0
     stressed_count: int = 0
+    not_yet_testable_count: int = 0
+    superseded_count: int = 0
 
 
 # ── Builder ──────────────────────────────────────────────────────
@@ -167,6 +171,8 @@ _STATUS_COUNTERS = {
     PredictionStatus.REFUTED: "refuted_count",
     PredictionStatus.PENDING: "pending_count",
     PredictionStatus.STRESSED: "stressed_count",
+    PredictionStatus.NOT_YET_TESTABLE: "not_yet_testable_count",
+    PredictionStatus.SUPERSEDED: "superseded_count",
 }
 
 
