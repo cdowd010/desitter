@@ -96,10 +96,12 @@ class ConfidenceTier(Enum):
     """How strongly a prediction is constrained.
 
     FULLY_SPECIFIED: Zero free parameters — pure prediction from hypotheses.
-    CONDITIONAL: Valid only if explicitly stated assumptions hold.
-    FIT_CHECK: Agreement unsurprising — model was fit to this data, or data
-        predates the model (retrodiction). Use evidence_kind to distinguish
-        fit vs. retrodiction sub-cases. Cannot be NOVEL_PREDICTION.
+    CONDITIONAL: Valid only if explicitly stated assumptions hold, or
+        parameterized with free degrees of freedom (``free_params > 0``).
+    FIT_CHECK: Agreement unsurprising — the model was tuned/calibrated
+        to match this data. Use ``EvidenceKind`` to distinguish fit
+        (``FIT_CONSISTENCY``) from retrodiction (``RETRODICTION``),
+        which is a separate and stronger form of evidence.
     """
     FULLY_SPECIFIED = "fully_specified"
     CONDITIONAL = "conditional"
@@ -130,10 +132,10 @@ class MeasurementRegime(Enum):
     """What kind of empirical evidence form applies to this prediction.
 
     MEASURED:
-        The relevant evidence is a direct quantitative value.
-        While status is PENDING/NOT_YET_TESTABLE, observed may still be
-        absent; once adjudicated (CONFIRMED/STRESSED/REFUTED), observed
-        should be present.
+        The relevant evidence is a direct value (quantitative or
+        categorical). While status is PENDING/NOT_YET_TESTABLE,
+        observed may still be absent; once adjudicated
+        (CONFIRMED/STRESSED/REFUTED), observed should be present.
     BOUND_ONLY:
         The relevant evidence is an upper/lower bound, not a point estimate.
         While status is PENDING/NOT_YET_TESTABLE, observed_bound may still be

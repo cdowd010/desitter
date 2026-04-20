@@ -62,11 +62,12 @@ def validate_tier_constraints(graph: EpistemicGraphPort) -> list[Finding]:
                 f"predictions/{pid}",
                 f"FULLY_SPECIFIED prediction has {pred.free_params} free params (must be 0)",
             ))
-        if pred.tier == ConfidenceTier.CONDITIONAL and not pred.conditional_on:
+        if pred.tier == ConfidenceTier.CONDITIONAL and not pred.conditional_on and pred.free_params == 0:
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                "CONDITIONAL prediction missing 'conditional_on'",
+                "CONDITIONAL prediction has neither 'conditional_on' assumptions "
+                "nor free parameters — expected at least one source of conditionality",
             ))
 
         requires_recorded_evidence = pred.status in {
