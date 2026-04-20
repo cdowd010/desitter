@@ -59,8 +59,10 @@ class Hypothesis:
         id: Unique identifier for this hypothesis (e.g. ``"H-001"``).
         statement: The human-readable text of the assertion.
         type: Structural role — ``FOUNDATIONAL`` (axiomatic base) or
-            ``DERIVED`` (depends on other hypotheses).
-        scope: Applicability scope, e.g. ``"global"`` or ``"domain-specific"``.
+            ``DERIVED`` (depends on other hypotheses). Defaults to
+            ``DERIVED``; can be inferred from ``depends_on``.
+        scope: Applicability scope, e.g. ``"global"`` or
+            ``"domain-specific"``. Defaults to ``"global"``.
         refutation_criteria: Description of what evidence would refute
             this hypothesis. Optional at registration to support early-stage
             or exploratory workflows; should be filled in as the hypothesis
@@ -76,10 +78,16 @@ class Hypothesis:
             ``Analysis.hypotheses_covered``.
         objectives: IDs of objectives that motivate this hypothesis. Bidirectional
             with ``Objective.motivates_hypotheses``.
+        observations: IDs of observations that motivated or are relevant to
+            this hypothesis. Soft navigational link — scrubbed on
+            observation removal.
         parameter_constraints: Annotation map ``{ParameterId: constraint_str}``
             where the constraint string is human-readable (e.g. ``"< 0.05"``.
             Episteme does not evaluate these — it surfaces them when a
             referenced parameter changes.
+        superseded_by: ID of the hypothesis that replaced this one when
+            status is ``REVISED`` or ``RETRACTED``. Enables provenance
+            chain reconstruction.
         source: Provenance string — DOI, arXiv ID, URL, citation, or
             ``"derived from ..."``.
         created: Date the hypothesis was first recorded.
@@ -88,8 +96,8 @@ class Hypothesis:
     """
     id: HypothesisId
     statement: str
-    type: HypothesisType
-    scope: str                                   # "global", "domain-specific"
+    type: HypothesisType = HypothesisType.DERIVED
+    scope: str = "global"
     refutation_criteria: str | None = None
     status: HypothesisStatus = HypothesisStatus.ACTIVE
     category: HypothesisCategory = HypothesisCategory.QUALITATIVE
@@ -97,7 +105,9 @@ class Hypothesis:
     depends_on: set[HypothesisId] = field(default_factory=set)
     analyses: set[AnalysisId] = field(default_factory=set)
     objectives: set[ObjectiveId] = field(default_factory=set)
+    observations: set[ObservationId] = field(default_factory=set)
     parameter_constraints: dict[ParameterId, str] = field(default_factory=dict)
+    superseded_by: HypothesisId | None = None
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
     created: date | None = None
     tags: set[str] = field(default_factory=set)
@@ -144,7 +154,7 @@ class Assumption:
     id: AssumptionId
     statement: str
     type: AssumptionType
-    scope: str
+    scope: str = "global"
     criticality: Criticality = Criticality.MODERATE
     used_in_hypotheses: set[HypothesisId] = field(default_factory=set)
     depends_on: set[AssumptionId] = field(default_factory=set)
@@ -222,6 +232,12 @@ class Prediction:
         source: Provenance string — DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
         created: Date the prediction was first recorded.
+        supersedes: ID of the prediction this one refines or replaces.
+            Enables iteration chains for engineering optimisation workflows.
+        predicted_uncertainty: Tolerance or uncertainty on the predicted
+            value, same type as ``predicted``. For example,
+            ``predicted=1.5, predicted_uncertainty=0.2`` represents
+            $1.5 \pm 0.2$.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
     """
@@ -250,6 +266,8 @@ class Prediction:
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
     notes: str | None = None
     created: date | None = None
+    supersedes: PredictionId | None = None
+    predicted_uncertainty: Any = None
     tags: set[str] = field(default_factory=set)
 
 
@@ -394,6 +412,9 @@ class Objective:
         related_discoveries: IDs of discoveries made while pursuing
             this objective. Soft navigational link.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
+        superseded_by: ID of the objective that replaced this one when
+            status is ``SUPERSEDED``. Enables provenance chain
+            reconstruction.
         created: Date the objective was first recorded.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
@@ -409,6 +430,7 @@ class Objective:
     related_dead_ends: set[DeadEndId] = field(default_factory=set)
     related_discoveries: set[DiscoveryId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
+    superseded_by: ObjectiveId | None = None
     created: date | None = None
     tags: set[str] = field(default_factory=set)
 

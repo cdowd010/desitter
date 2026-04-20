@@ -463,6 +463,7 @@ class EpistemicGraph:
         self._check_refs_exist(hypothesis.analyses, self.analyses, "analysis")
         self._check_refs_exist(set(hypothesis.parameter_constraints.keys()), self.parameters, "parameter")
         self._check_refs_exist(hypothesis.objectives, self.objectives, "objective")
+        self._check_refs_exist(hypothesis.observations, self.observations, "observation")
         self._check_no_cycle_with(hypothesis)
 
         new = self._copy()
@@ -932,6 +933,7 @@ class EpistemicGraph:
         self._check_refs_exist(new_hypothesis.analyses, self.analyses, "analysis")
         self._check_refs_exist(set(new_hypothesis.parameter_constraints.keys()), self.parameters, "parameter")
         self._check_refs_exist(new_hypothesis.objectives, self.objectives, "objective")
+        self._check_refs_exist(new_hypothesis.observations, self.observations, "observation")
         self._check_no_cycle_with(new_hypothesis)
 
         new = self._copy()
@@ -1733,6 +1735,11 @@ class EpistemicGraph:
             if pid in new.predictions:
                 new.predictions[pid] = copy.deepcopy(new.predictions[pid])
                 new.predictions[pid].observations.discard(oid)
+        # Scrub soft navigational link: hypothesis.observations
+        for hid, hyp in list(new.hypotheses.items()):
+            if oid in hyp.observations:
+                new.hypotheses[hid] = copy.deepcopy(hyp)
+                new.hypotheses[hid].observations.discard(oid)
         return new
 
     def transition_observation(
