@@ -53,19 +53,18 @@ the primary product, and it works without any AI involvement.
 But the architecture is designed from day one for a second mode of operation:
 **AI-assisted and AI-autonomous research**.
 
-### Three modes of interaction
+### Agent Interaction Modes
 
-| Mode | Who drives | What the AI does |
-|------|-----------|-----------------|
-| **Manual** | Human researcher | Episteme is a library. You register entities, run validators, query the graph. No AI required. |
-| **Assistant** | Human researcher, AI helps | The AI acts as an epistemic bookkeeper. When you say *"I think X causes Y,"* it registers a hypothesis, surfaces the validator findings, and uses them as a Socratic checklist: *"To make this testable, what prediction can we derive?"* |
-| **Autonomous** | AI agent, human supervises | The AI is given an `Objective` and uses Episteme as its internal world model to plan, execute, and evaluate research cycles. The invariant logic gate prevents it from advancing its state without valid epistemic reasoning. |
-
-The most interesting case is the **hybrid**: a human sets the objectives and
-key assumptions, releases an autonomous agent to run N analysis cycles, then
-returns to find a fully versioned, queryable epistemic graph showing exactly
-how the agent reached its conclusions — with every reasoning step legible and
-auditable.
+| Mode | Who drives | What it does |
+|------|-----------|-------------|
+| **Manual** | Human researcher | Episteme is a library. Register entities, run validators, query the graph. No AI required. |
+| **Assistant** | Human, AI helps | The AI acts as an epistemic bookkeeper — registers hypotheses, surfaces validator findings as a Socratic checklist, blocks changes that would create cycles or orphan evidence. |
+| **Hybrid** | Human sets scope, AI executes | Human defines objectives and assumptions, AI runs N analysis cycles autonomously. Human returns to a fully versioned, queryable graph showing every reasoning step. |
+| **Autonomous** | AI agent, human supervises | AI is given an `Objective` and runs the full research cycle. The invariant logic gate prevents it from advancing its state without valid epistemic reasoning. |
+| **Inductive** | AI, data-driven | Mines existing observations for patterns and surfaces candidate hypotheses. For domains where data precedes theory. |
+| **Adversarial** | AI critic | Red-teams the current graph — finding weak assumptions, thin test coverage, and disputed evidence bases. The 31 validators are a built-in red-team toolkit. |
+| **Archivist** | AI, retrospective | Constructs an epistemic graph from existing research (papers, logs, reports) — formalizing reasoning chains that were never recorded. |
+| **Peer Reviewer** | AI, read-only | Produces a structured audit report from a completed graph. Analogous to journal peer review. |
 
 ### Why the architecture supports this
 
@@ -76,7 +75,8 @@ invariants on every write. An agent using Episteme as its world model cannot
 silently hallucinate progress — it must register a hypothesis, derive a
 prediction, obtain an observation, and feed it back through the Gateway.
 The Gateway blocks circular reasoning, orphaned predictions, invalid
-transitions, and self-contradictory evidence claims.
+transitions, and self-contradictory evidence claims. This constrains what
+gets recorded as the agent's *internal state*, not just what it outputs.
 
 **Queryable long-term memory.** A large research graph — 200 hypotheses, 800
 predictions, 2000 observations — does not fit in a context window. But the
@@ -295,6 +295,7 @@ Episteme supports any STEM research or engineering methodology:
 | 4 | Control plane — gateway, staleness detection, export, render | In progress |
 | 5 | Interface layer — CLI and MCP server as thin delegates over the gateway | Planned |
 | 6 | Documentation — worked examples, terminology guide | Planned |
+| 7 | AI agency foundations — structured adjudication, provenance tracking, atomic tooling, concurrent writes | Planned |
 
 ---
 

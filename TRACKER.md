@@ -97,7 +97,7 @@ These are execution constraints. Work that violates them should be rejected.
 > requires: Epistemic Kernel
 
 - [ ] `adapters/json_repository.py` -- load/save EpistemicGraph to JSON
-- [ ] `adapters/transaction_log.py` -- append-only mutation journal
+- [ ] `adapters/transaction_log.py` -- append-only mutation journal; extend protocol with timestamp and agent_id fields
 - [ ] `adapters/payload_validator.py` -- schema validation against payload specs
 
 ---
@@ -173,6 +173,42 @@ All three helper mixins have signatures but raise `NotImplementedError`. Impleme
 
 ---
 
+## Milestone 8: AI Agency Foundations
+
+> requires: Gateway, Adapters, Client
+
+These items enable AI agents to use Episteme as a research world model. The kernel and architecture already support this; these are additive extensions.
+
+### Structured Adjudication
+
+- [ ] Define `AdjudicationRationale` type: `text`, `evidence_refs` (content-addressed hashes), `authored_by`
+- [ ] Replace `Prediction.adjudication_rationale: str | None` with `AdjudicationRationale | None`
+- [ ] Update `validate_adjudication_rationale` to check structured fields
+- [ ] `validate_independence_of_adjudication` -- WARNING when `authored_by` on a high-stakes transition matches the agent that registered the evidence
+
+### Transaction Log Provenance
+
+- [ ] Extend `TransactionLog.append` protocol to include timestamp, payload hash, and agent_id
+- [ ] Merkle-linked log adapter for tamper-evident history (swarm use case)
+
+### Atomic Tooling (MCP layer)
+
+- [ ] Design single experiment+register MCP tool that atomically registers an observation when an analysis runs
+- [ ] Ensure no separate "run then optionally register" path exists for agents
+
+### Concurrent Write Coordination
+
+- [ ] `GraphRepository.save_if_version(graph, expected_version)` -- CAS-style save using existing `EpistemicGraph.version` field
+- [ ] Gateway-level retry or merge strategy on version conflict
+
+### Agent Interaction Patterns
+
+- [ ] QC agent pattern: read-only graph access + validator suite as a standalone tool
+- [ ] Debater pattern: multiple agents writing to the same graph with independence group mediation
+- [ ] Degradation strategy primitives: retract, dead-end, supersede, escalate documented as agent policy building blocks
+
+---
+
 ## Possible Future Work: Dataset Entity
 
 > Evaluate whether Dataset is needed or if recording analysis provenance (script path, SHA, date) is sufficient.
@@ -198,6 +234,10 @@ Every item below must be true before the Python API target is closed:
 - [ ] Analysis results can be recorded programmatically via `record_analysis_result`
 - [ ] All named queries return structured `ClientResult` objects suitable for notebooks
 - [ ] `run_health_check` returns a `HealthReport` with correct overall status
+- [ ] Structured `AdjudicationRationale` type replaces plain string on `Prediction`
+- [ ] `validate_independence_of_adjudication` flags self-attested high-stakes transitions
+- [ ] Transaction log adapter records agent_id and timestamp per mutation
+- [ ] MCP tools enforce atomic observation registration (no split run/register)
 - [ ] Validation failures (schema errors, broken refs, CRITICAL invariants) fail fast without writing
 - [ ] dry_run=True validates and returns findings without mutating the graph
 - [ ] All of the above is covered by automated tests
