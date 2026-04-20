@@ -45,6 +45,9 @@ from .types import (
     DiscoveryStatus,
     EvidenceKind,
     Finding,
+    RefutationImpact,
+    AssumptionSupportStatus,
+    ParameterImpact,
     IndependenceGroupId,
     MeasurementRegime,
     ObservationId,
@@ -76,6 +79,7 @@ __all__ = [
     "PredictionStatus", "DeadEndStatus", "HypothesisStatus", "ObjectiveStatus", "ObjectiveKind", "DiscoveryStatus",
     "ObservationStatus", "Criticality", "AssumptionStatus",
     "AssumptionType", "HypothesisType", "HypothesisCategory",
+    "RefutationImpact", "AssumptionSupportStatus", "ParameterImpact",
     # model
     "Hypothesis", "Assumption", "Prediction", "Objective", "IndependenceGroup",
     "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Parameter",

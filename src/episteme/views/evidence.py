@@ -5,7 +5,7 @@ predictions with their statuses and observations, the assumption
 foundation (with criticality and test coverage), linked analyses
 and their staleness, and motivating objectives.
 
-Pure function — no I/O, no side effects.
+Pure function. No I/O, no side effects.
 """
 from __future__ import annotations
 

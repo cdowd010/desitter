@@ -50,7 +50,7 @@ class ClientResult(Generic[ResultData]):
 class EpistemeClientError(Exception):
     """Raised when the gateway returns a non-success status.
 
-    Not raised by default — callers must opt in to this behaviour.
+    Not raised by default. Callers must opt in to this behaviour.
     When raised, the ``status``, ``message``, and ``findings`` fields
     carry the same information that would appear in a ``ClientResult``.
 

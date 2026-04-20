@@ -1,6 +1,6 @@
 """Epistemic-graph metric read models and computation.
 
-Pure functions — no I/O, no side effects. Counts entities, computes
+Pure functions. No I/O, no side effects. Counts entities, computes
 detailed prediction statistics, and identifies coverage gaps.
 """
 from __future__ import annotations
@@ -80,7 +80,7 @@ class GraphMetrics:
 def compute_metrics(graph: EpistemicGraphPort) -> GraphMetrics:
     """Compute aggregate metrics from the epistemic graph.
 
-    Pure function — no I/O, no side effects. Counts entities in every
+    Pure function. No I/O, no side effects. Counts entities in every
     collection, computes detailed prediction statistics, and identifies
     coverage gaps.
 

@@ -17,8 +17,8 @@ class GatewayResult:
 
     Attributes:
         status: Outcome of the operation. Common values:
-            ``"ok"`` — success; ``"BLOCKED"`` — domain invariant
-            violation blocked the mutation; ``"error"`` — bad input
+            ``"ok"``: success; ``"BLOCKED"``: domain invariant
+            violation blocked the mutation; ``"error"``. Bad input
             (unknown resource, broken reference, missing required field).
         changed: ``True`` when the in-memory graph was modified as a result
             of this operation. Always ``False`` for ``dry_run=True`` calls

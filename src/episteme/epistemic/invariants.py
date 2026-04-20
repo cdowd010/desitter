@@ -69,7 +69,7 @@ def validate_tier_constraints(graph: EpistemicGraphPort) -> list[Finding]:
                 Severity.WARNING,
                 f"predictions/{pid}",
                 "CONDITIONAL prediction has neither 'conditional_on' assumptions "
-                "nor free parameters — expected at least one source of conditionality",
+                "nor free parameters: expected at least one source of conditionality",
             ))
 
         requires_recorded_evidence = pred.status in {
@@ -138,7 +138,7 @@ def validate_independence_semantics(graph: EpistemicGraphPort) -> list[Finding]:
 
     # Check pairwise separation completeness.
     # A separation is only required once BOTH groups have at least one member
-    # prediction. An empty group is a declaration of intent — requiring a
+    # prediction. An empty group is a declaration of intent. Requiring a
     # separation before any predictions exist creates an unresolvable
     # registration deadlock (the separation needs both groups, the second
     # group needs the separation to pass validation).
@@ -242,7 +242,7 @@ def validate_retracted_hypothesis_citations(graph: EpistemicGraphPort) -> list[F
     Retracted hypotheses are invalidated assertions that should not be relied
     upon. Active predictions (PENDING, CONFIRMED, STRESSED, NOT_YET_TESTABLE)
     and active hypotheses (ACTIVE, REVISED, DEFERRED) citing a retracted
-    hypothesis are CRITICAL — they need remediation. Terminal predictions
+    hypothesis are CRITICAL. They need remediation. Terminal predictions
     (REFUTED, SUPERSEDED) and terminal hypotheses (RETRACTED) are downgraded
     to INFO since they are historical records requiring no action.
 
@@ -343,7 +343,7 @@ def validate_tests_conditional_overlap(graph: EpistemicGraphPort) -> list[Findin
     ``tests_assumptions`` means 'this outcome bears on whether the assumption
     holds'. ``conditional_on`` means 'this prediction is only valid if the
     assumption holds'. These are logically contradictory for the same
-    assumption — you cannot simultaneously test something you assume to be
+    assumption. You cannot simultaneously test something you assume to be
     true. Severity: CRITICAL.
 
     Args:
@@ -369,7 +369,7 @@ def validate_tests_conditional_overlap(graph: EpistemicGraphPort) -> list[Findin
 def validate_foundational_hypothesis_deps(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag foundational hypotheses that have dependencies on other hypotheses.
 
-    Foundational hypotheses are axioms — by definition they should not depend
+    Foundational hypotheses are axioms. By definition they should not depend
     on other hypotheses. Having ``depends_on`` entries on a foundational hypothesis
     indicates a misclassification or structural error. Severity: WARNING.
 
@@ -419,14 +419,14 @@ def validate_evidence_consistency(graph: EpistemicGraphPort) -> list[Finding]:
                 findings.append(Finding(
                     Severity.WARNING,
                     f"predictions/{pid}",
-                    "FIT_CHECK prediction marked as NOVEL_PREDICTION — "
+                    "FIT_CHECK prediction marked as NOVEL_PREDICTION: "
                     "fit checks are definitionally not novel predictions",
                 ))
             elif pred.evidence_kind == EvidenceKind.RETRODICTION:
                 findings.append(Finding(
                     Severity.WARNING,
                     f"predictions/{pid}",
-                    "FIT_CHECK prediction marked as RETRODICTION — "
+                    "FIT_CHECK prediction marked as RETRODICTION: "
                     "retrodiction means data was not used for fitting, "
                     "which contradicts FIT_CHECK",
                 ))
@@ -442,7 +442,7 @@ def validate_conditional_assumption_pressure(graph: EpistemicGraphPort) -> list[
     pressure. P's status was established when A was considered sound; that
     basis is now in question.
 
-    Only CONFIRMED and STRESSED predictions are flagged — PENDING predictions
+    Only CONFIRMED and STRESSED predictions are flagged. PENDING predictions
     haven't been confirmed yet (no false sense of security to break), and
     REFUTED predictions are already in a terminal state.
 
@@ -496,7 +496,7 @@ def validate_stress_criteria(graph: EpistemicGraphPort) -> list[Finding]:
 
     The boundary between CONFIRMED and STRESSED is philosophically
     ambiguous. Making the researcher declare ``stress_criteria`` upfront
-    — what evidence would constitute tension without full refutation —
+    (what evidence would constitute tension without full refutation)
     ensures the adjudication is explicit and auditable rather than
     ad-hoc. Severity: WARNING.
 
@@ -513,7 +513,7 @@ def validate_stress_criteria(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                "STRESSED prediction has no stress_criteria — the boundary "
+                "STRESSED prediction has no stress_criteria: the boundary "
                 "between CONFIRMED and STRESSED should be declared explicitly",
             ))
     return findings
@@ -525,7 +525,7 @@ def validate_retracted_observation_citations(graph: EpistemicGraphPort) -> list[
     If an observation's ``related_hypotheses`` includes hypotheses that have been
     retracted, the observation's interpretation may be compromised.
     Also flags observations in RETRACTED status that are still linked to
-    predictions — active predictions (PENDING, CONFIRMED, STRESSED,
+    predictions. Active predictions (PENDING, CONFIRMED, STRESSED,
     NOT_YET_TESTABLE) are WARNING; terminal predictions (REFUTED, SUPERSEDED)
     are downgraded to INFO since they are historical records.
 
@@ -632,7 +632,7 @@ def validate_load_bearing_assumption_coverage(graph: EpistemicGraphPort) -> list
             findings.append(Finding(
                 Severity.CRITICAL,
                 f"assumptions/{aid}",
-                "LOAD_BEARING assumption has no predictions in tested_by — "
+                "LOAD_BEARING assumption has no predictions in tested_by: "
                 "this is a single point of failure with no active test",
             ))
         elif assumption.criticality == Criticality.HIGH and not assumption.tested_by:
@@ -648,7 +648,7 @@ def validate_testability_regime_consistency(graph: EpistemicGraphPort) -> list[F
     """Flag NOT_YET_TESTABLE predictions whose measurement regime contradicts their status.
 
     A ``NOT_YET_TESTABLE`` prediction that declares ``MEASURED`` or
-    ``BOUND_ONLY`` regime is contradictory — the regime claims evidence
+    ``BOUND_ONLY`` regime is contradictory. The regime claims evidence
     form is known, but the status says no feasible test exists.
     ``UNMEASURED`` is the expected regime for ``NOT_YET_TESTABLE``.
     Severity: WARNING.
@@ -669,7 +669,7 @@ def validate_testability_regime_consistency(graph: EpistemicGraphPort) -> list[F
                 Severity.WARNING,
                 f"predictions/{pid}",
                 f"NOT_YET_TESTABLE prediction has measurement_regime="
-                f"{pred.measurement_regime.value} — expected UNMEASURED",
+                f"{pred.measurement_regime.value}: expected UNMEASURED",
             ))
     return findings
 
@@ -694,7 +694,7 @@ def validate_goal_objective_criteria(graph: EpistemicGraphPort) -> list[Finding]
             findings.append(Finding(
                 Severity.WARNING,
                 f"objectives/{oid}",
-                "GOAL objective has no success_criteria — "
+                "GOAL objective has no success_criteria: "
                 "there is no way to determine when this objective is achieved",
             ))
     return findings
@@ -737,7 +737,7 @@ def validate_supersession_chains(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.WARNING,
                 f"hypotheses/{hid}",
-                "REVISED hypothesis has no superseded_by — "
+                "REVISED hypothesis has no superseded_by: "
                 "provenance chain is incomplete",
             ))
 
@@ -753,7 +753,7 @@ def validate_supersession_chains(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.WARNING,
                 f"objectives/{oid}",
-                "SUPERSEDED objective has no superseded_by — "
+                "SUPERSEDED objective has no superseded_by: "
                 "provenance chain is incomplete",
             ))
 
@@ -777,7 +777,7 @@ def validate_compromised_observation_basis(graph: EpistemicGraphPort) -> list[Fi
     compromised. The researcher should review whether the prediction's
     status is still warranted.
 
-    Only active adjudicated predictions (CONFIRMED, STRESSED) are flagged —
+    Only active adjudicated predictions (CONFIRMED, STRESSED) are flagged .
     PENDING predictions haven't been adjudicated yet, and terminal predictions
     (REFUTED, SUPERSEDED) are historical records. Severity: WARNING.
 
@@ -805,7 +805,7 @@ def validate_compromised_observation_basis(graph: EpistemicGraphPort) -> list[Fi
                 Severity.WARNING,
                 f"predictions/{pid}",
                 f"{pred.status.value} prediction has disputed/retracted "
-                f"observation(s): {sorted(bad_obs)} — adjudication basis "
+                f"observation(s): {sorted(bad_obs)}: adjudication basis "
                 f"may be compromised",
             ))
     return findings
@@ -852,7 +852,7 @@ def validate_supersession_status_consistency(graph: EpistemicGraphPort) -> list[
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                "SUPERSEDED prediction has no successor — "
+                "SUPERSEDED prediction has no successor: "
                 "no other prediction declares supersedes pointing to it",
             ))
 
@@ -880,7 +880,7 @@ def validate_refutation_criteria(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                "REFUTED prediction has no refutation_criteria — the basis "
+                "REFUTED prediction has no refutation_criteria: the basis "
                 "for refutation should be declared explicitly for auditability",
             ))
     return findings
@@ -911,7 +911,7 @@ def validate_observed_but_pending(graph: EpistemicGraphPort) -> list[Finding]:
                 Severity.INFO,
                 f"predictions/{pid}",
                 "Prediction has recorded observed data but status is still "
-                "PENDING — evidence may be ready for adjudication",
+                "PENDING: evidence may be ready for adjudication",
             ))
     return findings
 
@@ -921,7 +921,7 @@ def validate_deferred_hypothesis_active_predictions(graph: EpistemicGraphPort) -
 
     If a hypothesis has status ``DEFERRED`` (investigation paused) but
     predictions derived from it are still ``PENDING``, ``CONFIRMED``, or
-    ``STRESSED``, those predictions are in limbo — their theoretical basis
+    ``STRESSED``, those predictions are in limbo. Their theoretical basis
     is on hold but they are being treated as active. Severity: WARNING.
 
     Args:
@@ -955,7 +955,7 @@ def validate_deferred_hypothesis_active_predictions(graph: EpistemicGraphPort) -
                 Severity.WARNING,
                 f"hypotheses/{cid}",
                 f"DEFERRED hypothesis still has active prediction(s): "
-                f"{sorted(active_preds)} — their theoretical basis is on hold",
+                f"{sorted(active_preds)}: their theoretical basis is on hold",
             ))
     return findings
 
@@ -963,7 +963,7 @@ def validate_deferred_hypothesis_active_predictions(graph: EpistemicGraphPort) -
 def validate_orphaned_predictions(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag predictions with no hypothesis derivation chain.
 
-    A prediction with empty ``hypothesis_ids`` has no logical root — it
+    A prediction with empty ``hypothesis_ids`` has no logical root. It
     is an assertion without a derivation chain. This is common during
     early exploratory work but should be resolved as the graph matures.
     Severity: INFO.
@@ -980,7 +980,7 @@ def validate_orphaned_predictions(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.INFO,
                 f"predictions/{pid}",
-                "Prediction has no hypothesis_ids — no derivation chain "
+                "Prediction has no hypothesis_ids: no derivation chain "
                 "connects it to the reasoning graph",
             ))
     return findings
@@ -996,7 +996,7 @@ def validate_prediction_transition(
     Returns warnings for transitions that are technically valid but may
     indicate incomplete researcher intent. Hard blocks (logically
     impossible transitions) are enforced by graph mutation guards in
-    ``graph.py`` — this function only surfaces advisory findings.
+    ``graph.py``. This function only surfaces advisory findings.
 
     Designed for composition: the gateway ``_finalize_mutation`` can call
     this post-transition, or a researcher can call it directly before
@@ -1025,7 +1025,7 @@ def validate_prediction_transition(
         findings.append(Finding(
             Severity.WARNING,
             f"predictions/{pid}",
-            "Transitioning to STRESSED without stress_criteria — "
+            "Transitioning to STRESSED without stress_criteria: "
             "consider documenting what evidence threshold separates "
             "STRESSED from REFUTED",
         ))
@@ -1033,7 +1033,7 @@ def validate_prediction_transition(
         findings.append(Finding(
             Severity.WARNING,
             f"predictions/{pid}",
-            "Transitioning to REFUTED without refutation_criteria — "
+            "Transitioning to REFUTED without refutation_criteria: "
             "consider documenting what evidence constituted decisive "
             "refutation",
         ))
@@ -1045,7 +1045,7 @@ def validate_prediction_transition(
             Severity.WARNING,
             f"predictions/{pid}",
             f"Transitioning to NOT_YET_TESTABLE but measurement_regime "
-            f"is {pred.measurement_regime.value} — consider whether "
+            f"is {pred.measurement_regime.value}: consider whether "
             f"UNMEASURED is more appropriate",
         ))
     return findings
@@ -1063,7 +1063,7 @@ def validate_falsified_assumption_impact(graph: EpistemicGraphPort) -> list[Find
       FALSIFIED → CRITICAL; QUESTIONED → WARNING.
 
     Terminal entities (RETRACTED hypotheses, REFUTED/SUPERSEDED predictions)
-    are excluded — they are historical records.
+    are excluded. They are historical records.
 
     This complements ``validate_conditional_assumption_pressure`` (which checks
     if *testing predictions* have been REFUTED) by directly inspecting the
@@ -1105,7 +1105,7 @@ def validate_falsified_assumption_impact(graph: EpistemicGraphPort) -> list[Find
                     severity,
                     f"hypotheses/{cid}",
                     f"Hypothesis references {assumption.status.value} assumption "
-                    f"{aid} — re-evaluation needed",
+                    f"{aid}: re-evaluation needed",
                 ))
 
         # Predictions conditional on this assumption
@@ -1115,7 +1115,7 @@ def validate_falsified_assumption_impact(graph: EpistemicGraphPort) -> list[Find
                     severity,
                     f"predictions/{pid}",
                     f"Prediction is conditional on {assumption.status.value} "
-                    f"assumption {aid} — validity basis compromised",
+                    f"assumption {aid}: validity basis compromised",
                 ))
 
     return findings
@@ -1129,7 +1129,7 @@ def validate_adjudication_has_observations(graph: EpistemicGraphPort) -> list[Fi
     set. A prediction adjudicated without any observation links has an
     unauditable empirical basis.
 
-    UNMEASURED regime predictions are exempt — they have no direct
+    UNMEASURED regime predictions are exempt. They have no direct
     measurement path by definition.
 
     Severity: WARNING.
@@ -1152,7 +1152,7 @@ def validate_adjudication_has_observations(graph: EpistemicGraphPort) -> list[Fi
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                f"{pred.status.value} prediction has no linked observations — "
+                f"{pred.status.value} prediction has no linked observations: "
                 f"adjudication should be grounded in empirical evidence",
             ))
     return findings
@@ -1162,7 +1162,7 @@ def validate_adjudication_rationale(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag adjudicated predictions without an adjudication rationale.
 
     When a prediction is CONFIRMED, STRESSED, or REFUTED, the researcher
-    should document *why* — what evidence was decisive and how it maps to
+    should document *why*. What evidence was decisive and how it maps to
     the adjudication thresholds. Without ``adjudication_rationale``, the
     decision is unauditable.
 
@@ -1185,7 +1185,7 @@ def validate_adjudication_rationale(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.WARNING,
                 f"predictions/{pid}",
-                f"{pred.status.value} prediction has no adjudication_rationale — "
+                f"{pred.status.value} prediction has no adjudication_rationale: "
                 f"document the evidence and reasoning behind the adjudication",
             ))
     return findings
@@ -1225,7 +1225,7 @@ def validate_hypothesis_refutation_criteria(graph: EpistemicGraphPort) -> list[F
             findings.append(Finding(
                 Severity.INFO,
                 f"hypotheses/{cid}",
-                "Active hypothesis with predictions but no refutation_criteria — "
+                "Active hypothesis with predictions but no refutation_criteria: "
                 "consider documenting what evidence would refute this hypothesis",
             ))
     return findings
@@ -1236,7 +1236,7 @@ def validate_discovery_integration_consistency(graph: EpistemicGraphPort) -> lis
 
     A discovery with status ``INTEGRATED`` claims it has been incorporated
     into hypotheses or predictions. If both ``related_hypotheses`` and
-    ``related_predictions`` are empty, the claim is unsubstantiated — the
+    ``related_predictions`` are empty, the claim is unsubstantiated. The
     researcher should either add links or revert the status to ``NEW``.
 
     Severity: WARNING.
@@ -1258,7 +1258,7 @@ def validate_discovery_integration_consistency(graph: EpistemicGraphPort) -> lis
                 Severity.WARNING,
                 f"discoveries/{did}",
                 "INTEGRATED discovery has no related_hypotheses or "
-                "related_predictions — integration claim is unsubstantiated",
+                "related_predictions: integration claim is unsubstantiated",
             ))
     return findings
 
@@ -1266,7 +1266,7 @@ def validate_discovery_integration_consistency(graph: EpistemicGraphPort) -> lis
 def validate_supersession_cycles(graph: EpistemicGraphPort) -> list[Finding]:
     """Detect cycles in supersession chains across predictions, hypotheses, and objectives.
 
-    Supersession is inherently a DAG — "A was replaced by B which was
+    Supersession is inherently a DAG: "A was replaced by B which was
     replaced by C" forms a linear provenance chain. A cycle
     (A → B → A) is incoherent and indicates a data entry error.
 
@@ -1347,13 +1347,13 @@ def validate_hypothesis_empirical_interface(graph: EpistemicGraphPort) -> list[F
     Popper's falsifiability principle: a scientific hypothesis must
     generate testable predictions. An ACTIVE hypothesis with zero
     predictions citing it anywhere in the graph has no empirical
-    interface — it cannot be confirmed, stressed, or refuted.
+    interface. It cannot be confirmed, stressed, or refuted.
 
     This is expected during early-stage development. But as the graph
     matures, hypotheses without predictions represent blind spots in
     the testing strategy.
 
-    Only ACTIVE hypotheses are flagged — DEFERRED, REVISED, and
+    Only ACTIVE hypotheses are flagged. DEFERRED, REVISED, and
     RETRACTED hypotheses have other lifecycle semantics.
 
     Severity: INFO.
@@ -1375,7 +1375,7 @@ def validate_hypothesis_empirical_interface(graph: EpistemicGraphPort) -> list[F
             findings.append(Finding(
                 Severity.INFO,
                 f"hypotheses/{cid}",
-                "Active hypothesis has no predictions — no empirical "
+                "Active hypothesis has no predictions: no empirical "
                 "interface exists to test or refute it",
             ))
     return findings
@@ -1405,7 +1405,7 @@ def validate_disconnected_dead_ends(graph: EpistemicGraphPort) -> list[Finding]:
             findings.append(Finding(
                 Severity.INFO,
                 f"dead_ends/{did}",
-                "Dead end has no related_hypotheses or related_predictions — "
+                "Dead end has no related_hypotheses or related_predictions: "
                 "consider linking it to the reasoning it emerged from",
             ))
     return findings

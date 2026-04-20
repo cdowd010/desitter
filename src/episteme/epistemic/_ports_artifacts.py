@@ -14,7 +14,7 @@ class Artifact:
 
     Artifacts are self-contained, transport-friendly objects that carry
     their content alongside metadata. Consumers (``ArtifactSink``
-    implementations) decide what to do with them — write to disk, stream
+    implementations) decide what to do with them. Write to disk, stream
     to a client, embed in a report, etc.
 
     Attributes:

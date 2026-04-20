@@ -81,7 +81,7 @@ class ProjectContext:
 def load_config(root: Path) -> EpistemeConfig:
     """Read ``episteme.toml`` from *root* and return project settings.
 
-    A missing file or missing keys are not errors — defaults are used.
+    A missing file or missing keys are not errors. Defaults are used.
     Only the ``[episteme]`` table is read.
 
     Args:

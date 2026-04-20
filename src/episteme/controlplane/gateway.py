@@ -12,8 +12,8 @@ Responsibilities:
   - Post-mutation invariant enforcement (CRITICAL findings block mutation).
 
 Not responsible for:
-  - Persistence — that belongs to EpistemeClient via GraphRepository.
-  - Transaction logging — deferred to the persistence layer.
+  - Persistence. That belongs to EpistemeClient via GraphRepository.
+  - Transaction logging. Deferred to the persistence layer.
   - Prose sync, view rendering, or any I/O.
   - Formatting human CLI output.
 """
@@ -285,7 +285,7 @@ class Gateway:
         but does not update ``self._graph`` regardless of findings.
         Otherwise sets ``self._graph = new_graph``.
 
-        Persistence (``repo.save()``) is NOT performed here — that
+        Persistence (``repo.save()``) is NOT performed here. That
         belongs to ``EpistemeClient.save()``.
 
         Args:

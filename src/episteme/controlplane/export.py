@@ -2,7 +2,7 @@
 
 Produces self-contained exports of the epistemic graph via a pluggable
 ``GraphExporter`` and ``ArtifactSink``. Exports are point-in-time
-snapshots — they do not affect canonical state.
+snapshots. They do not affect canonical state.
 """
 from __future__ import annotations
 

@@ -21,7 +21,7 @@ class EpistemicError(Exception):
 class DuplicateIdError(EpistemicError):
     """Raised when registering an entity whose ID already exists in the graph.
 
-    Each entity type has a unique namespace — a hypothesis ID only needs to be
+    Each entity type has a unique namespace. A hypothesis ID only needs to be
     unique among hypotheses, not across all entity types.
     """
 

@@ -53,13 +53,13 @@ class Hypothesis:
     The EpistemicGraph maintains bidirectional links between hypotheses and
     their assumptions (``Assumption.used_in_hypotheses``) and analyses
     (``Analysis.hypotheses_covered``). These backlinks are updated
-    automatically during registration and updates — callers should
+    automatically during registration and updates. Callers should
     never modify them directly.
 
     Attributes:
         id: Unique identifier for this hypothesis (e.g. ``"H-001"``).
         statement: The human-readable text of the assertion.
-        type: Structural role — ``FOUNDATIONAL`` (axiomatic base) or
+        type: Structural role. ``FOUNDATIONAL`` (axiomatic base) or
             ``DERIVED`` (depends on other hypotheses). Defaults to
             ``DERIVED``; can be inferred from ``depends_on``.
         scope: Applicability scope, e.g. ``"global"`` or
@@ -68,7 +68,7 @@ class Hypothesis:
             this hypothesis. Optional at registration to support early-stage
             or exploratory workflows; should be filled in as the hypothesis
             matures.
-        status: Lifecycle state — ``ACTIVE``, ``REVISED``, ``RETRACTED``,
+        status: Lifecycle state. ``ACTIVE``, ``REVISED``, ``RETRACTED``,
             or ``DEFERRED``.
         category: Whether the hypothesis is ``QUANTITATIVE`` (quantitative) or
             ``QUALITATIVE`` (conceptual/structural).
@@ -81,16 +81,16 @@ class Hypothesis:
         objectives: IDs of objectives that motivate this hypothesis. Bidirectional
             with ``Objective.motivates_hypotheses``.
         observations: IDs of observations that motivated or are relevant to
-            this hypothesis. Soft navigational link — scrubbed on
+            this hypothesis. Soft navigational link. Scrubbed on
             observation removal.
         parameter_constraints: Annotation map ``{ParameterId: constraint_str}``
             where the constraint string is human-readable (e.g. ``"< 0.05"``.
-            Episteme does not evaluate these — it surfaces them when a
+            Episteme does not evaluate these. It surfaces them when a
             referenced parameter changes.
         superseded_by: ID of the hypothesis that replaced this one when
             status is ``REVISED`` or ``RETRACTED``. Enables provenance
             chain reconstruction.
-        source: Provenance string — DOI, arXiv ID, URL, citation, or
+        source: Provenance string. DOI, arXiv ID, URL, citation, or
             ``"derived from ..."``.
         notes: Free-form notes for the researcher.
         created: Date the hypothesis was first recorded.
@@ -140,20 +140,20 @@ class Assumption:
         scope: Applicability scope, e.g. ``"global"`` or ``"domain-specific"``.
         criticality: How load-bearing this assumption is. ``LOW``,
             ``MODERATE``, ``HIGH``, or ``LOAD_BEARING``. Defaults to
-            ``MODERATE`` — researchers should explicitly upgrade assumptions
+            ``MODERATE``. Researchers should explicitly upgrade assumptions
             that are single points of failure.
-        status: Lifecycle state — ``ACTIVE``, ``QUESTIONED``, ``FALSIFIED``,
+        status: Lifecycle state. ``ACTIVE``, ``QUESTIONED``, ``FALSIFIED``,
             or ``RETIRED``. Defaults to ``ACTIVE``.
         falsifiable_consequence: A description of what evidence would
             falsify this assumption. Required for empirical assumptions
             to pass coverage validation.
         used_in_hypotheses: IDs of hypotheses that reference this assumption.
-            Backlink maintained by hypothesis operations — not set by callers.
+            Backlink maintained by hypothesis operations. Not set by callers.
         depends_on: IDs of other assumptions this one presupposes.
             Forms a DAG enforced by the graph's cycle-detection logic.
         tested_by: IDs of predictions explicitly designed to test this
             assumption. Backlink maintained by prediction operations.
-        source: Provenance string — DOI, arXiv ID, URL, or citation.
+        source: Provenance string. DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
         created: Date the assumption was first recorded.
         tags: Free-form labels for filtering, grouping, or cross-cutting
@@ -188,12 +188,12 @@ class Prediction:
 
     - ``hypothesis_ids``: The hypotheses that jointly imply this prediction (the
       logical derivation chain). Most non-trivial predictions require
-      multiple hypotheses. No backlink exists on Hypothesis — the graph validates
+      multiple hypotheses. No backlink exists on Hypothesis. The graph validates
       existence only.
     - ``tests_assumptions``: Assumptions this prediction was explicitly
-      designed to test — its outcome bears on whether those assumptions
+      designed to test. Its outcome bears on whether those assumptions
       hold. Bidirectional with ``Assumption.tested_by``.
-    - ``conditional_on``: Assumptions this prediction is conditioned on —
+    - ``conditional_on``: Assumptions this prediction is conditioned on .
       it is valid only if these assumptions hold. Unlike
       ``tests_assumptions``, these are taken as given. A prediction
       cannot both test and condition on the same assumption.
@@ -205,16 +205,16 @@ class Prediction:
         id: Unique identifier (e.g. ``"P-001"``).
         observable: What is being measured or observed.
         predicted: The predicted value or outcome (type varies).
-        status: Lifecycle state — ``PENDING``, ``CONFIRMED``, ``STRESSED``,
+        status: Lifecycle state. ``PENDING``, ``CONFIRMED``, ``STRESSED``,
             ``REFUTED``, ``NOT_YET_TESTABLE``, or ``SUPERSEDED``.
             Defaults to ``PENDING``.
-        tier: Confidence classification — ``FULLY_SPECIFIED``,
+        tier: Confidence classification. ``FULLY_SPECIFIED``,
             ``CONDITIONAL``, or ``FIT_CHECK``. Defaults to
             ``FULLY_SPECIFIED``.
-        evidence_kind: Temporal/methodological classification —
+        evidence_kind: Temporal/methodological classification .
             ``NOVEL_PREDICTION``, ``RETRODICTION``, or ``FIT_CONSISTENCY``.
             Defaults to ``NOVEL_PREDICTION``.
-        measurement_regime: Evidence form — ``MEASURED``, ``BOUND_ONLY``,
+        measurement_regime: Evidence form. ``MEASURED``, ``BOUND_ONLY``,
             or ``UNMEASURED``. Defaults to ``MEASURED``.
         specification: The formula or relationship being tested (the "what").
         derivation: Why ``hypothesis_ids`` jointly imply this prediction (the "why").
@@ -233,14 +233,14 @@ class Prediction:
         conditional_on: IDs of assumptions taken as given for validity.
         refutation_criteria: Description of what evidence would refute this prediction.
         stress_criteria: Description of what evidence would move this
-            prediction from CONFIRMED to STRESSED — the threshold for
+            prediction from CONFIRMED to STRESSED. The threshold for
             tension without full refutation. Together with ``refutation_criteria``,
             this makes the adjudication boundaries explicit and auditable.
         observations: IDs of observations that bear on this prediction.
-            Backlink maintained by observation operations — not set by
+            Backlink maintained by observation operations. Not set by
             callers.
         benchmark_source: Reference to the benchmark data source.
-        source: Provenance string — DOI, arXiv ID, URL, or citation.
+        source: Provenance string. DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
         created: Date the prediction was first recorded.
         supersedes: ID of the prediction this one refines or replaces.
@@ -257,7 +257,7 @@ class Prediction:
         adjudication_rationale: Prose explaining *why* the prediction was
             adjudicated to its current status (CONFIRMED, STRESSED, or
             REFUTED). Distinct from ``refutation_criteria`` (threshold)
-            and ``stress_criteria`` (threshold) — this records the actual
+            and ``stress_criteria`` (threshold). This records the actual
             reasoning and evidence that led to the decision.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
@@ -305,16 +305,16 @@ class IndependenceGroup:
     member predictions.
 
     ``member_predictions`` is a backlink maintained by prediction
-    registration/update — callers should not set it directly.
+    registration/update. Callers should not set it directly.
 
     Attributes:
         id: Unique identifier (e.g. ``"IG-001"``).
         label: Human-readable name for the group.
         hypothesis_lineage: IDs of hypotheses in the common derivation chain.
-            Caller-maintained annotation — the kernel validates existence
+            Caller-maintained annotation. The kernel validates existence
             only, not semantic completeness.
         assumption_lineage: IDs of assumptions in the common chain.
-            Caller-maintained annotation — existence-validated only.
+            Caller-maintained annotation. Existence-validated only.
         member_predictions: IDs of predictions assigned to this group.
             Backlink maintained by prediction operations.
         measurement_regime: Optional regime shared by all members.
@@ -355,7 +355,7 @@ class PairwiseSeparation:
 class Analysis:
     """A piece of analytical work whose results feed back into the epistemic graph.
 
-    Episteme does not run analyses — the researcher runs them using their
+    Episteme does not run analyses. The researcher runs them using their
     preferred tools (SageMath, Python, R, Jupyter, etc.) and records the
     result via ``ds record`` or the ``record_result`` MCP tool.
 
@@ -368,7 +368,7 @@ class Analysis:
     ``health_check`` can identify which analyses (and therefore which
     predictions) need to be re-run.
 
-    ``hypotheses_covered`` is a backlink maintained by hypothesis operations — it
+    ``hypotheses_covered`` is a backlink maintained by hypothesis operations. It
     starts empty on registration and is populated when hypotheses reference
     this analysis.
 
@@ -377,7 +377,7 @@ class Analysis:
         command: Shell command to invoke the analysis (documentation only).
         path: File path relative to the workspace root.
         hypotheses_covered: IDs of hypotheses linked to this analysis. Backlink
-            maintained by hypothesis operations — not set by callers.
+            maintained by hypothesis operations. Not set by callers.
         uses_parameters: IDs of parameters this analysis depends on.
             Bidirectional with ``Parameter.used_in_analyses``.
         notes: Free-form notes for the researcher.
@@ -391,7 +391,7 @@ class Analysis:
     hypotheses_covered: set[HypothesisId] = field(default_factory=set)
     uses_parameters: set[ParameterId] = field(default_factory=set)
     notes: str | None = None
-    # Result fields — populated by record_analysis_result once the researcher
+    # Result fields. Populated by record_analysis_result once the researcher
     # runs the analysis and records the output.
     last_result: Any = None                      # the recorded output value
     last_result_sha: str | None = None           # git SHA of the code at run time
@@ -414,27 +414,31 @@ class Objective:
     can answer "which hypotheses lose their motivation?"
 
     ``related_predictions`` and ``related_dead_ends`` / ``related_discoveries``
-    are soft navigational links — scrubbed on removal of the referenced entity.
+    are soft navigational links. Scrubbed on removal of the referenced entity.
 
     Attributes:
         id: Unique identifier (e.g. ``"OBJ-001"``).
         title: Human-readable name for the objective.
-        kind: The type of objective — ``EXPLANATORY``, ``GOAL``, or
+        kind: The type of objective. ``EXPLANATORY``, ``GOAL``, or
             ``EXPLORATORY``.
-        status: Lifecycle state — ``ACTIVE``, ``REFINED``, ``ABANDONED``,
+        status: Lifecycle state. ``ACTIVE``, ``REFINED``, ``ABANDONED``,
             ``SUPERSEDED``, ``ACHIEVED``, ``INFEASIBLE``, or ``DEFERRED``.
         success_criteria: What counts as achieving this objective.
             Required for ``GOAL`` kind; optional for others.
         summary: Optional prose description of the objective.
         motivates_hypotheses: IDs of hypotheses this objective motivates.
-            Backlink maintained by hypothesis operations — not set by callers.
+            Backlink maintained by hypothesis operations. Not set by callers.
         related_predictions: IDs of predictions this objective generates.
-            Soft navigational link — scrubbed on prediction removal.
+            Soft navigational link. Scrubbed on prediction removal.
         related_dead_ends: IDs of dead ends that represent failed
             approaches toward this objective. Soft navigational link.
         related_discoveries: IDs of discoveries made while pursuing
             this objective. Soft navigational link.
-        source: Provenance string — DOI, arXiv ID, URL, or citation.
+        related_observations: IDs of observations gathered under this
+            objective. Supports exploratory and inductive workflows
+            where data collection precedes hypothesis formation.
+            Soft navigational link. Scrubbed on observation removal.
+        source: Provenance string. DOI, arXiv ID, URL, or citation.
         superseded_by: ID of the objective that replaced this one when
             status is ``SUPERSEDED``. Enables provenance chain
             reconstruction.
@@ -453,6 +457,7 @@ class Objective:
     related_predictions: set[PredictionId] = field(default_factory=set)
     related_dead_ends: set[DeadEndId] = field(default_factory=set)
     related_discoveries: set[DiscoveryId] = field(default_factory=set)
+    related_observations: set[ObservationId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
     superseded_by: ObjectiveId | None = None
     notes: str | None = None
@@ -475,11 +480,11 @@ class Discovery:
         date: When the discovery was made or recorded.
         summary: Prose description of what was found.
         impact: Description of the discovery's significance.
-        status: Progress state — ``NEW``, ``INTEGRATED``, or ``ARCHIVED``.
+        status: Progress state. ``NEW``, ``INTEGRATED``, or ``ARCHIVED``.
         related_hypotheses: IDs of hypotheses connected to this discovery.
-            Soft navigational link — scrubbed on hypothesis removal.
+            Soft navigational link. Scrubbed on hypothesis removal.
         related_predictions: IDs of predictions connected to this discovery.
-            Soft navigational link — scrubbed on prediction removal.
+            Soft navigational link. Scrubbed on prediction removal.
         references: List of external reference strings (DOIs, URLs, etc.).
         source: Primary provenance string.
         notes: Free-form notes for the researcher.
@@ -514,14 +519,14 @@ class DeadEnd:
         title: Human-readable name for the dead end.
         description: Detailed explanation of what was tried and why
             it failed.
-        status: State — ``ACTIVE`` (unresolved), ``RESOLVED`` (addressed),
+        status: State. ``ACTIVE`` (unresolved), ``RESOLVED`` (addressed),
             or ``ARCHIVED`` (historical only).
         related_predictions: IDs of predictions connected to this dead end.
-            Soft navigational link — scrubbed on prediction removal.
+            Soft navigational link. Scrubbed on prediction removal.
         related_hypotheses: IDs of hypotheses connected to this dead end.
-            Soft navigational link — scrubbed on hypothesis removal.
+            Soft navigational link. Scrubbed on hypothesis removal.
         references: List of external reference strings.
-        source: Provenance string — DOI, arXiv ID, URL, or analysis reference.
+        source: Provenance string. DOI, arXiv ID, URL, or analysis reference.
         notes: Free-form notes for the researcher.
         created: Date the dead end was first recorded.
         tags: Free-form labels for filtering, grouping, or cross-cutting
@@ -558,12 +563,12 @@ class Parameter:
     Attributes:
         id: Unique identifier (e.g. ``"PAR-001"``).
         name: Human-readable name for the parameter.
-        value: The parameter value — numeric, string, or structured.
+        value: The parameter value. Numeric, string, or structured.
         unit: SI or domain unit string (human-readable), or ``None``.
         uncertainty: Absolute uncertainty, same type as ``value``.
         source: Citation or derivation note.
         used_in_analyses: IDs of analyses that depend on this parameter.
-            Backlink maintained by analysis operations — not set by
+            Backlink maintained by analysis operations. Not set by
             callers.
         last_modified: Date when the parameter value was last changed.
             Used by ``check_stale`` to identify analyses whose results
@@ -608,16 +613,16 @@ class Observation:
         date: When the observation was made or recorded.
         status: Lifecycle state ``PRELIMINARY``, ``VALIDATED``,
             ``DISPUTED``, or ``RETRACTED``.
-        uncertainty: Statistical (random) measurement uncertainty —
+        uncertainty: Statistical (random) measurement uncertainty .
             precision. Same type as ``value``. For example,
             ``value=1.23, uncertainty=0.05`` represents
             $1.23 \pm 0.05_\text{stat}$.
-        systematic_uncertainty: Systematic measurement uncertainty —
+        systematic_uncertainty: Systematic measurement uncertainty .
             accuracy/bias. Same type as ``value``. When both are
             present the total error budget is
             $\sigma_\text{total}^2 = \sigma_\text{stat}^2 + \sigma_\text{sys}^2$.
             When only ``uncertainty`` is set it is treated as the total.
-        methodology: How the observation was made — experimental
+        methodology: How the observation was made. Experimental
             protocol, instrument, data pipeline, etc.
         predictions: IDs of predictions this observation bears on.
             Bidirectional with ``Prediction.observations``.

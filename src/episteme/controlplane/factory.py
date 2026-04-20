@@ -4,7 +4,7 @@
 optional abstract dependencies (``GraphValidator``, ``PayloadValidator``)
 into a ``Gateway``.
 
-Persistence (``GraphRepository``) is NOT wired here — it belongs to
+Persistence (``GraphRepository``) is NOT wired here. It belongs to
 ``EpistemeClient``, which owns all persistence decisions.
 """
 from __future__ import annotations

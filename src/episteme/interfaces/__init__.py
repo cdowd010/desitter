@@ -1,4 +1,4 @@
-"""Interface adapters — consumer entry points.
+"""Interface adapters. Consumer entry points.
 
 Each interface is a thin adapter over ``controlplane`` and ``views``.
 No business logic lives in any interface module.

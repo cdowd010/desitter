@@ -38,7 +38,7 @@ class _EpistemeClientRegistryHelpers:
         Args:
             id: Unique identifier for the objective.
             title: Short descriptive title.
-            kind: The type of objective (``ObjectiveKind`` string key —
+            kind: The type of objective (``ObjectiveKind`` string key .
                 ``"EXPLANATORY"``, ``"GOAL"``, or ``"EXPLORATORY"``).
             status: Initial lifecycle status (``ObjectiveStatus`` enum or string
                 key).

@@ -534,3 +534,71 @@ def test_dead_end_active_to_resolved(base_graph):
     )
     graph = graph.transition_dead_end(DeadEndId("DE-001"), DeadEndStatus.RESOLVED)
     assert graph.dead_ends[DeadEndId("DE-001")].status == DeadEndStatus.RESOLVED
+
+
+# ── Objective.related_observations ────────────────────────────────
+
+
+def test_objective_related_observations_registered(base_graph):
+    """Objectives can reference observations via related_observations."""
+    from episteme.epistemic.model import Objective, ObjectiveId, ObjectiveKind
+
+    graph = base_graph.register_objective(
+        Objective(
+            id=ObjectiveId("OBJ-EXPLORE"),
+            title="Field survey",
+            kind=ObjectiveKind.EXPLORATORY,
+            related_observations={ObservationId("OBS-001")},
+        )
+    )
+    obj = graph.objectives[ObjectiveId("OBJ-EXPLORE")]
+    assert ObservationId("OBS-001") in obj.related_observations
+
+
+def test_objective_related_observations_rejects_missing_ref(base_graph):
+    """Registering an objective with a non-existent observation raises."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Objective, ObjectiveId, ObjectiveKind
+
+    with pytest.raises(BrokenReferenceError, match="observation"):
+        base_graph.register_objective(
+            Objective(
+                id=ObjectiveId("OBJ-BAD"),
+                title="Bad ref",
+                kind=ObjectiveKind.EXPLORATORY,
+                related_observations={ObservationId("NO-SUCH-OBS")},
+            )
+        )
+
+
+def test_update_objective_validates_related_observations(base_graph):
+    """Updating an objective validates related_observations refs."""
+    from episteme.epistemic.errors import BrokenReferenceError
+    from episteme.epistemic.model import Objective, ObjectiveId, ObjectiveKind
+
+    obj = base_graph.objectives[ObjectiveId("T-001")]
+    updated = Objective(
+        id=obj.id,
+        title=obj.title,
+        kind=obj.kind,
+        related_observations={ObservationId("NO-SUCH-OBS")},
+    )
+    with pytest.raises(BrokenReferenceError, match="observation"):
+        base_graph.update_objective(updated)
+
+
+def test_remove_observation_scrubs_objective_related_observations(base_graph):
+    """Removing an observation scrubs it from Objective.related_observations."""
+    from episteme.epistemic.model import Objective, ObjectiveId, ObjectiveKind
+
+    graph = base_graph.register_objective(
+        Objective(
+            id=ObjectiveId("OBJ-EXPLORE"),
+            title="Field survey",
+            kind=ObjectiveKind.EXPLORATORY,
+            related_observations={ObservationId("OBS-001")},
+        )
+    )
+    graph = graph.remove_observation(ObservationId("OBS-001"))
+    obj = graph.objectives[ObjectiveId("OBJ-EXPLORE")]
+    assert ObservationId("OBS-001") not in obj.related_observations

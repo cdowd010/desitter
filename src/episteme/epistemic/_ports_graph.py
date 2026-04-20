@@ -22,6 +22,7 @@ from .types import (
     AnalysisId,
     AssumptionId,
     AssumptionStatus,
+    AssumptionSupportStatus,
     HypothesisId,
     HypothesisStatus,
     DeadEndId,
@@ -32,9 +33,11 @@ from .types import (
     ObservationId,
     ObservationStatus,
     ParameterId,
+    ParameterImpact,
     PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
+    RefutationImpact,
     ObjectiveId,
     ObjectiveStatus,
 )
@@ -43,8 +46,8 @@ from .types import (
 class EpistemicGraphPort(Protocol):
     """Dependency-inversion point for the epistemic graph aggregate.
 
-    Any implementation that satisfies this protocol — an in-memory
-    ``EpistemicGraph``, a DB-backed proxy, or a test double — can be used
+    Any implementation that satisfies this protocol. An in-memory
+    ``EpistemicGraph``, a DB-backed proxy, or a test double. Can be used
     wherever an epistemic graph is required. The ``Gateway`` and all
     control-plane code depend on this protocol rather than the concrete
     ``EpistemicGraph`` class.
@@ -74,6 +77,8 @@ class EpistemicGraphPort(Protocol):
             ``DeadEndId``.
         parameters: Registry of all parameters, keyed by
             ``ParameterId``.
+        observations: Registry of all observations, keyed by
+            ``ObservationId``.
     """
 
     version: int
@@ -182,33 +187,34 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def refutation_impact(self, pid: PredictionId) -> dict[str, set]:
+    def refutation_impact(self, pid: PredictionId) -> RefutationImpact:
         """Compute the blast radius when a prediction is refuted.
 
         Args:
             pid: The prediction to analyze.
 
         Returns:
-            dict[str, set]: Keys are ``hypothesis_ids`` (direct hypotheses),
-                ``hypothesis_ancestors`` (transitive ancestors excluding direct
-                hypotheses), and ``implicit_assumptions`` (full assumption
-                chain). All values are empty sets if the prediction does
-                not exist.
+            RefutationImpact: Typed result with ``hypothesis_ids`` (direct
+                hypotheses), ``hypothesis_ancestors`` (transitive ancestors
+                excluding direct hypotheses), and ``implicit_assumptions``
+                (full assumption chain). All fields are empty sets if the
+                prediction does not exist.
         """
         ...
 
-    def assumption_support_status(self, aid: AssumptionId) -> dict[str, set]:
+    def assumption_support_status(self, aid: AssumptionId) -> AssumptionSupportStatus:
         """Compute the dependency and test coverage of an assumption.
 
         Args:
             aid: The assumption to analyze.
 
         Returns:
-            dict[str, set]: Keys are ``direct_hypotheses`` (hypotheses that
-                directly reference this assumption), ``dependent_predictions``
-                (predictions whose derivation chain includes this assumption),
-                and ``tested_by`` (predictions that explicitly test it).
-                All values are empty sets if the assumption does not exist.
+            AssumptionSupportStatus: Typed result with ``direct_hypotheses``
+                (hypotheses referencing this assumption),
+                ``dependent_predictions`` (predictions whose derivation chain
+                includes this assumption), and ``tested_by`` (predictions that
+                explicitly test it). All fields are empty sets if the
+                assumption does not exist.
         """
         ...
 
@@ -236,16 +242,16 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def parameter_impact(self, pid: ParameterId) -> dict[str, set]:
+    def parameter_impact(self, pid: ParameterId) -> ParameterImpact:
         """Compute the full blast radius of a parameter change.
 
         Args:
             pid: The parameter whose impact to compute.
 
         Returns:
-            dict[str, set]: Keys are ``stale_analyses``,
+            ParameterImpact: Typed result with ``stale_analyses``,
                 ``constrained_hypotheses``, ``affected_hypotheses``, and
-                ``affected_predictions``. All values are empty sets if
+                ``affected_predictions``. All fields are empty sets if
                 the parameter does not exist.
         """
         ...
@@ -518,7 +524,7 @@ class EpistemicGraphPort(Protocol):
         ...
 
     def update_objective(self, new_objective: Objective) -> EpistemicGraphPort:
-        """Replace a objective's fields. Returns a new graph instance.
+        """Replace an objective's fields. Returns a new graph instance.
 
         Args:
             new_objective: The updated objective. Must match an existing ``id``.
@@ -860,9 +866,9 @@ class EpistemicGraphPort(Protocol):
         ...
 
     def remove_objective(self, tid: ObjectiveId) -> EpistemicGraphPort:
-        """Remove a objective from the graph. Returns a new graph instance.
+        """Remove an objective from the graph. Returns a new graph instance.
 
-        Theories are leaf entities — removal is always structurally safe.
+        Objectives are leaf entities. Removal is always structurally safe.
 
         Args:
             tid: The objective ID to remove.
@@ -878,7 +884,7 @@ class EpistemicGraphPort(Protocol):
     def remove_discovery(self, did: DiscoveryId) -> EpistemicGraphPort:
         """Remove a discovery from the graph. Returns a new graph instance.
 
-        Discoveries are leaf entities — removal is always structurally safe.
+        Discoveries are leaf entities. Removal is always structurally safe.
 
         Args:
             did: The discovery ID to remove.
@@ -894,7 +900,7 @@ class EpistemicGraphPort(Protocol):
     def remove_dead_end(self, did: DeadEndId) -> EpistemicGraphPort:
         """Remove a dead end from the graph. Returns a new graph instance.
 
-        Dead ends are leaf entities — removal is always structurally safe.
+        Dead ends are leaf entities. Removal is always structurally safe.
 
         Args:
             did: The dead end ID to remove.
@@ -925,7 +931,7 @@ class EpistemicGraphPort(Protocol):
         """Remove an observation from the graph. Returns a new graph instance.
 
         Tears down ``Prediction.observations`` backlinks. Observations are
-        provenance records — nothing hard-blocks their removal.
+        provenance records. Nothing hard-blocks their removal.
 
         Args:
             oid: The observation ID to remove.
@@ -947,7 +953,7 @@ class GraphRepository(Protocol):
     rather than any specific storage format.
 
     Concrete implementations include:
-    - ``JsonRepository`` — JSON files on the local filesystem.
+    - ``JsonRepository``. JSON files on the local filesystem.
     - Future: database-backed, remote API, etc.
     """
 

@@ -1,6 +1,6 @@
 """The EpistemicGraph: aggregate root for the epistemic domain.
 
-External code NEVER modifies entities directly — it calls methods on the
+External code NEVER modifies entities directly. It calls methods on the
 graph, and the graph ensures consistency.
 
 Every mutation method returns a NEW graph. This gives free undo/redo and
@@ -36,6 +36,7 @@ from .errors import (
 from .types import (
     AnalysisId,
     AssumptionId,
+    AssumptionSupportStatus,
     AssumptionStatus,
     ConfidenceTier,
     EvidenceKind,
@@ -50,9 +51,11 @@ from .types import (
     ObservationId,
     ObservationStatus,
     ParameterId,
+    ParameterImpact,
     PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
+    RefutationImpact,
     ObjectiveId,
     ObjectiveStatus,
     PREDICTION_TRANSITIONS,
@@ -70,7 +73,7 @@ class EpistemicGraph:
     """Complete epistemic state of a research project.
 
     The EpistemicGraph is the aggregate root for the epistemic domain.
-    External code NEVER modifies entities directly — it calls methods
+    External code NEVER modifies entities directly. It calls methods
     on the graph, and the graph ensures consistency.
 
     Every mutation method returns a NEW graph instance. The old graph is
@@ -271,7 +274,7 @@ class EpistemicGraph:
                         stack.append(dep)
         return result
 
-    def refutation_impact(self, pid: PredictionId) -> dict[str, set]:
+    def refutation_impact(self, pid: PredictionId) -> RefutationImpact:
         """Compute the blast radius when a prediction is refuted.
 
         Answers "what is called into question when this prediction fails?"
@@ -281,30 +284,29 @@ class EpistemicGraph:
             pid: The prediction ID to analyze.
 
         Returns:
-            dict[str, set]: A dictionary with three keys:
-
-            - ``hypothesis_ids``: Direct hypotheses jointly implying this prediction
-              (copy of ``Prediction.hypothesis_ids``).
-            - ``hypothesis_ancestors``: All ancestor hypotheses via transitive
-              ``depends_on`` closure, EXCLUDING the direct ``hypothesis_ids``.
-            - ``implicit_assumptions``: All assumptions in the full
-              derivation chain (same as ``prediction_implicit_assumptions``).
-
-            Returns empty sets for all keys if the prediction does not exist.
+            RefutationImpact: Typed result with ``hypothesis_ids`` (direct
+                hypotheses), ``hypothesis_ancestors`` (transitive ancestors
+                excluding direct hypotheses), and ``implicit_assumptions``
+                (full assumption chain). All fields are empty sets if the
+                prediction does not exist.
         """
         pred = self.predictions.get(pid)
         if pred is None:
-            return {"hypothesis_ids": set(), "hypothesis_ancestors": set(), "implicit_assumptions": set()}
+            return RefutationImpact(
+                hypothesis_ids=set(),
+                hypothesis_ancestors=set(),
+                implicit_assumptions=set(),
+            )
         ancestors: set[HypothesisId] = set()
         for cid in pred.hypothesis_ids:
             ancestors.update(self.hypothesis_lineage(cid))
-        return {
-            "hypothesis_ids": pred.hypothesis_ids.copy(),
-            "hypothesis_ancestors": ancestors - pred.hypothesis_ids,
-            "implicit_assumptions": self.prediction_implicit_assumptions(pid),
-        }
+        return RefutationImpact(
+            hypothesis_ids=pred.hypothesis_ids.copy(),
+            hypothesis_ancestors=ancestors - pred.hypothesis_ids,
+            implicit_assumptions=self.prediction_implicit_assumptions(pid),
+        )
 
-    def assumption_support_status(self, aid: AssumptionId) -> dict[str, set]:
+    def assumption_support_status(self, aid: AssumptionId) -> AssumptionSupportStatus:
         """Compute the full dependency and test coverage of an assumption.
 
         Answers "what depends on this assumption, and what tests it?"
@@ -313,31 +315,31 @@ class EpistemicGraph:
             aid: The assumption ID to analyze.
 
         Returns:
-            dict[str, set]: A dictionary with three keys:
-
-            - ``direct_hypotheses``: Claims that directly reference this
-              assumption in their ``assumptions`` set.
-            - ``dependent_predictions``: Predictions whose full derivation
-              chain includes this assumption (via implicit assumptions).
-            - ``tested_by``: Predictions explicitly testing this assumption
-              (via ``tests_assumptions``).
-
-            Returns empty sets for all keys if the assumption does not exist.
+            AssumptionSupportStatus: Typed result with ``direct_hypotheses``
+                (hypotheses referencing this assumption),
+                ``dependent_predictions`` (predictions whose derivation chain
+                includes this assumption), and ``tested_by`` (predictions that
+                explicitly test it). All fields are empty sets if the
+                assumption does not exist.
         """
         assumption = self.assumptions.get(aid)
         if assumption is None:
-            return {"direct_hypotheses": set(), "dependent_predictions": set(), "tested_by": set()}
+            return AssumptionSupportStatus(
+                direct_hypotheses=set(),
+                dependent_predictions=set(),
+                tested_by=set(),
+            )
         # Build inverse index once: {AssumptionId: set[PredictionId]}
         implicit_dependents: dict[AssumptionId, set[PredictionId]] = {}
         for pid in self.predictions:
             for dep_aid in self.prediction_implicit_assumptions(pid):
                 implicit_dependents.setdefault(dep_aid, set()).add(pid)
         dependent = implicit_dependents.get(aid, set())
-        return {
-            "direct_hypotheses": assumption.used_in_hypotheses.copy(),
-            "dependent_predictions": dependent,
-            "tested_by": assumption.tested_by.copy(),
-        }
+        return AssumptionSupportStatus(
+            direct_hypotheses=assumption.used_in_hypotheses.copy(),
+            dependent_predictions=dependent,
+            tested_by=assumption.tested_by.copy(),
+        )
 
     def hypotheses_depending_on_hypothesis(self, cid: HypothesisId) -> set[HypothesisId]:
         """Return all hypotheses that transitively depend on this hypothesis.
@@ -386,7 +388,7 @@ class EpistemicGraph:
             if pred.hypothesis_ids & affected_hypotheses
         }
 
-    def parameter_impact(self, pid: ParameterId) -> dict[str, set]:
+    def parameter_impact(self, pid: ParameterId) -> ParameterImpact:
         """Compute the full blast radius of a parameter change.
 
         Walks the dependency chain: parameter → stale analyses → hypotheses
@@ -398,25 +400,19 @@ class EpistemicGraph:
             pid: The parameter ID whose impact to compute.
 
         Returns:
-            dict[str, set]: A dictionary with four keys:
-
-            - ``stale_analyses``: Analysis IDs that use this parameter.
-            - ``constrained_hypotheses``: Hypothesis IDs with a threshold annotation
-              on this parameter.
-            - ``affected_hypotheses``: Union of hypotheses covered by stale analyses
-              and constrained hypotheses.
-            - ``affected_predictions``: All predictions in the downstream
-              chain of affected hypotheses, plus predictions directly linked
-              to stale analyses.
-
-            Returns empty sets for all keys if the parameter does not exist.
+            ParameterImpact: Typed result with ``stale_analyses``,
+                ``constrained_hypotheses``, ``affected_hypotheses``, and
+                ``affected_predictions``. All fields are empty sets if
+                the parameter does not exist.
         """
         param = self.parameters.get(pid)
         if param is None:
-            return {
-                "stale_analyses": set(), "constrained_hypotheses": set(),
-                "affected_hypotheses": set(), "affected_predictions": set(),
-            }
+            return ParameterImpact(
+                stale_analyses=set(),
+                constrained_hypotheses=set(),
+                affected_hypotheses=set(),
+                affected_predictions=set(),
+            )
         stale_analyses = param.used_in_analyses.copy()
         # Claims covered by stale analyses
         affected_hypotheses: set[HypothesisId] = set()
@@ -438,12 +434,12 @@ class EpistemicGraph:
         for pred_id, pred in self.predictions.items():
             if pred.analysis in stale_analyses:
                 affected_predictions.add(pred_id)
-        return {
-            "stale_analyses": stale_analyses,
-            "constrained_hypotheses": constrained_hypotheses,
-            "affected_hypotheses": affected_hypotheses,
-            "affected_predictions": affected_predictions,
-        }
+        return ParameterImpact(
+            stale_analyses=stale_analyses,
+            constrained_hypotheses=constrained_hypotheses,
+            affected_hypotheses=affected_hypotheses,
+            affected_predictions=affected_predictions,
+        )
 
     # ── Mutations (return new graph) ────────────────────────────────
 
@@ -506,7 +502,7 @@ class EpistemicGraph:
 
         Validates that all ``depends_on`` references exist and that no
         cycle would be introduced. Backlinks ``used_in_hypotheses`` and
-        ``tested_by`` are intentionally initialized to empty sets —
+        ``tested_by`` are intentionally initialized to empty sets .
         they are owned by hypothesis and prediction operations respectively.
 
         Args:
@@ -662,6 +658,7 @@ class EpistemicGraph:
         self._check_refs_exist(objective.related_predictions, self.predictions, "prediction")
         self._check_refs_exist(objective.related_dead_ends, self.dead_ends, "dead_end")
         self._check_refs_exist(objective.related_discoveries, self.discoveries, "discovery")
+        self._check_refs_exist(objective.related_observations, self.observations, "observation")
         new = self._copy()
         stored = copy.deepcopy(objective)
         stored.motivates_hypotheses = set()
@@ -906,7 +903,7 @@ class EpistemicGraph:
         return new
 
     def transition_objective(self, tid: ObjectiveId, new_status: ObjectiveStatus) -> EpistemicGraph:
-        """Change a objective's lifecycle status.
+        """Change an objective's lifecycle status.
 
         Args:
             tid: The objective ID to transition.
@@ -997,7 +994,7 @@ class EpistemicGraph:
         on the analysis while preserving every other field (path, command,
         uses_parameters, hypotheses_covered) exactly as-is.
 
-        This is intentionally a narrow mutation — the researcher records
+        This is intentionally a narrow mutation. The researcher records
         what came out of running the analysis without touching any of the
         provenance or structural metadata.
 
@@ -1022,7 +1019,7 @@ class EpistemicGraph:
         new.analyses[anid].last_result_date = result_date
         return new
 
-    # ── Update mutations — re-links bidirectional relationships ───
+    # ── Update mutations: re-links bidirectional relationships ───
 
     def update_hypothesis(self, new_hypothesis: Hypothesis) -> EpistemicGraph:
         """Replace a hypothesis's fields while maintaining all bidirectional links.
@@ -1089,7 +1086,7 @@ class EpistemicGraph:
         """Replace an assumption's fields, preserving owned backlinks.
 
         ``used_in_hypotheses`` and ``tested_by`` are maintained by hypothesis and
-        prediction operations respectively — they are preserved from the
+        prediction operations respectively. They are preserved from the
         old assumption. Only ``depends_on`` chain changes need validation.
 
         Args:
@@ -1180,8 +1177,8 @@ class EpistemicGraph:
     def update_parameter(self, new_parameter: Parameter) -> EpistemicGraph:
         """Replace a parameter's fields (value, unit, uncertainty, etc.).
 
-        ``used_in_analyses`` is a backlink maintained by analysis operations
-        — it is preserved from the old parameter so callers cannot
+        ``used_in_analyses`` is a backlink maintained by analysis operations;
+        it is preserved from the old parameter so callers cannot
         accidentally corrupt the staleness tracking index.
 
         Args:
@@ -1248,7 +1245,7 @@ class EpistemicGraph:
         """Replace an objective's fields.
 
         Validates that all ``related_predictions``, ``related_dead_ends``,
-        and ``related_discoveries`` IDs exist.
+        ``related_discoveries``, and ``related_observations`` IDs exist.
         ``motivates_hypotheses`` is a backlink maintained by hypothesis operations
         and is preserved from the existing objective.
 
@@ -1269,6 +1266,7 @@ class EpistemicGraph:
         self._check_refs_exist(new_objective.related_predictions, self.predictions, "prediction")
         self._check_refs_exist(new_objective.related_dead_ends, self.dead_ends, "dead_end")
         self._check_refs_exist(new_objective.related_discoveries, self.discoveries, "discovery")
+        self._check_refs_exist(new_objective.related_observations, self.observations, "observation")
         new = self._copy()
         updated = copy.deepcopy(new_objective)
         updated.motivates_hypotheses = copy.deepcopy(old.motivates_hypotheses)
@@ -1279,7 +1277,7 @@ class EpistemicGraph:
         """Replace an independence group's annotation fields.
 
         ``member_predictions`` is a backlink maintained by prediction
-        operations — preserved from the existing group. Validates
+        operations. Preserved from the existing group. Validates
         ``hypothesis_lineage`` and ``assumption_lineage`` refs.
 
         Args:
@@ -1383,7 +1381,7 @@ class EpistemicGraph:
         new.dead_ends[new_dead_end.id] = copy.deepcopy(new_dead_end)
         return new
 
-    # ── Remove mutations — safe deletion with ref checks ──────────
+    # ── Remove mutations: safe deletion with ref checks ──────────
 
     def remove_prediction(self, pid: PredictionId) -> EpistemicGraph:
         """Remove a prediction from the graph.
@@ -1672,7 +1670,7 @@ class EpistemicGraph:
         """Remove an objective from the graph.
 
         Scrubs ``Hypothesis.objectives`` references on any hypotheses that were
-        motivated by this objective. Does not block on hypotheses — a hypothesis
+        motivated by this objective. Does not block on hypotheses. A hypothesis
         can survive without its motivating objective.
 
         Args:
@@ -1698,7 +1696,7 @@ class EpistemicGraph:
     def remove_discovery(self, did: DiscoveryId) -> EpistemicGraph:
         """Remove a discovery from the graph.
 
-        Discoveries are leaf entities — nothing references them by ID, so
+        Discoveries are leaf entities. Nothing references them by ID, so
         removal is always safe.
 
         Args:
@@ -1724,7 +1722,7 @@ class EpistemicGraph:
     def remove_dead_end(self, did: DeadEndId) -> EpistemicGraph:
         """Remove a dead end from the graph.
 
-        Dead ends are leaf entities — nothing references them by ID, so
+        Dead ends are leaf entities. Nothing references them by ID, so
         removal is always safe.
 
         Args:
@@ -1839,7 +1837,7 @@ class EpistemicGraph:
         """Remove an observation from the graph.
 
         Tears down ``Prediction.observations`` backlinks. Observations
-        are provenance records — nothing else hard-blocks their removal.
+        are provenance records. Nothing else hard-blocks their removal.
 
         Args:
             oid: The observation ID to remove.
@@ -1865,6 +1863,11 @@ class EpistemicGraph:
             if oid in hyp.observations:
                 new.hypotheses[hid] = copy.deepcopy(hyp)
                 new.hypotheses[hid].observations.discard(oid)
+        # Scrub soft navigational link: objective.related_observations
+        for tid, obj in list(new.objectives.items()):
+            if oid in obj.related_observations:
+                new.objectives[tid] = copy.deepcopy(obj)
+                new.objectives[tid].related_observations.discard(oid)
         return new
 
     def transition_observation(
@@ -1925,7 +1928,7 @@ class EpistemicGraph:
         ):
             raise InvariantViolation(
                 f"FIT_CHECK prediction {prediction.id} cannot have "
-                f"evidence_kind={prediction.evidence_kind.value} — "
+                f"evidence_kind={prediction.evidence_kind.value}: "
                 f"only FIT_CONSISTENCY is valid"
             )
 
@@ -2048,7 +2051,7 @@ class EpistemicGraph:
         )
 
 
-# Domain exceptions live in errors.py — imported at the top of this module.
+# Domain exceptions live in errors.py. Imported at the top of this module.
 # Re-exported here so that ``from episteme.epistemic.graph import <Error>``
 # continues to work for any caller that imports directly from this module.
 __all_errors__ = [

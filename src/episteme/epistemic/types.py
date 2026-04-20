@@ -90,15 +90,68 @@ class Finding:
     message: str
 
 
+# ── Query result types ────────────────────────────────────────────
+
+
+@dataclass
+class RefutationImpact:
+    """Blast radius when a prediction is refuted.
+
+    Attributes:
+        hypothesis_ids: Direct hypotheses jointly implying the prediction.
+        hypothesis_ancestors: Transitive ancestors via ``depends_on``,
+            excluding the direct ``hypothesis_ids``.
+        implicit_assumptions: All assumptions in the full derivation chain.
+    """
+    hypothesis_ids: set[str]
+    hypothesis_ancestors: set[str]
+    implicit_assumptions: set[str]
+
+
+@dataclass
+class AssumptionSupportStatus:
+    """Dependency and test coverage of a single assumption.
+
+    Attributes:
+        direct_hypotheses: Hypotheses that directly reference this assumption.
+        dependent_predictions: Predictions whose derivation chain includes
+            this assumption.
+        tested_by: Predictions that explicitly test this assumption.
+    """
+    direct_hypotheses: set[str]
+    dependent_predictions: set[str]
+    tested_by: set[str]
+
+
+@dataclass
+class ParameterImpact:
+    """Blast radius of a parameter change.
+
+    Attributes:
+        stale_analyses: Analyses that use this parameter.
+        constrained_hypotheses: Hypotheses with threshold annotations
+            on this parameter.
+        affected_hypotheses: Union of hypotheses covered by stale analyses
+            and constrained hypotheses.
+        affected_predictions: Downstream predictions in the chain of
+            affected hypotheses, plus predictions directly linked to
+            stale analyses.
+    """
+    stale_analyses: set[str]
+    constrained_hypotheses: set[str]
+    affected_hypotheses: set[str]
+    affected_predictions: set[str]
+
+
 # ── Confidence tiers ──────────────────────────────────────────────
 
 class ConfidenceTier(Enum):
     """How strongly a prediction is constrained.
 
-    FULLY_SPECIFIED: Zero free parameters — pure prediction from hypotheses.
+    FULLY_SPECIFIED: Zero free parameters. Pure prediction from hypotheses.
     CONDITIONAL: Valid only if explicitly stated assumptions hold, or
         parameterized with free degrees of freedom (``free_params > 0``).
-    FIT_CHECK: Agreement unsurprising — the model was tuned/calibrated
+    FIT_CHECK: Agreement unsurprising. The model was tuned/calibrated
         to match this data. The only valid ``EvidenceKind`` pairing is
         ``FIT_CONSISTENCY``. Retrodiction (``RETRODICTION``) is a
         distinct and stronger form of evidence that belongs under
@@ -197,7 +250,7 @@ class ObjectiveKind(Enum):
 
     EXPLANATORY:
         A theoretical framework that explains phenomena and generates
-        hypotheses — the traditional notion of a scientific theory.
+        hypotheses. The traditional notion of a scientific theory.
     GOAL:
         A concrete target outcome with success criteria, e.g.
         "reduce fuel consumption ≥20%" or "find a treatment for X".
@@ -228,7 +281,7 @@ class ObjectiveStatus(Enum):
         Determined to be unachievable with current knowledge or
         constraints (primarily for GOAL objectives).
     DEFERRED:
-        Paused but not abandoned — may be resumed later.
+        Paused but not abandoned. May be resumed later.
     """
 
     ACTIVE = "active"         # currently under investigation
@@ -266,7 +319,7 @@ class HypothesisStatus(Enum):
     RETRACTED:
         Hypothesis is invalidated and should not be relied upon.
     DEFERRED:
-        Investigation paused but not abandoned — may be resumed later.
+        Investigation paused but not abandoned. May be resumed later.
     """
 
     ACTIVE = "active"        # normal, in-use
@@ -348,10 +401,10 @@ class Criticality(Enum):
     MODERATE:
         Assumption underpins a meaningful portion of the reasoning chain.
     HIGH:
-        Assumption is a major structural dependency — many hypotheses and
+        Assumption is a major structural dependency. Many hypotheses and
         predictions rest on it.
     LOAD_BEARING:
-        Assumption is a single point of failure — if it falls, a large
+        Assumption is a single point of failure. If it falls, a large
         fraction of the project's conclusions are invalidated.
     """
 

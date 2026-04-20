@@ -1,11 +1,11 @@
-"""Episteme — control plane for research epistemic graphs.
+"""Episteme. Control plane for research epistemic graphs.
 
 Layer cake (top to bottom):
-  interfaces   — optional consumer adapters (CLI, MCP, REST, …)
-  views        — read-only summaries and computed projections
-  controlplane — orchestration boundary above the epistemic kernel
-  epistemic    — domain kernel: EpistemicGraph, entities, invariants, ports
-  local edge   — optional deployment adapters such as local workspaces
+  interfaces: optional consumer adapters (CLI, MCP, REST, …)
+  views: read-only summaries and computed projections
+  controlplane: orchestration boundary above the epistemic kernel
+  epistemic: domain kernel: EpistemicGraph, entities, invariants, ports
+  local edge: optional deployment adapters such as local workspaces
 
 Programmatic entry point::
 
