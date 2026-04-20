@@ -26,7 +26,7 @@ from .model import (
     PairwiseSeparation,
     Parameter,
     Prediction,
-    Theory,
+    Objective,
 )
 
 
@@ -35,7 +35,7 @@ ENTITY_TYPES: dict[str, type[object]] = {
     "assumption": Assumption,
     "prediction": Prediction,
     "analysis": Analysis,
-    "theory": Theory,
+    "objective": Objective,
     "discovery": Discovery,
     "dead_end": DeadEnd,
     "parameter": Parameter,

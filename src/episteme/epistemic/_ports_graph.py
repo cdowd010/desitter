@@ -16,7 +16,7 @@ from .model import (
     PairwiseSeparation,
     Parameter,
     Prediction,
-    Theory,
+    Objective,
 )
 from .types import (
     AnalysisId,
@@ -34,8 +34,8 @@ from .types import (
     PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
-    TheoryId,
-    TheoryStatus,
+    ObjectiveId,
+    ObjectiveStatus,
 )
 
 
@@ -61,7 +61,7 @@ class EpistemicGraphPort(Protocol):
             ``AssumptionId``.
         predictions: Registry of all predictions, keyed by
             ``PredictionId``.
-        theories: Registry of all theories, keyed by ``TheoryId``.
+        objectives: Registry of all objectives, keyed by ``ObjectiveId``.
         discoveries: Registry of all discoveries, keyed by
             ``DiscoveryId``.
         analyses: Registry of all analyses, keyed by ``AnalysisId``.
@@ -80,7 +80,7 @@ class EpistemicGraphPort(Protocol):
     hypotheses: Mapping[HypothesisId, Hypothesis]
     assumptions: Mapping[AssumptionId, Assumption]
     predictions: Mapping[PredictionId, Prediction]
-    theories: Mapping[TheoryId, Theory]
+    objectives: Mapping[ObjectiveId, Objective]
     discoveries: Mapping[DiscoveryId, Discovery]
     analyses: Mapping[AnalysisId, Analysis]
     independence_groups: Mapping[IndependenceGroupId, IndependenceGroup]
@@ -313,17 +313,17 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def register_theory(self, theory: Theory) -> EpistemicGraphPort:
-        """Register a new theory. Returns a new graph instance.
+    def register_objective(self, objective: Objective) -> EpistemicGraphPort:
+        """Register a new objective. Returns a new graph instance.
 
         Args:
-            theory: The theory to add. Must have a unique ``id``.
+            objective: The objective to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicGraphPort: New graph containing the registered theory.
+            EpistemicGraphPort: New graph containing the registered objective.
 
         Raises:
-            DuplicateIdError: If ``theory.id`` already exists.
+            DuplicateIdError: If ``objective.id`` already exists.
             BrokenReferenceError: If any referenced hypothesis or prediction ID
                 does not exist.
         """
@@ -516,17 +516,17 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def update_theory(self, new_theory: Theory) -> EpistemicGraphPort:
-        """Replace a theory's fields. Returns a new graph instance.
+    def update_objective(self, new_objective: Objective) -> EpistemicGraphPort:
+        """Replace a objective's fields. Returns a new graph instance.
 
         Args:
-            new_theory: The updated theory. Must match an existing ``id``.
+            new_objective: The updated objective. Must match an existing ``id``.
 
         Returns:
-            EpistemicGraphPort: New graph with the updated theory.
+            EpistemicGraphPort: New graph with the updated objective.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist or if any
+            BrokenReferenceError: If the objective does not exist or if any
                 referenced hypothesis or prediction ID does not exist.
         """
         ...
@@ -658,18 +658,18 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicGraphPort:
-        """Change a theory's lifecycle status. Returns a new graph instance.
+    def transition_objective(self, tid: ObjectiveId, new_status: ObjectiveStatus) -> EpistemicGraphPort:
+        """Change an objective's lifecycle status. Returns a new graph instance.
 
         Args:
-            tid: The theory ID to transition.
-            new_status: The target ``TheoryStatus`` value.
+            tid: The objective ID to transition.
+            new_status: The target ``ObjectiveStatus`` value.
 
         Returns:
-            EpistemicGraphPort: New graph with the updated theory status.
+            EpistemicGraphPort: New graph with the updated objective status.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist.
+            BrokenReferenceError: If the objective does not exist.
         """
         ...
 
@@ -737,7 +737,7 @@ class EpistemicGraphPort(Protocol):
     def remove_prediction(self, pid: PredictionId) -> EpistemicGraphPort:
         """Remove a prediction from the graph. Returns a new graph instance.
 
-        Tears down backlinks and scrubs soft references in theories,
+        Tears down backlinks and scrubs soft references in objectives,
         dead ends, and discoveries.
 
         Args:
@@ -839,19 +839,19 @@ class EpistemicGraphPort(Protocol):
         """
         ...
 
-    def remove_theory(self, tid: TheoryId) -> EpistemicGraphPort:
-        """Remove a theory from the graph. Returns a new graph instance.
+    def remove_objective(self, tid: ObjectiveId) -> EpistemicGraphPort:
+        """Remove a objective from the graph. Returns a new graph instance.
 
         Theories are leaf entities — removal is always structurally safe.
 
         Args:
-            tid: The theory ID to remove.
+            tid: The objective ID to remove.
 
         Returns:
-            EpistemicGraphPort: New graph without the theory.
+            EpistemicGraphPort: New graph without the objective.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist.
+            BrokenReferenceError: If the objective does not exist.
         """
         ...
 

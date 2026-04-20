@@ -26,7 +26,7 @@ from .model import (
     PairwiseSeparation,
     Parameter,
     Prediction,
-    Theory,
+    Objective,
 )
 from .types import (
     AnalysisId,
@@ -53,8 +53,9 @@ from .types import (
     PredictionId,
     PredictionStatus,
     Severity,
-    TheoryId,
-    TheoryStatus,
+    ObjectiveId,
+    ObjectiveKind,
+    ObjectiveStatus,
 )
 from .errors import (
     BrokenReferenceError,
@@ -67,15 +68,15 @@ from .graph import EpistemicGraph
 
 __all__ = [
     # types
-    "HypothesisId", "AssumptionId", "PredictionId", "TheoryId", "DiscoveryId",
+    "HypothesisId", "AssumptionId", "PredictionId", "ObjectiveId", "DiscoveryId",
     "AnalysisId", "IndependenceGroupId", "ParameterId", "DeadEndId",
     "PairwiseSeparationId", "ObservationId",
     "Severity", "Finding", "ConfidenceTier", "EvidenceKind", "MeasurementRegime",
-    "PredictionStatus", "DeadEndStatus", "HypothesisStatus", "TheoryStatus", "DiscoveryStatus",
+    "PredictionStatus", "DeadEndStatus", "HypothesisStatus", "ObjectiveStatus", "ObjectiveKind", "DiscoveryStatus",
     "ObservationStatus", "Criticality",
     "AssumptionType", "HypothesisType", "HypothesisCategory",
     # model
-    "Hypothesis", "Assumption", "Prediction", "Theory", "IndependenceGroup",
+    "Hypothesis", "Assumption", "Prediction", "Objective", "IndependenceGroup",
     "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Parameter",
     "Observation",
     # graph

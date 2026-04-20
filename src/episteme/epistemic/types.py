@@ -22,8 +22,8 @@ AssumptionId = NewType("AssumptionId", str)
 PredictionId = NewType("PredictionId", str)
 """Nominal identifier for a :class:`~episteme.epistemic.model.Prediction`."""
 
-TheoryId = NewType("TheoryId", str)
-"""Nominal identifier for a :class:`~episteme.epistemic.model.Theory`."""
+ObjectiveId = NewType("ObjectiveId", str)
+"""Nominal identifier for a :class:`~episteme.epistemic.model.Objective`."""
 
 DiscoveryId = NewType("DiscoveryId", str)
 """Nominal identifier for a :class:`~episteme.epistemic.model.Discovery`."""
@@ -95,7 +95,7 @@ class Finding:
 class ConfidenceTier(Enum):
     """How strongly a prediction is constrained.
 
-    FULLY_SPECIFIED: Zero free parameters — pure prediction from theory.
+    FULLY_SPECIFIED: Zero free parameters — pure prediction from objective.
     CONDITIONAL: Valid only if explicitly stated assumptions hold.
     FIT_CHECK: Agreement unsurprising — model was fit to this data, or data
         predates the model (retrodiction). Use evidence_kind to distinguish
@@ -186,8 +186,27 @@ class DeadEndStatus(Enum):
     ARCHIVED = "archived"
 
 
-class TheoryStatus(Enum):
-    """Lifecycle state of a theory in the research program.
+class ObjectiveKind(Enum):
+    """What type of research objective this is.
+
+    EXPLANATORY:
+        A theoretical framework that explains phenomena and generates
+        hypotheses — the traditional notion of a scientific theory.
+    GOAL:
+        A concrete target outcome with success criteria, e.g.
+        "reduce fuel consumption ≥20%" or "find a treatment for X".
+    EXPLORATORY:
+        An open-ended investigation to characterise or understand
+        a domain, e.g. "map the soil microbiome at site X".
+    """
+
+    EXPLANATORY = "explanatory"  # traditional scientific theory
+    GOAL = "goal"                # target outcome with success criteria
+    EXPLORATORY = "exploratory"  # open-ended investigation
+
+
+class ObjectiveStatus(Enum):
+    """Lifecycle state of an objective in the research program.
 
     ACTIVE:
         Currently under active development or evaluation.
@@ -196,13 +215,23 @@ class TheoryStatus(Enum):
     ABANDONED:
         No longer pursued due to lack of explanatory or predictive value.
     SUPERSEDED:
-        Replaced by a better theory/framework.
+        Replaced by a better objective/framework.
+    ACHIEVED:
+        Success criteria met (primarily for GOAL objectives).
+    INFEASIBLE:
+        Determined to be unachievable with current knowledge or
+        constraints (primarily for GOAL objectives).
+    DEFERRED:
+        Paused but not abandoned — may be resumed later.
     """
 
     ACTIVE = "active"         # currently under investigation
     REFINED = "refined"       # initial formulation has been updated
     ABANDONED = "abandoned"   # no longer pursued
     SUPERSEDED = "superseded" # replaced by a better framework
+    ACHIEVED = "achieved"     # success criteria met
+    INFEASIBLE = "infeasible" # determined unachievable
+    DEFERRED = "deferred"     # paused, not abandoned
 
 
 class DiscoveryStatus(Enum):

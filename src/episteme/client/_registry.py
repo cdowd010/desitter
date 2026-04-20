@@ -5,44 +5,57 @@ from datetime import date
 from typing import Iterable
 
 from ._types import ClientResult
-from ..epistemic.model import DeadEnd, Discovery, Theory
-from ..epistemic.types import DeadEndStatus, DiscoveryStatus, TheoryStatus
+from ..epistemic.model import DeadEnd, Discovery, Objective
+from ..epistemic.types import DeadEndStatus, DiscoveryStatus, ObjectiveStatus
 
 
 class _EpistemeClientRegistryHelpers:
-    """Typed helpers for theories, discoveries, and dead ends."""
+    """Typed helpers for objectives, discoveries, and dead ends."""
 
-    def register_theory(
+    def register_objective(
         self,
         id: str,
         title: str,
-        status: TheoryStatus | str,
+        kind: str,
+        status: ObjectiveStatus | str,
         *,
         dry_run: bool = False,
         summary: str | None = None,
+        success_criteria: str | None = None,
         related_predictions: Iterable[str] | None = None,
+        related_dead_ends: Iterable[str] | None = None,
+        related_discoveries: Iterable[str] | None = None,
         source: str | None = None,
-    ) -> ClientResult[Theory]:
-        """Register a theory in the epistemic graph.
+    ) -> ClientResult[Objective]:
+        """Register an objective in the epistemic graph.
 
-        A theory is a high-level narrative construct that groups related hypotheses
-        and predictions into a coherent explanatory framework. Claims declare
-        which theories motivate them via ``Hypothesis.theories``; the theory's
-        ``motivates_hypotheses`` backlink is auto-maintained.
+        An objective is a research goal that motivates and organises hypotheses.
+        It unifies explanatory frameworks, goal-directed research, and exploratory
+        investigations. Hypotheses declare which objectives motivate them via
+        ``Hypothesis.objectives``; the objective's ``motivates_hypotheses``
+        backlink is auto-maintained.
 
         Args:
-            id: Unique identifier for the theory.
+            id: Unique identifier for the objective.
             title: Short descriptive title.
-            status: Initial lifecycle status (``TheoryStatus`` enum or string
+            kind: The type of objective (``ObjectiveKind`` string key —
+                ``"EXPLANATORY"``, ``"GOAL"``, or ``"EXPLORATORY"``).
+            status: Initial lifecycle status (``ObjectiveStatus`` enum or string
                 key).
             dry_run: Simulate without committing.
-            summary: Extended free-text summary of the theory.
+            summary: Extended free-text summary of the objective.
+            success_criteria: What counts as achieving this objective.
+                Required for ``GOAL`` kind; optional for others.
             related_predictions: IDs of predictions associated with this
-                theory.
+                objective.
+            related_dead_ends: IDs of dead ends representing failed
+                approaches toward this objective.
+            related_discoveries: IDs of discoveries made while pursuing
+                this objective.
             source: Citation or reference.
 
         Returns:
-            ``ClientResult[Theory]`` with ``status="ok"`` and ``data`` holding
+            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` holding
             the registered entity on success.
 
         Raises:
@@ -136,14 +149,14 @@ class _EpistemeClientRegistryHelpers:
         """
         raise NotImplementedError
 
-    def get_theory(self, identifier: str) -> ClientResult[Theory]:
-        """Retrieve a theory by its unique identifier.
+    def get_objective(self, identifier: str) -> ClientResult[Objective]:
+        """Retrieve a objective by its unique identifier.
 
         Args:
-            identifier: The unique string ID of the theory to look up.
+            identifier: The unique string ID of the objective to look up.
 
         Returns:
-            ``ClientResult[Theory]`` with ``status="ok"`` and ``data`` set to
+            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` set to
             the entity when found, or ``status="error"`` if not found.
 
         Raises:
@@ -181,16 +194,16 @@ class _EpistemeClientRegistryHelpers:
         """
         raise NotImplementedError
 
-    def list_theories(self, **filters: object) -> ClientResult[list[Theory]]:
-        """Return all theories, applying any keyword attribute filters.
+    def list_objectives(self, **filters: object) -> ClientResult[list[Objective]]:
+        """Return all objectives, applying any keyword attribute filters.
 
         Args:
             **filters: Attribute-value pairs to filter on (e.g.
-                ``status="active"`` to return only active theories).
+                ``status="active"`` to return only active objectives).
 
         Returns:
-            ``ClientResult[list[Theory]]`` with ``data`` holding the
-            (possibly empty) list of matching theories.
+            ``ClientResult[list[Objective]]`` with ``data`` holding the
+            (possibly empty) list of matching objectives.
 
         Raises:
             NotImplementedError: This stub is not yet implemented.
@@ -228,23 +241,23 @@ class _EpistemeClientRegistryHelpers:
         """
         raise NotImplementedError
 
-    def transition_theory(
+    def transition_objective(
         self,
         identifier: str,
-        new_status: TheoryStatus | str,
+        new_status: ObjectiveStatus | str,
         *,
         dry_run: bool = False,
-    ) -> ClientResult[Theory]:
-        """Advance or retract a theory's lifecycle status.
+    ) -> ClientResult[Objective]:
+        """Advance or retract a objective's lifecycle status.
 
         Args:
-            identifier: The unique string ID of the theory to transition.
-            new_status: Target lifecycle status (``TheoryStatus`` enum value
+            identifier: The unique string ID of the objective to transition.
+            new_status: Target lifecycle status (``ObjectiveStatus`` enum value
                 or its string key).
             dry_run: Simulate the transition without committing.
 
         Returns:
-            ``ClientResult[Theory]`` with ``status="ok"`` and ``data`` holding
+            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` holding
             the updated entity, or ``status="BLOCKED"`` if the transition
             violates a domain invariant.
 

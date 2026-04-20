@@ -23,9 +23,9 @@ from episteme.epistemic.model import (
     Prediction,
     PredictionId,
     PredictionStatus,
-    Theory,
-    TheoryId,
-    TheoryStatus,
+    Objective,
+    ObjectiveId,
+    ObjectiveStatus,
 )
 from episteme.epistemic.types import (
     ConfidenceTier,
@@ -38,7 +38,7 @@ from episteme.views.evidence import evidence_summary
 
 
 def test_evidence_summary_basic(base_graph):
-    """Evidence summary for C-001 includes its prediction, assumption, and theory."""
+    """Evidence summary for C-001 includes its prediction, assumption, and objective."""
     summary = evidence_summary(base_graph, HypothesisId("C-001"))
 
     assert summary.hypothesis_id == HypothesisId("C-001")
@@ -65,10 +65,10 @@ def test_evidence_summary_basic(base_graph):
     assert a.criticality == Criticality.LOAD_BEARING
     assert a.direct is True
 
-    # T-001 is the motivating theory
-    assert len(summary.theories) == 1
-    assert summary.theories[0].id == TheoryId("T-001")
-    assert summary.theories[0].title == "Catalysis Theory"
+    # T-001 is the motivating objective
+    assert len(summary.objectives) == 1
+    assert summary.objectives[0].id == ObjectiveId("T-001")
+    assert summary.objectives[0].title == "Catalysis Objective"
 
     # Status counts
     assert summary.pending_count == 1
@@ -98,7 +98,7 @@ def test_evidence_summary_with_stale_analysis(base_graph):
         assumptions=h.assumptions,
         depends_on=h.depends_on,
         analyses={AnalysisId("AN-001")},
-        theories=h.theories,
+        objectives=h.objectives,
     )
     graph = base_graph.update_hypothesis(updated)
 

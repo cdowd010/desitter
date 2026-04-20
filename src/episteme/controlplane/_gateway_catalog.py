@@ -60,7 +60,7 @@ RESOURCE_SPECS: dict[str, ResourceSpec] = {
     "assumption": ResourceSpec("assumptions", "register_assumption", "update_assumption"),
     "prediction": ResourceSpec("predictions", "register_prediction", "update_prediction", "transition_prediction"),
     "analysis": ResourceSpec("analyses", "register_analysis", "update_analysis"),
-    "theory": ResourceSpec("theories", "register_theory", "update_theory", "transition_theory"),
+    "objective": ResourceSpec("objectives", "register_objective", "update_objective", "transition_objective"),
     "discovery": ResourceSpec("discoveries", "register_discovery", "update_discovery", "transition_discovery"),
     "dead_end": ResourceSpec("dead_ends", "register_dead_end", "update_dead_end", "transition_dead_end"),
     "parameter": ResourceSpec("parameters", "register_parameter", "update_parameter"),

@@ -23,7 +23,7 @@ from .types import (
     ObservationStatus,
     PredictionStatus,
     Severity,
-    TheoryStatus,
+    ObjectiveStatus,
 )
 from .ports import EpistemicGraphPort
 
@@ -534,10 +534,10 @@ def validate_retracted_observation_citations(graph: EpistemicGraphPort) -> list[
     return findings
 
 
-def validate_theory_abandonment_impact(graph: EpistemicGraphPort) -> list[Finding]:
-    """Flag hypotheses whose only theoretical motivation comes from abandoned/superseded theories.
+def validate_objective_abandonment_impact(graph: EpistemicGraphPort) -> list[Finding]:
+    """Flag hypotheses whose only theoretical motivation comes from abandoned/superseded objectives.
 
-    If all theories referenced by a hypothesis have been abandoned or superseded,
+    If all objectives referenced by a hypothesis have been abandoned or superseded,
     the hypothesis has lost its theoretical motivation. This does not invalidate
     the hypothesis (it may still be empirically supported), but the researcher
     should be aware. Severity: WARNING.
@@ -550,21 +550,21 @@ def validate_theory_abandonment_impact(graph: EpistemicGraphPort) -> list[Findin
             theoretical motivation.
     """
     findings: list[Finding] = []
-    terminal_statuses = {TheoryStatus.ABANDONED, TheoryStatus.SUPERSEDED}
+    terminal_statuses = {ObjectiveStatus.ABANDONED, ObjectiveStatus.SUPERSEDED}
     for cid, hypothesis in graph.hypotheses.items():
-        if not hypothesis.theories:
+        if not hypothesis.objectives:
             continue
         all_terminal = all(
-            graph.theories.get(tid) is not None
-            and graph.theories[tid].status in terminal_statuses
-            for tid in hypothesis.theories
+            graph.objectives.get(tid) is not None
+            and graph.objectives[tid].status in terminal_statuses
+            for tid in hypothesis.objectives
         )
         if all_terminal:
             findings.append(Finding(
                 Severity.WARNING,
                 f"hypotheses/{cid}",
-                f"All motivating theories are abandoned/superseded: "
-                f"{sorted(hypothesis.theories)}. Hypothesis has lost theoretical "
+                f"All motivating objectives are abandoned/superseded: "
+                f"{sorted(hypothesis.objectives)}. Hypothesis has lost theoretical "
                 f"motivation.",
             ))
     return findings
@@ -622,7 +622,7 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         10. Conditional assumption pressure
         11. Stress criteria
         12. Retracted observation citations
-        13. Theory abandonment impact
+        13. Objective abandonment impact
         14. Load-bearing assumption coverage
 
     Args:
@@ -645,6 +645,6 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         + validate_conditional_assumption_pressure(graph)
         + validate_stress_criteria(graph)
         + validate_retracted_observation_citations(graph)
-        + validate_theory_abandonment_impact(graph)
+        + validate_objective_abandonment_impact(graph)
         + validate_load_bearing_assumption_coverage(graph)
     )

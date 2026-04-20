@@ -23,7 +23,7 @@ from .model import (
     PairwiseSeparation,
     Parameter,
     Prediction,
-    Theory,
+    Objective,
 )
 from .errors import (
     BrokenReferenceError,
@@ -48,8 +48,8 @@ from .types import (
     PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
-    TheoryId,
-    TheoryStatus,
+    ObjectiveId,
+    ObjectiveStatus,
 )
 
 
@@ -75,7 +75,7 @@ class EpistemicGraph:
         hypotheses: Registry of all hypotheses, keyed by ``HypothesisId``.
         assumptions: Registry of all assumptions, keyed by ``AssumptionId``.
         predictions: Registry of all predictions, keyed by ``PredictionId``.
-        theories: Registry of all theories, keyed by ``TheoryId``.
+        objectives: Registry of all objectives, keyed by ``ObjectiveId``.
         discoveries: Registry of all discoveries, keyed by ``DiscoveryId``.
         analyses: Registry of all analyses, keyed by ``AnalysisId``.
         independence_groups: Registry of all independence groups, keyed
@@ -94,7 +94,7 @@ class EpistemicGraph:
     hypotheses: dict[HypothesisId, Hypothesis] = field(default_factory=dict)
     assumptions: dict[AssumptionId, Assumption] = field(default_factory=dict)
     predictions: dict[PredictionId, Prediction] = field(default_factory=dict)
-    theories: dict[TheoryId, Theory] = field(default_factory=dict)
+    objectives: dict[ObjectiveId, Objective] = field(default_factory=dict)
     discoveries: dict[DiscoveryId, Discovery] = field(default_factory=dict)
     analyses: dict[AnalysisId, Analysis] = field(default_factory=dict)
     independence_groups: dict[IndependenceGroupId, IndependenceGroup] = field(
@@ -462,7 +462,7 @@ class EpistemicGraph:
         self._check_refs_exist(hypothesis.depends_on, self.hypotheses, "hypothesis")
         self._check_refs_exist(hypothesis.analyses, self.analyses, "analysis")
         self._check_refs_exist(set(hypothesis.parameter_constraints.keys()), self.parameters, "parameter")
-        self._check_refs_exist(hypothesis.theories, self.theories, "theory")
+        self._check_refs_exist(hypothesis.objectives, self.objectives, "objective")
         self._check_no_cycle_with(hypothesis)
 
         new = self._copy()
@@ -481,10 +481,10 @@ class EpistemicGraph:
             new.analyses[anid] = copy.deepcopy(new.analyses[anid])
             new.analyses[anid].hypotheses_covered.add(hypothesis.id)
 
-        # Maintain bidirectional: theory.motivates_hypotheses
-        for tid in hypothesis.theories:
-            new.theories[tid] = copy.deepcopy(new.theories[tid])
-            new.theories[tid].motivates_hypotheses.add(hypothesis.id)
+        # Maintain bidirectional: objective.motivates_hypotheses
+        for tid in hypothesis.objectives:
+            new.objectives[tid] = copy.deepcopy(new.objectives[tid])
+            new.objectives[tid].motivates_hypotheses.add(hypothesis.id)
 
         return new
 
@@ -600,30 +600,33 @@ class EpistemicGraph:
 
         return new
 
-    def register_theory(self, theory: Theory) -> EpistemicGraph:
-        """Register a new theory in the graph.
+    def register_objective(self, objective: Objective) -> EpistemicGraph:
+        """Register a new objective in the graph.
 
-        Validates that all ``related_predictions`` IDs exist.
+        Validates that all ``related_predictions``, ``related_dead_ends``,
+        and ``related_discoveries`` IDs exist.
         ``motivates_hypotheses`` is a backlink maintained by hypothesis
         operations and starts empty.
 
         Args:
-            theory: The theory to register. Must have a unique ``id``.
+            objective: The objective to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicGraph: A new graph instance containing the registered theory.
+            EpistemicGraph: A new graph instance containing the registered objective.
 
         Raises:
-            DuplicateIdError: If ``theory.id`` already exists.
+            DuplicateIdError: If ``objective.id`` already exists.
             BrokenReferenceError: If any referenced ID does not exist.
         """
-        if theory.id in self.theories:
-            raise DuplicateIdError(f"Theory {theory.id} already exists")
-        self._check_refs_exist(theory.related_predictions, self.predictions, "prediction")
+        if objective.id in self.objectives:
+            raise DuplicateIdError(f"Objective {objective.id} already exists")
+        self._check_refs_exist(objective.related_predictions, self.predictions, "prediction")
+        self._check_refs_exist(objective.related_dead_ends, self.dead_ends, "dead_end")
+        self._check_refs_exist(objective.related_discoveries, self.discoveries, "discovery")
         new = self._copy()
-        stored = copy.deepcopy(theory)
+        stored = copy.deepcopy(objective)
         stored.motivates_hypotheses = set()
-        new.theories[theory.id] = stored
+        new.objectives[objective.id] = stored
         return new
 
     def register_independence_group(self, group: IndependenceGroup) -> EpistemicGraph:
@@ -819,24 +822,24 @@ class EpistemicGraph:
         new.hypotheses[cid].status = new_status
         return new
 
-    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicGraph:
-        """Change a theory's lifecycle status.
+    def transition_objective(self, tid: ObjectiveId, new_status: ObjectiveStatus) -> EpistemicGraph:
+        """Change a objective's lifecycle status.
 
         Args:
-            tid: The theory ID to transition.
+            tid: The objective ID to transition.
             new_status: The new status (ACTIVE, REFINED, ABANDONED, or SUPERSEDED).
 
         Returns:
             EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist.
+            BrokenReferenceError: If the objective does not exist.
         """
-        if tid not in self.theories:
-            raise BrokenReferenceError(f"Theory {tid} does not exist")
+        if tid not in self.objectives:
+            raise BrokenReferenceError(f"Objective {tid} does not exist")
         new = self._copy()
-        new.theories[tid] = copy.deepcopy(new.theories[tid])
-        new.theories[tid].status = new_status
+        new.objectives[tid] = copy.deepcopy(new.objectives[tid])
+        new.objectives[tid].status = new_status
         return new
 
     def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicGraph:
@@ -928,7 +931,7 @@ class EpistemicGraph:
         self._check_refs_exist(new_hypothesis.depends_on, self.hypotheses, "hypothesis")
         self._check_refs_exist(new_hypothesis.analyses, self.analyses, "analysis")
         self._check_refs_exist(set(new_hypothesis.parameter_constraints.keys()), self.parameters, "parameter")
-        self._check_refs_exist(new_hypothesis.theories, self.theories, "theory")
+        self._check_refs_exist(new_hypothesis.objectives, self.objectives, "objective")
         self._check_no_cycle_with(new_hypothesis)
 
         new = self._copy()
@@ -950,13 +953,13 @@ class EpistemicGraph:
             new.analyses[anid] = copy.deepcopy(new.analyses[anid])
             new.analyses[anid].hypotheses_covered.add(new_hypothesis.id)
 
-        # Diff theory.motivates_hypotheses
-        for tid in old.theories - new_hypothesis.theories:
-            new.theories[tid] = copy.deepcopy(new.theories[tid])
-            new.theories[tid].motivates_hypotheses.discard(new_hypothesis.id)
-        for tid in new_hypothesis.theories - old.theories:
-            new.theories[tid] = copy.deepcopy(new.theories[tid])
-            new.theories[tid].motivates_hypotheses.add(new_hypothesis.id)
+        # Diff objective.motivates_hypotheses
+        for tid in old.objectives - new_hypothesis.objectives:
+            new.objectives[tid] = copy.deepcopy(new.objectives[tid])
+            new.objectives[tid].motivates_hypotheses.discard(new_hypothesis.id)
+        for tid in new_hypothesis.objectives - old.objectives:
+            new.objectives[tid] = copy.deepcopy(new.objectives[tid])
+            new.objectives[tid].motivates_hypotheses.add(new_hypothesis.id)
 
         return new
 
@@ -1114,32 +1117,35 @@ class EpistemicGraph:
 
         return new
 
-    def update_theory(self, new_theory: Theory) -> EpistemicGraph:
-        """Replace a theory's fields.
+    def update_objective(self, new_objective: Objective) -> EpistemicGraph:
+        """Replace an objective's fields.
 
-        Validates that all ``related_predictions`` IDs exist.
+        Validates that all ``related_predictions``, ``related_dead_ends``,
+        and ``related_discoveries`` IDs exist.
         ``motivates_hypotheses`` is a backlink maintained by hypothesis operations
-        and is preserved from the existing theory.
+        and is preserved from the existing objective.
 
         Args:
-            new_theory: The updated theory. Must have the same ``id``
-                as an existing theory.
+            new_objective: The updated objective. Must have the same ``id``
+                as an existing objective.
 
         Returns:
-            EpistemicGraph: A new graph instance with the updated theory.
+            EpistemicGraph: A new graph instance with the updated objective.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist or if
+            BrokenReferenceError: If the objective does not exist or if
                 any referenced ID does not exist.
         """
-        if new_theory.id not in self.theories:
-            raise BrokenReferenceError(f"Theory {new_theory.id} does not exist")
-        old = self.theories[new_theory.id]
-        self._check_refs_exist(new_theory.related_predictions, self.predictions, "prediction")
+        if new_objective.id not in self.objectives:
+            raise BrokenReferenceError(f"Objective {new_objective.id} does not exist")
+        old = self.objectives[new_objective.id]
+        self._check_refs_exist(new_objective.related_predictions, self.predictions, "prediction")
+        self._check_refs_exist(new_objective.related_dead_ends, self.dead_ends, "dead_end")
+        self._check_refs_exist(new_objective.related_discoveries, self.discoveries, "discovery")
         new = self._copy()
-        updated = copy.deepcopy(new_theory)
+        updated = copy.deepcopy(new_objective)
         updated.motivates_hypotheses = copy.deepcopy(old.motivates_hypotheses)
-        new.theories[new_theory.id] = updated
+        new.objectives[new_objective.id] = updated
         return new
 
     def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicGraph:
@@ -1257,7 +1263,7 @@ class EpistemicGraph:
 
         Tears down all backlinks (``Assumption.tested_by``,
         ``IndependenceGroup.member_predictions``) and scrubs soft
-        navigational references in theories, dead ends, and discoveries.
+        navigational references in objectives, dead ends, and discoveries.
         No entity hard-blocks prediction removal.
 
         Args:
@@ -1282,11 +1288,11 @@ class EpistemicGraph:
             gid = pred.independence_group
             new.independence_groups[gid] = copy.deepcopy(new.independence_groups[gid])
             new.independence_groups[gid].member_predictions.discard(pid)
-        # Scrub soft references in theories, dead ends, and discoveries
-        for tid, theory in list(new.theories.items()):
-            if pid in theory.related_predictions:
-                new.theories[tid] = copy.deepcopy(theory)
-                new.theories[tid].related_predictions.discard(pid)
+        # Scrub soft references in objectives, dead ends, and discoveries
+        for tid, objective in list(new.objectives.items()):
+            if pid in objective.related_predictions:
+                new.objectives[tid] = copy.deepcopy(objective)
+                new.objectives[tid].related_predictions.discard(pid)
         for de_id, dead_end in list(new.dead_ends.items()):
             if pid in dead_end.related_predictions:
                 new.dead_ends[de_id] = copy.deepcopy(dead_end)
@@ -1310,7 +1316,7 @@ class EpistemicGraph:
         update or remove all referencing entities.
 
         On success, tears down backlinks on assumptions and analyses,
-        scrubs soft references in theories, dead ends, discoveries,
+        scrubs soft references in objectives, dead ends, discoveries,
         and independence group ``hypothesis_lineage`` annotations.
 
         Args:
@@ -1349,11 +1355,11 @@ class EpistemicGraph:
             if anid in new.analyses:
                 new.analyses[anid] = copy.deepcopy(new.analyses[anid])
                 new.analyses[anid].hypotheses_covered.discard(cid)
-        # Tear down bidirectional: theory.motivates_hypotheses
-        for tid in hypothesis.theories:
-            if tid in new.theories:
-                new.theories[tid] = copy.deepcopy(new.theories[tid])
-                new.theories[tid].motivates_hypotheses.discard(cid)
+        # Tear down bidirectional: objective.motivates_hypotheses
+        for tid in hypothesis.objectives:
+            if tid in new.objectives:
+                new.objectives[tid] = copy.deepcopy(new.objectives[tid])
+                new.objectives[tid].motivates_hypotheses.discard(cid)
         # Scrub soft references in dead ends and discoveries
         for de_id, dead_end in list(new.dead_ends.items()):
             if cid in dead_end.related_hypotheses:
@@ -1535,31 +1541,31 @@ class EpistemicGraph:
         del new.independence_groups[gid]
         return new
 
-    def remove_theory(self, tid: TheoryId) -> EpistemicGraph:
-        """Remove a theory from the graph.
+    def remove_objective(self, tid: ObjectiveId) -> EpistemicGraph:
+        """Remove an objective from the graph.
 
-        Scrubs ``Hypothesis.theories`` references on any hypotheses that were
-        motivated by this theory. Does not block on hypotheses — a hypothesis
-        can survive without its motivating theory.
+        Scrubs ``Hypothesis.objectives`` references on any hypotheses that were
+        motivated by this objective. Does not block on hypotheses — a hypothesis
+        can survive without its motivating objective.
 
         Args:
-            tid: The theory ID to remove.
+            tid: The objective ID to remove.
 
         Returns:
-            EpistemicGraph: A new graph instance without the theory.
+            EpistemicGraph: A new graph instance without the objective.
 
         Raises:
-            BrokenReferenceError: If the theory does not exist.
+            BrokenReferenceError: If the objective does not exist.
         """
-        if tid not in self.theories:
-            raise BrokenReferenceError(f"Theory {tid} does not exist")
+        if tid not in self.objectives:
+            raise BrokenReferenceError(f"Objective {tid} does not exist")
         new = self._copy()
-        del new.theories[tid]
-        # Scrub Hypothesis.theories backlinks
+        del new.objectives[tid]
+        # Scrub Hypothesis.objectives backlinks
         for cid, hypothesis in list(new.hypotheses.items()):
-            if tid in hypothesis.theories:
+            if tid in hypothesis.objectives:
                 new.hypotheses[cid] = copy.deepcopy(hypothesis)
-                new.hypotheses[cid].theories.discard(tid)
+                new.hypotheses[cid].objectives.discard(tid)
         return new
 
     def remove_discovery(self, did: DiscoveryId) -> EpistemicGraph:
@@ -1581,6 +1587,11 @@ class EpistemicGraph:
             raise BrokenReferenceError(f"Discovery {did} does not exist")
         new = self._copy()
         del new.discoveries[did]
+        # Scrub Objective.related_discoveries soft links
+        for oid, obj in list(new.objectives.items()):
+            if did in obj.related_discoveries:
+                new.objectives[oid] = copy.deepcopy(obj)
+                new.objectives[oid].related_discoveries.discard(did)
         return new
 
     def remove_dead_end(self, did: DeadEndId) -> EpistemicGraph:
@@ -1602,6 +1613,11 @@ class EpistemicGraph:
             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
         new = self._copy()
         del new.dead_ends[did]
+        # Scrub Objective.related_dead_ends soft links
+        for oid, obj in list(new.objectives.items()):
+            if did in obj.related_dead_ends:
+                new.objectives[oid] = copy.deepcopy(obj)
+                new.objectives[oid].related_dead_ends.discard(did)
         return new
 
     def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicGraph:
@@ -1835,7 +1851,7 @@ class EpistemicGraph:
             hypotheses=dict(self.hypotheses),
             assumptions=dict(self.assumptions),
             predictions=dict(self.predictions),
-            theories=dict(self.theories),
+            objectives=dict(self.objectives),
             discoveries=dict(self.discoveries),
             analyses=dict(self.analyses),
             independence_groups=dict(self.independence_groups),

@@ -3,7 +3,7 @@
 Assembles the full evidence picture for a single hypothesis: its
 predictions with their statuses and observations, the assumption
 foundation (with criticality and test coverage), linked analyses
-and their staleness, and motivating theories.
+and their staleness, and motivating objectives.
 
 Pure function — no I/O, no side effects.
 """
@@ -23,10 +23,11 @@ from ..epistemic.types import (
     MeasurementRegime,
     ObservationId,
     ObservationStatus,
+    ObjectiveKind,
     PredictionId,
     PredictionStatus,
-    TheoryId,
-    TheoryStatus,
+    ObjectiveId,
+    ObjectiveStatus,
 )
 
 
@@ -110,18 +111,20 @@ class AnalysisDetail:
 
 
 @dataclass
-class TheoryDetail:
-    """Summary of a motivating theory.
+class ObjectiveDetail:
+    """Summary of a motivating objective.
 
     Attributes:
-        id: Theory identifier.
+        id: Objective identifier.
         title: Human-readable name.
+        kind: The type of objective.
         status: Current lifecycle status.
     """
 
-    id: TheoryId
+    id: ObjectiveId
     title: str
-    status: TheoryStatus
+    kind: ObjectiveKind
+    status: ObjectiveStatus
 
 
 @dataclass
@@ -137,7 +140,7 @@ class EvidenceSummary:
         assumptions: Full assumption foundation (direct and transitive),
             with criticality and test coverage.
         analyses: Linked analyses with staleness flags.
-        theories: Motivating theories.
+        objectives: Motivating objectives.
         confirmed_count: Number of predictions with CONFIRMED status.
         refuted_count: Number of predictions with REFUTED status.
         pending_count: Number of predictions with PENDING status.
@@ -150,7 +153,7 @@ class EvidenceSummary:
     predictions: list[PredictionDetail] = field(default_factory=list)
     assumptions: list[AssumptionDetail] = field(default_factory=list)
     analyses: list[AnalysisDetail] = field(default_factory=list)
-    theories: list[TheoryDetail] = field(default_factory=list)
+    objectives: list[ObjectiveDetail] = field(default_factory=list)
     confirmed_count: int = 0
     refuted_count: int = 0
     pending_count: int = 0
@@ -274,13 +277,13 @@ def evidence_summary(
             )
         )
 
-    # ── Theories ──────────────────────────────────────────────────
-    theory_details: list[TheoryDetail] = []
-    for tid in sorted(hypothesis.theories):
-        theory = graph.theories.get(tid)
-        if theory is not None:
-            theory_details.append(
-                TheoryDetail(id=theory.id, title=theory.title, status=theory.status)
+    # ── Objectives ────────────────────────────────────────────────
+    objective_details: list[ObjectiveDetail] = []
+    for tid in sorted(hypothesis.objectives):
+        objective = graph.objectives.get(tid)
+        if objective is not None:
+            objective_details.append(
+                ObjectiveDetail(id=objective.id, title=objective.title, kind=objective.kind, status=objective.status)
             )
 
     return EvidenceSummary(
@@ -290,6 +293,6 @@ def evidence_summary(
         predictions=prediction_details,
         assumptions=assumption_details,
         analyses=analysis_details,
-        theories=theory_details,
+        objectives=objective_details,
         **status_counts,
     )

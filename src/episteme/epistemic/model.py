@@ -35,8 +35,9 @@ from .types import (
     PairwiseSeparationId,
     PredictionId,
     PredictionStatus,
-    TheoryId,
-    TheoryStatus,
+    ObjectiveId,
+    ObjectiveKind,
+    ObjectiveStatus,
 )
 
 
@@ -70,8 +71,8 @@ class Hypothesis:
             DAG enforced by the graph's cycle-detection logic.
         analyses: IDs of analyses linked to this hypothesis. Bidirectional with
             ``Analysis.hypotheses_covered``.
-        theories: IDs of theories that motivate this hypothesis. Bidirectional
-            with ``Theory.motivates_hypotheses``.
+        objectives: IDs of objectives that motivate this hypothesis. Bidirectional
+            with ``Objective.motivates_hypotheses``.
         parameter_constraints: Annotation map ``{ParameterId: constraint_str}``
             where the constraint string is human-readable (e.g. ``"< 0.05"``.
             Episteme does not evaluate these — it surfaces them when a
@@ -89,7 +90,7 @@ class Hypothesis:
     assumptions: set[AssumptionId] = field(default_factory=set)
     depends_on: set[HypothesisId] = field(default_factory=set)
     analyses: set[AnalysisId] = field(default_factory=set)
-    theories: set[TheoryId] = field(default_factory=set)
+    objectives: set[ObjectiveId] = field(default_factory=set)
     parameter_constraints: dict[ParameterId, str] = field(default_factory=dict)
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
 
@@ -340,36 +341,53 @@ class Analysis:
 
 
 @dataclass
-class Theory:
-    """A higher-level explanatory framework being explored.
+class Objective:
+    """A research objective that motivates and organises hypotheses.
 
-    A theory motivates and organises hypotheses. Claims declare which theories
-    motivate them via ``Hypothesis.theories``, and this entity's
-    ``motivates_hypotheses`` backlink is maintained automatically by the graph.
-    This makes the relationship structural: when a theory is abandoned,
-    the system can answer "which hypotheses lose their theoretical motivation?"
+    Objectives unify explanatory frameworks (traditional theories),
+    goal-directed research ("achieve X"), and exploratory investigations
+    ("understand domain Y") under a single entity. The ``kind`` field
+    distinguishes these roles.
 
-    ``related_predictions`` remains a soft navigational link — predictions
-    relate to theories indirectly through hypotheses.
+    Hypotheses declare which objectives motivate them via
+    ``Hypothesis.objectives``, and this entity's ``motivates_hypotheses``
+    backlink is maintained automatically by the graph. This makes the
+    relationship structural: when an objective is abandoned, the system
+    can answer "which hypotheses lose their motivation?"
+
+    ``related_predictions`` and ``related_dead_ends`` / ``related_discoveries``
+    are soft navigational links — scrubbed on removal of the referenced entity.
 
     Attributes:
-        id: Unique identifier (e.g. ``"T-001"``).
-        title: Human-readable name for the theory.
+        id: Unique identifier (e.g. ``"OBJ-001"``).
+        title: Human-readable name for the objective.
+        kind: The type of objective — ``EXPLANATORY``, ``GOAL``, or
+            ``EXPLORATORY``.
         status: Lifecycle state — ``ACTIVE``, ``REFINED``, ``ABANDONED``,
-            or ``SUPERSEDED``.
-        summary: Optional prose description of the theory.
-        motivates_hypotheses: IDs of hypotheses this theory motivates. Backlink
-            maintained by hypothesis operations — not set by callers.
-        related_predictions: IDs of predictions this theory generates.
+            ``SUPERSEDED``, ``ACHIEVED``, ``INFEASIBLE``, or ``DEFERRED``.
+        success_criteria: What counts as achieving this objective.
+            Required for ``GOAL`` kind; optional for others.
+        summary: Optional prose description of the objective.
+        motivates_hypotheses: IDs of hypotheses this objective motivates.
+            Backlink maintained by hypothesis operations — not set by callers.
+        related_predictions: IDs of predictions this objective generates.
             Soft navigational link — scrubbed on prediction removal.
+        related_dead_ends: IDs of dead ends that represent failed
+            approaches toward this objective. Soft navigational link.
+        related_discoveries: IDs of discoveries made while pursuing
+            this objective. Soft navigational link.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
     """
-    id: TheoryId
+    id: ObjectiveId
     title: str
-    status: TheoryStatus
+    kind: ObjectiveKind
+    status: ObjectiveStatus
+    success_criteria: str | None = None          # what counts as achieved
     summary: str | None = None
     motivates_hypotheses: set[HypothesisId] = field(default_factory=set)
     related_predictions: set[PredictionId] = field(default_factory=set)
+    related_dead_ends: set[DeadEndId] = field(default_factory=set)
+    related_discoveries: set[DiscoveryId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
 
 

@@ -5,14 +5,14 @@ from episteme.epistemic.model import (
     HypothesisId,
     ObservationId,
     PredictionId,
-    TheoryId,
+    ObjectiveId,
 )
 
 
-def test_theory_hypothesis_bidirectional_links(base_graph):
-    """Registering a Hypothesis with theories= auto-populates Theory.motivates_hypotheses."""
-    assert HypothesisId("C-001") in base_graph.theories[TheoryId("T-001")].motivates_hypotheses
-    assert TheoryId("T-001") in base_graph.hypotheses[HypothesisId("C-001")].theories
+def test_objective_hypothesis_bidirectional_links(base_graph):
+    """Registering a Hypothesis with objectives= auto-populates Objective.motivates_hypotheses."""
+    assert HypothesisId("C-001") in base_graph.objectives[ObjectiveId("T-001")].motivates_hypotheses
+    assert ObjectiveId("T-001") in base_graph.hypotheses[HypothesisId("C-001")].objectives
 
 
 def test_prediction_stress_criteria_stored(base_graph):
@@ -32,12 +32,12 @@ def test_observation_prediction_bidirectional(base_graph):
     assert ObservationId("OBS-002") in base_graph.predictions[PredictionId("P-001")].observations
 
 
-def test_theory_removal_scrubs_hypothesis_theories(base_graph):
-    """Removing a Theory clears its id from all Hypothesis.theories sets."""
+def test_objective_removal_scrubs_hypothesis_objectives(base_graph):
+    """Removing a Objective clears its id from all Hypothesis.objectives sets."""
     graph = base_graph.remove_prediction(PredictionId("P-001"))
     graph = graph.remove_hypothesis(HypothesisId("C-001"))
-    graph = graph.remove_theory(TheoryId("T-001"))
-    assert TheoryId("T-001") not in graph.theories
+    graph = graph.remove_objective(ObjectiveId("T-001"))
+    assert ObjectiveId("T-001") not in graph.objectives
 
 
 def test_observation_removal_cleans_prediction_backlink(base_graph):

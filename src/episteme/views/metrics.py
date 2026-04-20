@@ -47,7 +47,7 @@ class GraphMetrics:
         hypothesis_count: Number of hypotheses.
         assumption_count: Number of assumptions.
         analysis_count: Number of analyses.
-        theory_count: Number of theories.
+        objective_count: Number of objectives.
         discovery_count: Number of discoveries.
         dead_end_count: Number of dead ends.
         parameter_count: Number of parameters.
@@ -63,7 +63,7 @@ class GraphMetrics:
     hypothesis_count: int = 0
     assumption_count: int = 0
     analysis_count: int = 0
-    theory_count: int = 0
+    objective_count: int = 0
     discovery_count: int = 0
     dead_end_count: int = 0
     parameter_count: int = 0

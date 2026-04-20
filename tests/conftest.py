@@ -23,9 +23,10 @@ from episteme.epistemic.model import (
     Prediction,
     PredictionId,
     PredictionStatus,
-    Theory,
-    TheoryId,
-    TheoryStatus,
+    Objective,
+    ObjectiveId,
+    ObjectiveKind,
+    ObjectiveStatus,
 )
 from episteme.epistemic.types import (
     Criticality,
@@ -40,7 +41,7 @@ def base_graph() -> EpistemicGraph:
     """EpistemicGraph populated with the standard set of test entities.
 
     Entity graph:
-        Theory T-001  ←→  Hypothesis C-001  →  Assumption A-001 (LOAD_BEARING)
+        Objective T-001  ←→  Hypothesis C-001  →  Assumption A-001 (LOAD_BEARING)
                               ↓
                          Prediction P-001 (stress_criteria set)
                               ↑
@@ -51,8 +52,8 @@ def base_graph() -> EpistemicGraph:
     """
     graph = EpistemicGraph()
 
-    graph = graph.register_theory(
-        Theory(id=TheoryId("T-001"), title="Catalysis Theory", status=TheoryStatus.ACTIVE)
+    graph = graph.register_objective(
+        Objective(id=ObjectiveId("T-001"), title="Catalysis Objective", kind=ObjectiveKind.EXPLANATORY, status=ObjectiveStatus.ACTIVE)
     )
 
     graph = graph.register_assumption(
@@ -73,7 +74,7 @@ def base_graph() -> EpistemicGraph:
             scope="global",
             refutation_criteria="Show yield does not increase",
             assumptions={AssumptionId("A-001")},
-            theories={TheoryId("T-001")},
+            objectives={ObjectiveId("T-001")},
         )
     )
 
