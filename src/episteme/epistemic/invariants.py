@@ -601,6 +601,75 @@ def validate_load_bearing_assumption_coverage(graph: EpistemicGraphPort) -> list
     return findings
 
 
+def validate_supersession_chains(graph: EpistemicGraphPort) -> list[Finding]:
+    """Validate supersession provenance chains across hypotheses, predictions, and objectives.
+
+    Checks four properties:
+
+    1. **Dangling superseded_by on Hypothesis** (CRITICAL): If set, the
+       referenced hypothesis must exist in the graph.
+    2. **Missing superseded_by on revised/retracted Hypothesis** (WARNING):
+       A REVISED or RETRACTED hypothesis should declare what replaced it to
+       maintain a complete provenance chain.
+    3. **Dangling superseded_by on Objective** (CRITICAL): If set, the
+       referenced objective must exist.
+    4. **Missing superseded_by on superseded Objective** (WARNING): A
+       SUPERSEDED objective should declare its successor.
+    5. **Dangling supersedes on Prediction** (CRITICAL): If set, the
+       referenced predecessor prediction must exist.
+
+    Args:
+        graph: The epistemic graph to validate.
+
+    Returns:
+        list[Finding]: All supersession-chain findings found.
+    """
+    findings: list[Finding] = []
+
+    # Hypotheses
+    for hid, hyp in graph.hypotheses.items():
+        if hyp.superseded_by is not None and hyp.superseded_by not in graph.hypotheses:
+            findings.append(Finding(
+                Severity.CRITICAL,
+                f"hypotheses/{hid}",
+                f"superseded_by references non-existent hypothesis: {hyp.superseded_by}",
+            ))
+        if hyp.status in {HypothesisStatus.REVISED, HypothesisStatus.RETRACTED} and hyp.superseded_by is None:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"hypotheses/{hid}",
+                f"{hyp.status.value} hypothesis has no superseded_by — "
+                f"provenance chain is incomplete",
+            ))
+
+    # Objectives
+    for oid, obj in graph.objectives.items():
+        if obj.superseded_by is not None and obj.superseded_by not in graph.objectives:
+            findings.append(Finding(
+                Severity.CRITICAL,
+                f"objectives/{oid}",
+                f"superseded_by references non-existent objective: {obj.superseded_by}",
+            ))
+        if obj.status == ObjectiveStatus.SUPERSEDED and obj.superseded_by is None:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"objectives/{oid}",
+                "SUPERSEDED objective has no superseded_by — "
+                "provenance chain is incomplete",
+            ))
+
+    # Predictions
+    for pid, pred in graph.predictions.items():
+        if pred.supersedes is not None and pred.supersedes not in graph.predictions:
+            findings.append(Finding(
+                Severity.CRITICAL,
+                f"predictions/{pid}",
+                f"supersedes references non-existent prediction: {pred.supersedes}",
+            ))
+
+    return findings
+
+
 def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
     """Run all domain invariant validators and return the combined findings.
 
@@ -624,6 +693,7 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         12. Retracted observation citations
         13. Objective abandonment impact
         14. Load-bearing assumption coverage
+        15. Supersession chains
 
     Args:
         graph: The epistemic graph to validate.
@@ -647,4 +717,5 @@ def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
         + validate_retracted_observation_citations(graph)
         + validate_objective_abandonment_impact(graph)
         + validate_load_bearing_assumption_coverage(graph)
+        + validate_supersession_chains(graph)
     )

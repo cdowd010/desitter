@@ -90,6 +90,7 @@ class Hypothesis:
             chain reconstruction.
         source: Provenance string — DOI, arXiv ID, URL, citation, or
             ``"derived from ..."``.
+        notes: Free-form notes for the researcher.
         created: Date the hypothesis was first recorded.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns (e.g. ``"phase:2"``, ``"domain:chemistry"``).
@@ -109,6 +110,7 @@ class Hypothesis:
     parameter_constraints: dict[ParameterId, str] = field(default_factory=dict)
     superseded_by: HypothesisId | None = None
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
+    notes: str | None = None
     created: date | None = None
     tags: set[str] = field(default_factory=set)
 
@@ -238,6 +240,11 @@ class Prediction:
             value, same type as ``predicted``. For example,
             ``predicted=1.5, predicted_uncertainty=0.2`` represents
             $1.5 \pm 0.2$.
+        observed_uncertainty: Uncertainty on the distilled ``observed``
+            value, same type as ``observed``. Complements
+            ``predicted_uncertainty`` so the adjudication comparison
+            is symmetric: $\hat{y} \pm \delta_\text{pred}$ vs
+            $y \pm \delta_\text{obs}$.
         tags: Free-form labels for filtering, grouping, or cross-cutting
             concerns.
     """
@@ -268,6 +275,7 @@ class Prediction:
     created: date | None = None
     supersedes: PredictionId | None = None
     predicted_uncertainty: Any = None
+    observed_uncertainty: Any = None
     tags: set[str] = field(default_factory=set)
 
 
@@ -571,9 +579,15 @@ class Observation:
         date: When the observation was made or recorded.
         status: Lifecycle state ``PRELIMINARY``, ``VALIDATED``,
             ``DISPUTED``, or ``RETRACTED``.
-        uncertainty: Measurement uncertainty, same type as ``value``.
-            For example, ``value=1.23, uncertainty=0.05`` represents
-            $1.23 \pm 0.05$.
+        uncertainty: Statistical (random) measurement uncertainty —
+            precision. Same type as ``value``. For example,
+            ``value=1.23, uncertainty=0.05`` represents
+            $1.23 \pm 0.05_\text{stat}$.
+        systematic_uncertainty: Systematic measurement uncertainty —
+            accuracy/bias. Same type as ``value``. When both are
+            present the total error budget is
+            $\sigma_\text{total}^2 = \sigma_\text{stat}^2 + \sigma_\text{sys}^2$.
+            When only ``uncertainty`` is set it is treated as the total.
         methodology: How the observation was made — experimental
             protocol, instrument, data pipeline, etc.
         predictions: IDs of predictions this observation bears on.
@@ -594,6 +608,7 @@ class Observation:
     date: date
     status: ObservationStatus
     uncertainty: Any = None
+    systematic_uncertainty: Any = None
     methodology: str | None = None
     predictions: set[PredictionId] = field(default_factory=set)
     related_hypotheses: set[HypothesisId] = field(default_factory=set)
