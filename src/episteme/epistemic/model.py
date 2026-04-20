@@ -61,7 +61,10 @@ class Hypothesis:
         type: Structural role — ``FOUNDATIONAL`` (axiomatic base) or
             ``DERIVED`` (depends on other hypotheses).
         scope: Applicability scope, e.g. ``"global"`` or ``"domain-specific"``.
-        refutation_criteria: Description of what evidence would refute this hypothesis.
+        refutation_criteria: Description of what evidence would refute
+            this hypothesis. Optional at registration to support early-stage
+            or exploratory workflows; should be filled in as the hypothesis
+            matures.
         status: Lifecycle state — ``ACTIVE``, ``REVISED``, or ``RETRACTED``.
         category: Whether the hypothesis is ``QUANTITATIVE`` (quantitative) or
             ``QUALITATIVE`` (conceptual/structural).
@@ -79,12 +82,15 @@ class Hypothesis:
             referenced parameter changes.
         source: Provenance string — DOI, arXiv ID, URL, citation, or
             ``"derived from ..."``.
+        created: Date the hypothesis was first recorded.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns (e.g. ``"phase:2"``, ``"domain:chemistry"``).
     """
     id: HypothesisId
     statement: str
     type: HypothesisType
     scope: str                                   # "global", "domain-specific"
-    refutation_criteria: str
+    refutation_criteria: str | None = None
     status: HypothesisStatus = HypothesisStatus.ACTIVE
     category: HypothesisCategory = HypothesisCategory.QUALITATIVE
     assumptions: set[AssumptionId] = field(default_factory=set)
@@ -93,6 +99,8 @@ class Hypothesis:
     objectives: set[ObjectiveId] = field(default_factory=set)
     parameter_constraints: dict[ParameterId, str] = field(default_factory=dict)
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
+    created: date | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -131,6 +139,7 @@ class Assumption:
             assumption. Backlink maintained by prediction operations.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
+        created: Date the assumption was first recorded.
     """
     id: AssumptionId
     statement: str
@@ -143,6 +152,7 @@ class Assumption:
     tested_by: set[PredictionId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
     notes: str | None = None
+    created: date | None = None
 
 
 @dataclass
@@ -174,15 +184,17 @@ class Prediction:
     Attributes:
         id: Unique identifier (e.g. ``"P-001"``).
         observable: What is being measured or observed.
-        tier: Confidence classification — ``FULLY_SPECIFIED``,
-            ``CONDITIONAL``, or ``FIT_CHECK``.
+        predicted: The predicted value or outcome (type varies).
         status: Lifecycle state — ``PENDING``, ``CONFIRMED``, ``STRESSED``,
-            ``REFUTED``, or ``NOT_YET_TESTABLE``.
+            ``REFUTED``, or ``NOT_YET_TESTABLE``. Defaults to ``PENDING``.
+        tier: Confidence classification — ``FULLY_SPECIFIED``,
+            ``CONDITIONAL``, or ``FIT_CHECK``. Defaults to
+            ``FULLY_SPECIFIED``.
         evidence_kind: Temporal/methodological classification —
             ``NOVEL_PREDICTION``, ``RETRODICTION``, or ``FIT_CONSISTENCY``.
+            Defaults to ``NOVEL_PREDICTION``.
         measurement_regime: Evidence form — ``MEASURED``, ``BOUND_ONLY``,
-            or ``UNMEASURED``.
-        predicted: The predicted value or outcome (type varies).
+            or ``UNMEASURED``. Defaults to ``MEASURED``.
         specification: The formula or relationship being tested (the "what").
         derivation: Why ``hypothesis_ids`` jointly imply this prediction (the "why").
         hypothesis_ids: IDs of hypotheses forming the derivation chain.
@@ -209,14 +221,17 @@ class Prediction:
         benchmark_source: Reference to the benchmark data source.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
         notes: Free-form notes for the researcher.
+        created: Date the prediction was first recorded.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: PredictionId
     observable: str
-    tier: ConfidenceTier
-    status: PredictionStatus
-    evidence_kind: EvidenceKind
-    measurement_regime: MeasurementRegime
     predicted: Any                               # the predicted value/outcome
+    status: PredictionStatus = PredictionStatus.PENDING
+    tier: ConfidenceTier = ConfidenceTier.FULLY_SPECIFIED
+    evidence_kind: EvidenceKind = EvidenceKind.NOVEL_PREDICTION
+    measurement_regime: MeasurementRegime = MeasurementRegime.MEASURED
     specification: str | None = None             # formula/relationship being tested (the "what")
     derivation: str | None = None                # why hypothesis_ids jointly imply this prediction (the "why")
     hypothesis_ids: set[HypothesisId] = field(default_factory=set)
@@ -234,6 +249,8 @@ class Prediction:
     benchmark_source: str | None = None
     source: str | None = None                    # doi:..., arxiv:..., url, citation, or "derived from ..."
     notes: str | None = None
+    created: date | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -377,6 +394,9 @@ class Objective:
         related_discoveries: IDs of discoveries made while pursuing
             this objective. Soft navigational link.
         source: Provenance string — DOI, arXiv ID, URL, or citation.
+        created: Date the objective was first recorded.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: ObjectiveId
     title: str
@@ -389,6 +409,8 @@ class Objective:
     related_dead_ends: set[DeadEndId] = field(default_factory=set)
     related_discoveries: set[DiscoveryId] = field(default_factory=set)
     source: str | None = None                    # doi:..., arxiv:..., url, citation
+    created: date | None = None
+    tags: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -527,6 +549,9 @@ class Observation:
         date: When the observation was made or recorded.
         status: Lifecycle state ``PRELIMINARY``, ``VALIDATED``,
             ``DISPUTED``, or ``RETRACTED``.
+        uncertainty: Measurement uncertainty, same type as ``value``.
+            For example, ``value=1.23, uncertainty=0.05`` represents
+            $1.23 \pm 0.05$.
         methodology: How the observation was made — experimental
             protocol, instrument, data pipeline, etc.
         predictions: IDs of predictions this observation bears on.
@@ -538,17 +563,21 @@ class Observation:
             removal.
         source: Provenance string DOI, arXiv ID, URL, lab notebook ref.
         notes: Free-form notes for the researcher.
+        tags: Free-form labels for filtering, grouping, or cross-cutting
+            concerns.
     """
     id: ObservationId
     description: str
     value: Any
     date: date
     status: ObservationStatus
+    uncertainty: Any = None
     methodology: str | None = None
     predictions: set[PredictionId] = field(default_factory=set)
     related_hypotheses: set[HypothesisId] = field(default_factory=set)
     related_assumptions: set[AssumptionId] = field(default_factory=set)
     source: str | None = None
     notes: str | None = None
+    tags: set[str] = field(default_factory=set)
 
 

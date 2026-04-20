@@ -27,8 +27,8 @@ class _EpistemeClientHypothesisHelpers:
         statement: str,
         type: HypothesisType | str,
         scope: str,
-        refutation_criteria: str,
         *,
+        refutation_criteria: str | None = None,
         dry_run: bool = False,
         status: HypothesisStatus | str | None = None,
         category: HypothesisCategory | str | None = None,
@@ -45,7 +45,9 @@ class _EpistemeClientHypothesisHelpers:
             statement: Human-readable statement of the hypothesis.
             type: Epistemological type (``HypothesisType`` enum or its string key).
             scope: Domain scope string identifying the area of the hypothesis.
-            refutation_criteria: Description of how this hypothesis could be falsified.
+            refutation_criteria: Description of how this hypothesis could be
+                falsified. Optional at registration; should be filled in as
+                the hypothesis matures.
             dry_run: Simulate the mutation without committing. Defaults to
                 ``False``.
             status: Initial lifecycle status. Falls back to the graph default
