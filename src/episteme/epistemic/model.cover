@@ -1,9 +1,9 @@
     1: """Core epistemic entities.
        
        Relationships are ID references, not object references. To traverse
-       the graph, go through the EpistemicWeb.
+       the graph, go through the EpistemicGraph.
        
-       Native Python collections throughout: set, list, dict. The web is
+       Native Python collections throughout: set, list, dict. The graph is
        the encapsulation boundary, not the type system.
        """
     1: from __future__ import annotations
@@ -43,7 +43,7 @@
     1:     """An atomic, falsifiable assertion.
        
            depends_on forms a DAG. assumptions and analyses have bidirectional
-           links maintained by the EpistemicWeb.
+           links maintained by the EpistemicGraph.
        
            'parameter_constraints' is an annotation map: {ParameterId: constraint_str}.
            The constraint string is human-readable ("< 0.05", "> 3.0", "in [0.1, 10]").
@@ -92,7 +92,7 @@
            'claim_ids' is the set of claims that jointly imply this prediction —
            the logical derivation chain. Most non-trivial predictions require
            multiple claims together. Bidirectional maintenance is one-way only:
-           the web validates all claim_ids exist; no backlink on Claim.
+           the graph validates all claim_ids exist; no backlink on Claim.
        
            'tests_assumptions' is the set of assumptions this prediction was
            explicitly designed to test — i.e., its outcome bears on whether
@@ -105,7 +105,7 @@
            conditioned on — i.e., "this prediction holds only if these assumptions
            hold." Unlike tests_assumptions (which marks assumptions under active
            test), conditional_on marks assumptions that are taken as given for
-           this prediction to be valid. The web validates all IDs exist.
+           this prediction to be valid. The graph validates all IDs exist.
            """
     1:     id: PredictionId
     1:     observable: str
@@ -157,7 +157,7 @@
        
     3: @dataclass
     2: class Analysis:
-    1:     """A piece of analytical work whose results feed back into the epistemic web.
+    1:     """A piece of analytical work whose results feed back into the epistemic graph.
        
            deSitter does not run analyses — the researcher runs them using their
            preferred tools (SageMath, Python, R, Jupyter, etc.) and records the
@@ -250,7 +250,7 @@
            scripts and in a single version-controlled location.
        
            'used_in_analyses' is the bidirectional backlink to Analysis.uses_parameters.
-           The EpistemicWeb maintains this automatically when analyses are registered.
+           The EpistemicGraph maintains this automatically when analyses are registered.
            It enables staleness detection: when this parameter changes, health_check
            surfaces all analyses (and linked predictions) that need to be re-run.
            """

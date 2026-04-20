@@ -5,7 +5,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from ._ports_web import EpistemicWebPort
+from ._ports_graph import EpistemicGraphPort
 
 
 @dataclass(frozen=True)
@@ -54,20 +54,20 @@ class ArtifactSink(Protocol):
         ...
 
 
-class WebExporter(Protocol):
-    """Produce portable data artifacts from the epistemic web.
+class GraphExporter(Protocol):
+    """Produce portable data artifacts from the epistemic graph.
 
-    Exporters serialize the web into a transport format (e.g. JSON,
+    Exporters serialize the graph into a transport format (e.g. JSON,
     CSV) via a stream of ``Artifact`` instances. The implementation
     decides the format; the control-plane ``export`` function handles
     routing to an ``ArtifactSink``.
     """
 
-    def export(self, web: EpistemicWebPort) -> Iterable[Artifact]:
-        """Serialize the web into a stream of portable artifacts.
+    def export(self, graph: EpistemicGraphPort) -> Iterable[Artifact]:
+        """Serialize the graph into a stream of portable artifacts.
 
         Args:
-            web: The epistemic web to export.
+            graph: The epistemic graph to export.
 
         Returns:
             Iterable[Artifact]: A stream of serialized artifacts. May
@@ -76,20 +76,20 @@ class WebExporter(Protocol):
         ...
 
 
-class WebRenderer(Protocol):
-    """Generate human-readable artifacts from the epistemic web.
+class GraphRenderer(Protocol):
+    """Generate human-readable artifacts from the epistemic graph.
 
     Renderers produce markdown tables, summary views, or other
-    human-readable formats from the web. The control-plane ``render_all``
+    human-readable formats from the graph. The control-plane ``render_all``
     function calls the renderer and passes results to an ``ArtifactSink``
     or cache layer.
     """
 
-    def render(self, web: EpistemicWebPort) -> Iterable[Artifact]:
+    def render(self, graph: EpistemicGraphPort) -> Iterable[Artifact]:
         """Return rendered artifacts ready for an ``ArtifactSink``.
 
         Args:
-            web: The epistemic web to render.
+            graph: The epistemic graph to render.
 
         Returns:
             Iterable[Artifact]: A stream of rendered artifacts (e.g.
@@ -98,4 +98,4 @@ class WebRenderer(Protocol):
         ...
 
 
-__all__ = ["Artifact", "ArtifactSink", "WebExporter", "WebRenderer"]
+__all__ = ["Artifact", "ArtifactSink", "GraphExporter", "GraphRenderer"]

@@ -10,9 +10,9 @@ fast, portable, and free of supply-chain risk.
 Public surface:
   from episteme.epistemic.types import ClaimId, Finding, Severity, …
   from episteme.epistemic.model import Claim, Assumption, Prediction, …
-  from episteme.epistemic.web import EpistemicWeb
+  from episteme.epistemic.graph import EpistemicGraph
   from episteme.epistemic.invariants import validate_all
-  from episteme.epistemic.ports import WebRepository, WebRenderer, …
+  from episteme.epistemic.ports import GraphRepository, GraphRenderer, …
 """
 
 from .model import (
@@ -63,7 +63,7 @@ from .errors import (
     EpistemicError,
     InvariantViolation,
 )
-from .web import EpistemicWeb
+from .graph import EpistemicGraph
 
 __all__ = [
     # types
@@ -78,7 +78,7 @@ __all__ = [
     "Claim", "Assumption", "Prediction", "Theory", "IndependenceGroup",
     "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Parameter",
     "Observation",
-    # web
-    "EpistemicWeb", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
+    # graph
+    "EpistemicGraph", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
     "CycleError", "InvariantViolation",
 ]

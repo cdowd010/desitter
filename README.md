@@ -56,7 +56,7 @@ external tools can watch, index, and react to directly.
   parameters in a typed, versioned graph
 - **Enforce** referential integrity, DAG acyclicity, bidirectional links, and
   tier constraints at write time, not after the fact
-- **Validate** the full epistemic web on demand against ten domain invariants
+- **Validate** the full epistemic graph on demand against ten domain invariants
 - **Track evidence** through prediction tiers (`FULLY_SPECIFIED`, `CONDITIONAL`,
   `FIT_CHECK`) with explicit independence-group accounting
 - **Detect staleness** when a parameter changes and propagates to analyses and
@@ -97,7 +97,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io) lets AI assistants
 (Claude, Copilot, Cursor, and others) call deSitter tools directly as structured
 operations. An agent can audit a derivation chain, identify structural gaps,
 pre-flight a new prediction with `dry_run=True`, and commit it — all within a
-single session. The epistemic web provides the shared, persistent,
+single session. The epistemic graph provides the shared, persistent,
 invariant-enforced state. The AI provides the reasoning.
 
 Additional interfaces — CLI, REST, and others — follow the same pattern: thin
@@ -144,7 +144,7 @@ ds status
 
 deSitter is built in layers, from the inside out. The innermost layer, the
 **epistemic kernel**, is pure Python with no I/O dependencies. It defines the
-entity model, the `EpistemicWeb` aggregate root, and all invariant rules. Nothing
+entity model, the `EpistemicGraph` aggregate root, and all invariant rules. Nothing
 in the kernel touches a file, a database, or a network socket.
 
 The layers above the kernel — adapters, control plane, view services, interfaces
@@ -173,7 +173,7 @@ The layers above the kernel — adapters, control plane, view services, interfac
                       │
 ┌─────────────────────▼────────────────────────────────┐
 │  Epistemic Kernel — pure Python, no I/O              │
-│  types · model · web · invariants · ports            │
+│  types · model · graph · invariants · ports            │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -205,11 +205,11 @@ src/desitter/
 ├── epistemic/              # Epistemic kernel — pure Python, zero I/O
 │   ├── types.py            # Typed IDs, enums, Finding, Severity
 │   ├── model.py            # Entity dataclasses: Claim, Assumption, Prediction, …
-│   ├── web.py              # EpistemicWeb, aggregate root, all mutations
+│   ├── graph.py              # EpistemicGraph, aggregate root, all mutations
 │   ├── invariants.py       # Ten pure validator functions
 │   ├── codec.py            # Serialization between entities and primitive payloads
 │   ├── errors.py           # Domain exception hierarchy: EpistemicError, …
-│   └── ports.py            # Abstract interfaces: WebRepository, WebValidator, …
+│   └── ports.py            # Abstract interfaces: GraphRepository, GraphValidator, …
 ├── controlplane/           # Core services
 │   ├── gateway.py          # Single mutation/query boundary + GatewayResult
 │   ├── _gateway_catalog.py # Resource and query spec tables
@@ -226,7 +226,7 @@ src/desitter/
 ├── views/                  # Read-only composed summaries
 │   ├── health.py           # run_health_check → HealthReport
 │   ├── status.py           # get_status → ProjectStatus
-│   └── metrics.py          # compute_metrics → PredictionMetrics, WebMetrics
+│   └── metrics.py          # compute_metrics → PredictionMetrics, GraphMetrics
 └── interfaces/             # Thin adapters, no business logic (planned)
 ```
 

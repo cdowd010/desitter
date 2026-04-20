@@ -10,13 +10,13 @@ from typing import Any
 
 from ._types import ClientResult
 from ..controlplane.gateway import Gateway, GatewayResult
-from ..epistemic.ports import WebRepository
+from ..epistemic.ports import GraphRepository
 
 
 class _EpistemeClientCore:
     """Shared client lifecycle and generic gateway orchestration.
 
-    Owns the ``Gateway`` reference and the optional ``WebRepository``
+    Owns the ``Gateway`` reference and the optional ``GraphRepository``
     used for persistence. Provides the generic CRUD and query verbs
     (``register``, ``get``, ``list``, ``set``, ``transition``, ``query``)
     that typed helper methods delegate to.
@@ -30,15 +30,15 @@ class _EpistemeClientCore:
         self,
         gateway: Gateway,
         *,
-        repo: WebRepository | None = None,
+        repo: GraphRepository | None = None,
     ) -> None:
         """Initialize the client with a gateway and optional repository.
 
         Args:
-            gateway: The ``Gateway`` instance that owns the in-memory web
+            gateway: The ``Gateway`` instance that owns the in-memory graph
                 and all mutation/query operations.
-            repo: Optional ``WebRepository`` used to persist the web.
-                When ``None``, ``save()`` is a no-op and the web exists
+            repo: Optional ``GraphRepository`` used to persist the graph.
+                When ``None``, ``save()`` is a no-op and the graph exists
                 only in memory for the lifetime of the client.
         """
         raise NotImplementedError
@@ -48,12 +48,12 @@ class _EpistemeClientCore:
         """The ``Gateway`` instance backing this client.
 
         Returns:
-            Gateway: The gateway that owns the current in-memory web.
+            Gateway: The gateway that owns the current in-memory graph.
         """
         raise NotImplementedError
 
     def save(self) -> None:
-        """Persist the in-memory web through the repository.
+        """Persist the in-memory graph through the repository.
 
         A no-op when no repository was provided at construction time.
         Called automatically by ``__exit__`` when used as a context manager.
@@ -92,7 +92,7 @@ class _EpistemeClientCore:
 
         Args:
             resource: Canonical resource key (e.g. ``"claim"``).
-            dry_run: When ``True``, validate without mutating the web.
+            dry_run: When ``True``, validate without mutating the graph.
             **payload: Entity attributes as keyword arguments.
 
         Returns:
@@ -144,7 +144,7 @@ class _EpistemeClientCore:
         Args:
             resource: Canonical resource key (e.g. ``"claim"``).
             identifier: String form of the entity's ID.
-            dry_run: When ``True``, validate without mutating the web.
+            dry_run: When ``True``, validate without mutating the graph.
             **payload: Fields to update as keyword arguments.
 
         Returns:
@@ -168,7 +168,7 @@ class _EpistemeClientCore:
             identifier: String form of the entity's ID.
             new_status: Target status value. Accepts the enum member itself
                 or its string value.
-            dry_run: When ``True``, validate without mutating the web.
+            dry_run: When ``True``, validate without mutating the graph.
 
         Returns:
             ClientResult[Any]: Typed result with the updated entity

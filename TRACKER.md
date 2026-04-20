@@ -12,7 +12,7 @@ These are execution constraints. Work that violates them should be rejected.
 
 - All writes flow through `controlplane/gateway.py`. No second mutation path.
 - The client changes calling conventions only. No business logic, no invariant bypass.
-- `EpistemicWeb` is the kernel mutation surface. The Gateway orchestrates around it.
+- `EpistemicGraph` is the kernel mutation surface. The Gateway orchestrates around it.
 - `controlplane/` depends on abstractions from `epistemic/ports.py`. Concrete wiring stays in `factory.py`.
 - Payload validation stays behind the `PayloadValidator` port. No inline validation in the Gateway.
 - Fail fast: schema errors, broken references, and invariant failures surface before persistence.
@@ -22,26 +22,26 @@ These are execution constraints. Work that violates them should be rejected.
 
 ## Epistemic Kernel
 
-- [x] `types.py`, `model.py`, `web.py`, `invariants.py`, `errors.py`, `codec.py`, `ports.py`
+- [x] `types.py`, `model.py`, `graph.py`, `invariants.py`, `errors.py`, `codec.py`, `ports.py`
 
 ### ResearchObjective
 
 - [ ] `ResearchObjectiveId` NewType, `ResearchObjectiveStatus` enum (`OPEN`, `NARROWED`, `TARGETED`, `ACHIEVED`, `ABANDONED`) — `types.py`
 - [ ] `ResearchObjective` dataclass (`id`, `statement`, `domain`, `status`, `candidate_theories`, `related_discoveries`, `notes`) — `model.py`
-- [ ] `EpistemicWeb.research_objectives` collection field — `web.py`
-- [ ] `register_research_objective`, `update_research_objective`, `remove_research_objective`, `transition_research_objective` — `web.py`
-- [ ] `remove_theory`, `remove_discovery` — scrub ID from `ResearchObjective` soft links — `web.py`
-- [ ] `EpistemicWebPort` — add `research_objectives` attribute and new method signatures — `_ports_web.py`
+- [ ] `EpistemicGraph.research_objectives` collection field — `graph.py`
+- [ ] `register_research_objective`, `update_research_objective`, `remove_research_objective`, `transition_research_objective` — `graph.py`
+- [ ] `remove_theory`, `remove_discovery` — scrub ID from `ResearchObjective` soft links — `graph.py`
+- [ ] `EpistemicGraphPort` — add `research_objectives` attribute and new method signatures — `_ports_graph.py`
 
 ### Dataset
 
 - [ ] `DatasetId` NewType, `DatasetStatus` enum (`ACTIVE`, `DEPRECATED`, `SUPERSEDED`) — `types.py`
 - [ ] `Dataset` dataclass (`id`, `name`, `version`, `description`, `path`, `used_in_analyses`) — `model.py`
 - [ ] `Analysis` — add `uses_datasets: set[DatasetId]` field — `model.py`
-- [ ] `EpistemicWeb.datasets` collection field — `web.py`
-- [ ] `register_dataset`, `update_dataset`, `remove_dataset` — `web.py`
-- [ ] `register_analysis`, `update_analysis`, `remove_analysis` — handle `uses_datasets` ↔ `Dataset.used_in_analyses` backlinks — `web.py`
-- [ ] `EpistemicWebPort` — add `datasets` attribute and new method signatures — `_ports_web.py`
+- [ ] `EpistemicGraph.datasets` collection field — `graph.py`
+- [ ] `register_dataset`, `update_dataset`, `remove_dataset` — `graph.py`
+- [ ] `register_analysis`, `update_analysis`, `remove_analysis` — handle `uses_datasets` ↔ `Dataset.used_in_analyses` backlinks — `graph.py`
+- [ ] `EpistemicGraphPort` — add `datasets` attribute and new method signatures — `_ports_graph.py`
 
 ### Invariants
 
@@ -78,7 +78,7 @@ These are execution constraints. Work that violates them should be rejected.
 > requires: Epistemic Kernel
 
 - [x] `DomainValidator.validate()` in `controlplane/validate.py`
-- [ ] `validate_project(web, extra_validators)` — run `DomainValidator` plus any extras, return combined findings
+- [ ] `validate_project(graph, extra_validators)` — run `DomainValidator` plus any extras, return combined findings
 
 ---
 
@@ -89,23 +89,23 @@ These are execution constraints. Work that violates them should be rejected.
 - [x] Gateway metadata tables: `_gateway_catalog.py` (RESOURCE_SPECS, QUERY_SPECS), `_gateway_results.py` (GatewayResult)
 - [ ] `_gateway_catalog.py` — add `ResearchObjective` ResourceSpec (with transition)
 - [ ] `_gateway_catalog.py` — add `Dataset` ResourceSpec
-- [ ] `__init__` — store web, validator, payload_validator
-- [ ] `web` property — return current in-memory web
+- [ ] `__init__` — store graph, validator, payload_validator
+- [ ] `graph` property — return current in-memory graph
 - [ ] `resolve_resource` — validate and return canonical resource key
 - [ ] `_resource_spec` — look up ResourceSpec by resource key
 - [ ] `_typed_identifier` — coerce string ID to resource's NewType
-- [ ] `_lookup_entity` — find entity in web by resource key and string ID
+- [ ] `_lookup_entity` — find entity in graph by resource key and string ID
 - [ ] `_validate_payload` — delegate to PayloadValidator if configured
 - [ ] `_matches_filters` — test serialized entity dict against filter predicates
 - [ ] `_error_result` — construct error GatewayResult
-- [ ] `_finalize_mutation` — run validators on new web; CRITICAL blocks; swap on success
+- [ ] `_finalize_mutation` — run validators on new graph; CRITICAL blocks; swap on success
 - [ ] `register` — validate payload → build entity → call kernel → _finalize_mutation
 - [ ] `get` — look up entity → serialize → return
 - [ ] `list` — collect all entities of type → filter → serialize → return
 - [ ] `set` — fetch existing → merge payload → rebuild entity → call kernel → _finalize_mutation
 - [ ] `transition` — fetch existing → call kernel transition method → _finalize_mutation
-- [ ] `query` — resolve QuerySpec → coerce params → call web method → serialize → return
-- [ ] `record_analysis_result` — narrow wrapper over `EpistemicWeb.record_analysis_result`
+- [ ] `query` — resolve QuerySpec → coerce params → call graph method → serialize → return
+- [ ] `record_analysis_result` — narrow wrapper over `EpistemicGraph.record_analysis_result`
 
 ---
 
@@ -113,7 +113,7 @@ These are execution constraints. Work that violates them should be rejected.
 
 > requires: Gateway, Validate, Adapters
 
-- [ ] `build_gateway(web, *, payload_validator)` — instantiate `DomainValidator`, construct and return `Gateway`
+- [ ] `build_gateway(graph, *, payload_validator)` — instantiate `DomainValidator`, construct and return `Gateway`
 
 ---
 
@@ -124,7 +124,7 @@ These are execution constraints. Work that violates them should be rejected.
 - [x] Typed helper signatures declared in `client/_hypothesis.py`, `_registry.py`, `_structure.py`
 - [ ] `_DeSitterClientCore.__init__(gateway, *, repo)` — store gateway and repo
 - [ ] `_DeSitterClientCore.gateway` property
-- [ ] `_DeSitterClientCore.save()` — call `repo.save(gateway.web)` if repo present
+- [ ] `_DeSitterClientCore.save()` — call `repo.save(gateway.graph)` if repo present
 - [ ] `_DeSitterClientCore.__enter__` / `__exit__` — context manager; auto-save on exit
 - [ ] `_DeSitterClientCore.register(resource, *, dry_run, **payload)` → `ClientResult`
 - [ ] `_DeSitterClientCore.get(resource, identifier)` → `ClientResult`
@@ -134,7 +134,7 @@ These are execution constraints. Work that violates them should be rejected.
 - [ ] `_DeSitterClientCore.query(query_type, **params)` → `ClientResult`
 - [ ] `_DeSitterClientCore._invoke_gateway` — call gateway method, wrap unexpected errors
 - [ ] `_DeSitterClientCore._handle_resource_result` — convert GatewayResult to ClientResult
-- [ ] `connect(*, repo, web)` — load config + context, build web via repo or empty, build gateway via factory, return DeSitterClient
+- [ ] `connect(*, repo, graph)` — load config + context, build graph via repo or empty, build gateway via factory, return DeSitterClient
 - [ ] `_without_none(**payload)` — strip None values from payload dict
 
 ---
@@ -170,7 +170,7 @@ All three helper mixins have signatures but raise `NotImplementedError`. Impleme
 
 > requires: Validate
 
-- [ ] `run_health_check(web, validator)` in `views/health.py` — run validator, compute overall status, return `HealthReport`
+- [ ] `run_health_check(graph, validator)` in `views/health.py` — run validator, compute overall status, return `HealthReport`
 
 ---
 
@@ -181,7 +181,7 @@ All three helper mixins have signatures but raise `NotImplementedError`. Impleme
 - [ ] Gateway: register round-trip for at least one entity (claim)
 - [ ] Gateway: get / list / set / transition round-trips
 - [ ] Gateway: query round-trips (claim_lineage, refutation_impact, parameter_impact)
-- [ ] Gateway: CRITICAL finding blocks mutation, web unchanged
+- [ ] Gateway: CRITICAL finding blocks mutation, graph unchanged
 - [ ] Gateway: dry_run returns findings without mutating
 - [ ] Gateway: broken reference returns error result
 - [ ] Gateway: duplicate ID returns error result
@@ -193,8 +193,8 @@ All three helper mixins have signatures but raise `NotImplementedError`. Impleme
 - [ ] Client: record_analysis_result round-trip through client
 - [ ] Client: dry_run=True validates without writing
 - [ ] Client: schema validation errors surface as ClientResult errors, not exceptions
-- [ ] Health: run_health_check returns HEALTHY on a clean web
-- [ ] Health: run_health_check returns WARNING / CRITICAL on a web with violations
+- [ ] Health: run_health_check returns HEALTHY on a clean graph
+- [ ] Health: run_health_check returns WARNING / CRITICAL on a graph with violations
 - [ ] Invariants: validate_adjudicated_prediction_no_analysis fires on adjudicated prediction with no analysis
 - [ ] Invariants: validate_revised_claim_downstream_impact fires on prediction/claim citing a REVISED claim
 - [ ] Invariants: validate_active_theory_claims_retracted fires on ACTIVE theory with all claims retracted
@@ -219,7 +219,7 @@ Every item below must be true before this target is closed:
 - [ ] All named queries return structured `ClientResult` objects suitable for notebooks
 - [ ] `run_health_check` returns a `HealthReport` with correct overall status
 - [ ] Validation failures (schema errors, broken refs, CRITICAL invariants) fail fast without writing
-- [ ] dry_run=True validates and returns findings without mutating the web
+- [ ] dry_run=True validates and returns findings without mutating the graph
 - [ ] All of the above is covered by automated tests
 
 ---

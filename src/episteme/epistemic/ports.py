@@ -5,20 +5,20 @@ public import path stays stable while cohesion improves.
 """
 from __future__ import annotations
 
-from ._ports_artifacts import Artifact, ArtifactSink, WebExporter, WebRenderer
-from ._ports_services import PayloadValidator, ProseSync, TransactionLog, WebValidator
-from ._ports_web import EpistemicWebPort, WebRepository
+from ._ports_artifacts import Artifact, ArtifactSink, GraphExporter, GraphRenderer
+from ._ports_services import PayloadValidator, ProseSync, TransactionLog, GraphValidator
+from ._ports_graph import EpistemicGraphPort, GraphRepository
 
 
 __all__ = [
     "Artifact",
     "ArtifactSink",
-    "EpistemicWebPort",
+    "EpistemicGraphPort",
     "PayloadValidator",
     "ProseSync",
     "TransactionLog",
-    "WebExporter",
-    "WebRenderer",
-    "WebRepository",
-    "WebValidator",
+    "GraphExporter",
+    "GraphRenderer",
+    "GraphRepository",
+    "GraphValidator",
 ]

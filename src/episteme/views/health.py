@@ -1,19 +1,19 @@
 """Health checks for the project.
 
 Composes domain validation into a single structured health report.
-The caller passes the already-loaded web directly.
+The caller passes the already-loaded graph directly.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..epistemic.ports import EpistemicWebPort, WebValidator
+from ..epistemic.ports import EpistemicGraphPort, GraphValidator
 from ..epistemic.types import Finding, Severity
 
 
 @dataclass
 class HealthReport:
-    """Structured health report for an epistemic web.
+    """Structured health report for an epistemic graph.
 
     Attributes:
         overall:  ``"HEALTHY"``, ``"WARNINGS"``, or ``"CRITICAL"``.
@@ -34,13 +34,13 @@ class HealthReport:
 
 
 def run_health_check(
-    web: EpistemicWebPort,
-    validator: WebValidator,
+    graph: EpistemicGraphPort,
+    validator: GraphValidator,
 ) -> HealthReport:
     """Run domain invariant validation and return a structured report.
 
     Args:
-        web: The in-memory epistemic web to validate.
+        graph: The in-memory epistemic graph to validate.
         validator: Domain validator to run invariant checks.
 
     Returns:

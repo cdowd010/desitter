@@ -3,8 +3,8 @@
 Consumer adapters route all operations through the Gateway.
 
 Responsibilities:
-  - Hold an EpistemicWebPort instance for the lifetime of a session.
-    This may be in-memory (EpistemicWeb) or DB-backed (lazy-loading proxy).
+  - Hold an EpistemicGraphPort instance for the lifetime of a session.
+    This may be in-memory (EpistemicGraph) or DB-backed (lazy-loading proxy).
   - Resource-oriented register/get/list/set/transition/query operations.
   - Payload parsing and normalization.
     - Resource key validation.
@@ -12,7 +12,7 @@ Responsibilities:
   - Post-mutation invariant enforcement (CRITICAL findings block mutation).
 
 Not responsible for:
-  - Persistence — that belongs to EpistemeClient via WebRepository.
+  - Persistence — that belongs to EpistemeClient via GraphRepository.
   - Transaction logging — deferred to the persistence layer.
   - Prose sync, view rendering, or any I/O.
   - Formatting human CLI output.
@@ -31,9 +31,9 @@ from ..epistemic.codec import (
     status_enum_type,
 )
 from ..epistemic.ports import (
-    EpistemicWebPort,
+    EpistemicGraphPort,
     PayloadValidator,
-    WebValidator,
+    GraphValidator,
 )
 from ..epistemic.types import Finding, Severity
 from ..epistemic.errors import EpistemicError
@@ -42,8 +42,8 @@ from ..epistemic.errors import EpistemicError
 class Gateway:
     """Single mutation/query boundary for the control plane.
 
-    Holds a reference to an ``EpistemicWebPort`` instance for the session
-    lifetime. This may be a concrete ``EpistemicWeb`` (in-memory) or a
+    Holds a reference to an ``EpistemicGraphPort`` instance for the session
+    lifetime. This may be a concrete ``EpistemicGraph`` (in-memory) or a
     DB-backed proxy implementing the same protocol. Either way, the Gateway
     treats it identically via the protocol.
 
@@ -53,16 +53,16 @@ class Gateway:
 
     def __init__(
         self,
-        web: EpistemicWebPort,
-        validator: WebValidator,
+        graph: EpistemicGraphPort,
+        validator: GraphValidator,
         payload_validator: PayloadValidator | None = None,
     ) -> None:
-        """Initialize a gateway with an epistemic web instance.
+        """Initialize a gateway with an epistemic graph instance.
 
         Args:
-            web: Any ``EpistemicWebPort`` implementation. Typically a concrete
-                ``EpistemicWeb()`` for in-memory sessions or a pre-loaded web
-                from a ``WebRepository`` (JSON, DB-backed, etc.) for persistent
+            graph: Any ``EpistemicGraphPort`` implementation. Typically a concrete
+                ``EpistemicGraph()`` for in-memory sessions or a pre-loaded graph
+                from a ``GraphRepository`` (JSON, DB-backed, etc.) for persistent
                 sessions. The Gateway treats all implementations identically.
             validator: Domain validation service (invariant checks).
             payload_validator: Optional schema validator for incoming
@@ -71,8 +71,8 @@ class Gateway:
         raise NotImplementedError
 
     @property
-    def web(self) -> EpistemicWebPort:
-        """The current in-memory epistemic web."""
+    def graph(self) -> EpistemicGraphPort:
+        """The current in-memory epistemic graph."""
         raise NotImplementedError
 
     def resolve_resource(self, resource: str) -> str:
@@ -99,13 +99,13 @@ class Gateway:
     ) -> GatewayResult:
         """Register a new resource entity.
 
-        Validates payload, builds entity, registers on the in-memory web,
-        enforces domain invariants. Updates ``self._web`` on success.
+        Validates payload, builds entity, registers on the in-memory graph,
+        enforces domain invariants. Updates ``self._graph`` on success.
 
         Args:
             resource: Canonical resource key.
             payload: Entity attributes as a primitive mapping.
-            dry_run: If ``True``, validate without mutating the web.
+            dry_run: If ``True``, validate without mutating the graph.
 
         Returns:
             GatewayResult: ``"ok"`` on success, ``"BLOCKED"`` on invariant
@@ -153,13 +153,13 @@ class Gateway:
         """Update fields on an existing resource entity.
 
         Merges ``payload`` onto the existing serialized entity, validates
-        the merged result, and updates the in-memory web on success.
+        the merged result, and updates the in-memory graph on success.
 
         Args:
             resource: Canonical resource key.
             identifier: String form of the entity's ID.
             payload: Partial entity attributes to apply.
-            dry_run: If ``True``, validate without mutating the web.
+            dry_run: If ``True``, validate without mutating the graph.
 
         Returns:
             GatewayResult: ``"ok"`` on success, ``"BLOCKED"`` on invariant
@@ -182,7 +182,7 @@ class Gateway:
             identifier: String form of the entity's ID.
             new_status: Target status value (matched against the
                 resource's status enum).
-            dry_run: If ``True``, validate without mutating the web.
+            dry_run: If ``True``, validate without mutating the graph.
 
         Returns:
             GatewayResult: ``"ok"`` on success, ``"error"`` if the
@@ -191,7 +191,7 @@ class Gateway:
         raise NotImplementedError
 
     def query(self, query_type: str, **params: object) -> GatewayResult:
-        """Run a named read-only query across the epistemic web.
+        """Run a named read-only query across the epistemic graph.
 
         Args:
             query_type: One of the keys in ``QUERY_SPECS``.
@@ -235,7 +235,7 @@ class Gateway:
         raise NotImplementedError
 
     def _lookup_entity(self, resource: str, identifier: str) -> object | None:
-        """Find an entity in the in-memory web by resource key and string ID.
+        """Find an entity in the in-memory graph by resource key and string ID.
 
         Args:
             resource: Canonical resource key (e.g. ``"prediction"``).
@@ -243,7 +243,7 @@ class Gateway:
 
         Returns:
             object | None: The domain entity instance, or ``None`` if the
-                entity does not exist in the web.
+                entity does not exist in the graph.
         """
         raise NotImplementedError
 
@@ -273,17 +273,17 @@ class Gateway:
         operation: str,
         resource: str,
         identifier: str,
-        new_web: EpistemicWebPort,
+        new_graph: EpistemicGraphPort,
         dry_run: bool,
         message: str,
     ) -> GatewayResult:
-        """Enforce invariants and, if clean, commit the new web to memory.
+        """Enforce invariants and, if clean, commit the new graph to memory.
 
-        Runs the ``WebValidator`` against ``new_web``. If any CRITICAL
+        Runs the ``GraphValidator`` against ``new_graph``. If any CRITICAL
         findings are produced, returns a ``BLOCKED`` result without
-        updating ``self._web``. If ``dry_run`` is ``True``, validates
-        but does not update ``self._web`` regardless of findings.
-        Otherwise sets ``self._web = new_web``.
+        updating ``self._graph``. If ``dry_run`` is ``True``, validates
+        but does not update ``self._graph`` regardless of findings.
+        Otherwise sets ``self._graph = new_graph``.
 
         Persistence (``repo.save()``) is NOT performed here — that
         belongs to ``EpistemeClient.save()``.
@@ -292,8 +292,8 @@ class Gateway:
             operation: Human-readable operation name for the result message.
             resource: Canonical resource key (used in log/message context).
             identifier: The entity ID affected by the operation.
-            new_web: The candidate new web state produced by the mutation.
-            dry_run: When ``True``, validate without committing the new web.
+            new_graph: The candidate new graph state produced by the mutation.
+            dry_run: When ``True``, validate without committing the new graph.
             message: Success message to include in the result when no
                 CRITICAL findings are present.
 

@@ -1,6 +1,6 @@
-# Epistemic Web — Worked Examples
+# Epistemic Graph — Worked Examples
 
-This document shows how data is ingested into the epistemic web through the gateway. It covers everything from the gateway inward: the entity model, the web's structural enforcement, the invariant validators, and the query traversals. The interface layer (CLI commands, MCP tool names) is not the focus here — what matters is the payload structure and the sequence rules the gateway enforces.
+This document shows how data is ingested into the epistemic graph through the gateway. It covers everything from the gateway inward: the entity model, the graph's structural enforcement, the invariant validators, and the query traversals. The interface layer (CLI commands, MCP tool names) is not the focus here — what matters is the payload structure and the sequence rules the gateway enforces.
 
 Read this alongside ARCHITECTURE.md. The architecture document explains *what* each piece is; these examples show *how they assemble*.
 
@@ -8,7 +8,7 @@ Read this alongside ARCHITECTURE.md. The architecture document explains *what* e
 
 ## How to Read These Examples
 
-Each example shows a sequence of gateway calls and annotates what the web does automatically in response.
+Each example shows a sequence of gateway calls and annotates what the graph does automatically in response.
 
 ```python
 # Call format
@@ -27,16 +27,16 @@ gateway.query("refutation_impact", pid="P-001")
 
 **What the gateway enforces on every mutation:**
 1. The resource alias resolves to a known entity type.
-2. `repo.load()` reads the current web from disk — always fresh.
-3. The entity is built from the payload and the web's mutation method is called. If this raises (broken reference, cycle, duplicate), the call returns `status="error"` immediately.
-4. `validator.validate(new_web)` runs all ten semantic invariant checks. Any CRITICAL finding returns `status="BLOCKED"` and the disk is not touched.
+2. `repo.load()` reads the current graph from disk — always fresh.
+3. The entity is built from the payload and the graph's mutation method is called. If this raises (broken reference, cycle, duplicate), the call returns `status="error"` immediately.
+4. `validator.validate(new_graph)` runs all ten semantic invariant checks. Any CRITICAL finding returns `status="BLOCKED"` and the disk is not touched.
 5. If `dry_run=True`, returns `status="dry_run"` with findings but no write.
-6. `repo.save(new_web)` atomically replaces the JSON files on disk.
+6. `repo.save(new_graph)` atomically replaces the JSON files on disk.
 7. The transaction is appended to the log. The result is returned.
 
-**Bidirectional links the web maintains automatically** (you set the forward link, the web maintains the reverse):
+**Bidirectional links the graph maintains automatically** (you set the forward link, the graph maintains the reverse):
 
-| You set this… | Web automatically maintains… |
+| You set this… | Graph automatically maintains… |
 |---|---|
 | `Claim.assumptions` | `Assumption.used_in_claims` |
 | `Claim.analyses` | `Analysis.claims_covered` |
@@ -62,7 +62,7 @@ gateway.query("refutation_impact", pid="P-001")
 
 **Population sequence — registration order and auto-wired backlinks:**
 
-| Step | Entity registered | Backlinks auto-wired by the web |
+| Step | Entity registered | Backlinks auto-wired by the graph |
 |------|------------------|--------------------------------|
 | 1 | `PAR-001` parameter | (none — `used_in_analyses=∅` until AN-001 arrives) |
 | 2 | `A-001` assumption | (none — `used_in_claims=∅`, `tested_by=∅`) |
@@ -111,7 +111,7 @@ classDef bigText font-size:18px,color:#111111;
 | <span style="display:inline-block;width:0.95em;height:0.95em;border-radius:3px;background:#CE93D8;border:1px solid #8E24AA;"></span> | Prediction |
 | <span style="display:inline-block;width:0.95em;height:0.95em;border-radius:3px;background:#B0BEC5;border:1px solid #546E7A;"></span> | Independence group |
 
-Solid arrows = forward links you set explicitly. Dashed arrows = reverse backlinks the web maintains automatically.
+Solid arrows = forward links you set explicitly. Dashed arrows = reverse backlinks the graph maintains automatically.
 
 **Step 1: Register the parameter.**
 
@@ -124,7 +124,7 @@ gateway.register("parameter", {
     "notes": "Two-tailed t-test alpha level",
 })
 # → ok | PAR-001 registered
-# Web state: parameters: {PAR-001: Parameter(value=0.05, used_in_analyses=set())}
+# Graph state: parameters: {PAR-001: Parameter(value=0.05, used_in_analyses=set())}
 # Note: used_in_analyses is empty — it will be auto-populated when AN-001 is registered.
 ```
 
@@ -140,7 +140,7 @@ gateway.register("assumption", {
     "falsifiable_consequence": None,                  # Methodological — no direct falsifier
 })
 # → ok | A-001 registered
-# Web state: Assumption(used_in_claims=set(), tested_by=set())
+# Graph state: Assumption(used_in_claims=set(), tested_by=set())
 # Backlinks start empty; they will be filled by the Claim and Prediction that reference this assumption.
 ```
 
@@ -155,7 +155,7 @@ gateway.register("analysis", {
     "notes":           "Two-tailed Welch t-test, 30 runs per condition",
 })
 # → ok | AN-001 registered
-# Web auto-update: PAR-001.used_in_analyses now includes AN-001.
+# Graph auto-update: PAR-001.used_in_analyses now includes AN-001.
 # Analysis.claims_covered starts empty — it will be auto-populated by the Claim.
 ```
 
@@ -176,7 +176,7 @@ gateway.register("claim", {
     "parameter_constraints": {"PAR-001": "< 0.05"},  # the t-test must be significant
 })
 # → ok | C-001 registered
-# Web auto-updates:
+# Graph auto-updates:
 #   A-001.used_in_claims now includes C-001
 #   AN-001.claims_covered now includes C-001
 ```
@@ -218,13 +218,13 @@ gateway.register("prediction", {
     "analysis":         "AN-001",
 })
 # → ok | P-001 registered
-# Web auto-updates:
+# Graph auto-updates:
 #   IG-001.member_predictions now includes P-001
 # Validator runs: no CRITICAL findings.
 #   INFO: C-001 is NUMERICAL with AN-001 linked — coverage is satisfied.
 ```
 
-> **Web state after step 6:**
+> **Graph state after step 6:**
 > ```
 > parameters:  PAR-001 [used_in_analyses={AN-001}]:::bigText
 > assumptions: A-001   [used_in_claims={C-001}, tested_by=∅]:::bigText
@@ -233,7 +233,7 @@ gateway.register("prediction", {
 > ind_groups:  IG-001  [member_predictions={P-001}]  ← auto-wired
 > predictions: P-001   [PENDING, tier=FULLY_SPECIFIED, free_params=0]:::bigText
 > ```
-> All structural links are in place. The web is ready for the observation.
+> All structural links are in place. The graph is ready for the observation.
 
 **Step 7: Researcher runs the experiment, result is p=0.02, mean yield=0.57. Transition prediction.**
 
@@ -265,7 +265,7 @@ gateway.transition("prediction", "P-001", "CONFIRMED")
 # → ok | P-001 → CONFIRMED
 ```
 
-**Final web state — what the queries now return:**
+**Final graph state — what the queries now return:**
 
 ```python
 gateway.query("assumption_support_status", aid="A-001")
@@ -378,7 +378,7 @@ gateway.register("claim", {
     "depends_on":    ["C-001", "C-002"],    # derives from both foundational claims
 })
 # → ok | C-003 registered
-# Web validates: DFS from C-003 checks C-001 and C-002 — no cycle.
+# Graph validates: DFS from C-003 checks C-001 and C-002 — no cycle.
 ```
 
 **What the traversal queries return:**
@@ -497,7 +497,7 @@ gateway.register("prediction", {
     "falsifier":        "Reconstructed Z mass offset > 2% of nominal would falsify A-001.",
 })
 # → ok | P-001 registered
-# Web auto-update: A-001.tested_by now includes P-001.
+# Graph auto-update: A-001.tested_by now includes P-001.
 ```
 
 **P-002 takes A-001 as a given (conditional_on):**
@@ -577,19 +577,19 @@ gateway.register("prediction", {
     "tests_assumptions": ["A-001"],        # ...AND tests A-001 simultaneously — contradiction
     "free_params":      0,
 })
-# Step 4 (web mutation): register_prediction succeeds — this is a structural operation.
+# Step 4 (graph mutation): register_prediction succeeds — this is a structural operation.
 # Step 5 (validation): validate_tests_conditional_overlap fires.
 #   → CRITICAL: Prediction P-003 has A-001 in both tests_assumptions and conditional_on.
 #     A prediction cannot simultaneously test an assumption and depend on it being true.
 # → GatewayResult(status="BLOCKED", changed=False,
 #                 findings=[Finding(severity=CRITICAL, source="predictions/P-003", ...)])
-# The disk is untouched. P-003 does not exist in the web.
+# The disk is untouched. P-003 does not exist in the graph.
 ```
 
-**What `validate_web` returns at this point (no P-003 in the web):**
+**What `validate_graph` returns at this point (no P-003 in the graph):**
 
 ```python
-gateway.query("validate_web")   # equivalent to running validate_project
+gateway.query("validate_graph")   # equivalent to running validate_project
 # findings = [
 #   Finding(INFO, "assumptions/A-001",
 #           "Assumption A-001 has a falsifiable_consequence and a tested_by prediction (P-001)."
@@ -694,7 +694,7 @@ gateway.register("prediction", {
 # → ok
 ```
 
-**Web state after initial registration (before parameter change):**
+**Graph state after initial registration (before parameter change):**
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryTextColor": "#111111", "secondaryTextColor": "#111111", "tertiaryTextColor": "#111111", "textColor": "#111111", "lineColor": "#616161"}}}%%
@@ -746,9 +746,9 @@ gateway.set("parameter", "PAR-001", {
     "notes": "Updated to 0.01 per journal submission requirements (Nature Methods 2024)",
 })
 # → ok | PAR-001 updated, changed=True
-# The web stores the new value. That is all.
+# The graph stores the new value. That is all.
 # P-001 and P-002 remain CONFIRMED. AN-001 is unchanged.
-# Nothing is automatically invalidated. The web records what IS; it does not
+# Nothing is automatically invalidated. The graph records what IS; it does not
 # make judgments about what SHOULD be done.
 ```
 
@@ -813,7 +813,7 @@ classDef bigText font-size:18px,color:#111111;
 4. If BRCA1 no longer meets FDR < 0.01, transition P-001 to `STRESSED` or `REFUTED`.
 5. Update `C-001.parameter_constraints` to reflect the new threshold.
 
-The web has not made any of these decisions. It has surfaced the complete structural consequence of the parameter change and left the scientific judgment to the researcher.
+The graph has not made any of these decisions. It has surfaced the complete structural consequence of the parameter change and left the scientific judgment to the researcher.
 
 **What `check_stale` will report:**
 
@@ -915,8 +915,8 @@ gateway.transition("claim", "C-001", "REVISED")
 
 # Step 2: Attempt full retraction.
 gateway.transition("claim", "C-001", "RETRACTED")
-# Step 4: web.transition_claim("C-001", RETRACTED) → new_web where C-001.status = RETRACTED
-# Step 5: validator.validate(new_web)
+# Step 4: graph.transition_claim("C-001", RETRACTED) → new_graph where C-001.status = RETRACTED
+# Step 5: validator.validate(new_graph)
 #   → validate_retracted_claim_citations fires.
 #   → P-001.claim_ids contains C-001. C-001 is now RETRACTED.
 #     CRITICAL: Prediction P-001 still cites retracted claim C-001.
@@ -1009,7 +1009,7 @@ The validator rule: *a PairwiseSeparation is required for every pair of independ
 gateway.register("prediction", {"id": "P-001", ..., "independence_group": "IG-001"})
 # → ok (IG-002 is still empty — no check fires yet)
 gateway.register("prediction", {"id": "P-002", ..., "independence_group": "IG-002"})
-# Step 5: validator.validate(new_web)
+# Step 5: validator.validate(new_graph)
 #   → validate_independence_semantics: both groups now have predictions, 0 separations.
 #   → CRITICAL: Missing PairwiseSeparation for (IG-001, IG-002).
 # → GatewayResult(status="BLOCKED", changed=False)
@@ -1241,7 +1241,7 @@ gateway.register("prediction", {
     "source":           "Einstein 1916 prediction; Dyson, Eddington, Davidson 1920 result",
 })
 # → ok
-# Web auto-updates: IG-001.member_predictions = {P-001}
+# Graph auto-updates: IG-001.member_predictions = {P-001}
 #                  A-001.tested_by = {P-001}
 ```
 
@@ -1689,7 +1689,7 @@ classDef bigText font-size:18px,color:#111111;
     P001 -->|"tests_assumptions"| A002
     A001 -.->|"concept abandoned → "| DE001
 
-    NOTE["The web surfaces these connections.\nIt does NOT automatically retract C-001/C-002\nor mark A-001 false.\nResearcher judgment required."]:::bigText
+    NOTE["The graph surfaces these connections.\nIt does NOT automatically retract C-001/C-002\nor mark A-001 false.\nResearcher judgment required."]:::bigText
 
     style P001 fill:#FFCDD2,stroke:#C62828,stroke-width:2px
     style C001 fill:#FFCC80,stroke:#EF6C00
@@ -1780,15 +1780,15 @@ gateway.register("dead_end", {
 # → ok
 ```
 
-**What the web now shows — a complete epistemic record:**
+**What the graph now shows — a complete epistemic record:**
 
-The web records that:
+The graph records that:
 - P-001 is REFUTED and was testing A-001 and A-002.
 - A-001 is an empirical assumption with a known falsifiable consequence and has been tested — adversely.
 - C-001 and C-002 have a refuted prediction in their derivation chain.
 - DE-001 documents what was tried and why it was abandoned.
 
-No inference has been drawn automatically. The web does not mark A-001 as "false" or C-001 as "retracted." That judgment belongs to the researcher. The web surfaces the structural consequences and waits.
+No inference has been drawn automatically. The graph does not mark A-001 as "false" or C-001 as "retracted." That judgment belongs to the researcher. The graph surfaces the structural consequences and waits.
 
 ---
 
@@ -2056,7 +2056,7 @@ gateway.query("parameter_impact", pid="PAR-001")
 
 **This change is NOT benign.** `AN-001` was run with `--split 0.20`. The split is now 0.30. The test set has changed. The observed precision of 0.91 was measured on the 20% holdout, not the 30% holdout. P-001 is CONFIRMED based on a result produced under different parameters.
 
-**The web does not automatically change P-001.status.** The CONFIRMED status remains. But the staleness signal is visible to anyone querying `parameter_impact`. The researcher must:
+**The graph does not automatically change P-001.status.** The CONFIRMED status remains. But the staleness signal is visible to anyone querying `parameter_impact`. The researcher must:
 
 ```python
 # 1. Re-run AN-001 with the new split.
@@ -2211,11 +2211,11 @@ graph LR
 | <span style="display:inline-block;width:0.95em;height:0.95em;border-radius:3px;background:#FFE082;border:2px solid #F9A825;"></span> | Stressed outcome |
 | <span style="display:inline-block;width:0.95em;height:0.95em;border-radius:3px;background:#FFF176;border:1px solid #F9A825;"></span> | Structural gap exposed |
 
-**The web has revealed two structural gaps that pre-existed the parameter changes:**
+**The graph has revealed two structural gaps that pre-existed the parameter changes:**
 1. A-001 has a `falsifiable_consequence` but no prediction in `tested_by`. The team never formally instrumented the distribution monitoring.
 2. P-001 is CONDITIONAL on A-001 but A-001 is not being actively tested. The conditional dependency is a known risk that was never formally tracked.
 
-These are not bugs introduced by the examples. They are real design gaps that the epistemic web makes visible.
+These are not bugs introduced by the examples. They are real design gaps that the epistemic graph makes visible.
 
 ---
 
@@ -2225,7 +2225,7 @@ These are not bugs introduced by the examples. They are real design gaps that th
 
 | Situation | What happens |
 |---|---|
-| Register entity with reference to non-existent ID | `status="error"` immediately (web raises `BrokenReferenceError`) |
+| Register entity with reference to non-existent ID | `status="error"` immediately (graph raises `BrokenReferenceError`) |
 | Register claim with `depends_on` that creates a cycle | `status="error"` immediately |
 | Register duplicate ID | `status="error"` immediately |
 | Transition claim to RETRACTED while predictions still cite it | `status="BLOCKED"` (CRITICAL finding) |
@@ -2239,6 +2239,6 @@ These are not bugs introduced by the examples. They are real design gaps that th
 |---|---|
 | Parameter value changes | Query `parameter_impact`, re-run affected analyses, record results, decide whether to transition prediction status |
 | Prediction refuted | Query `refutation_impact` to see blast radius; decide whether to retract upstream claims |
-| Assumption under pressure from a refuted prediction | Explicitly review the assumption; the web flags it, it does not change the assumption's status |
+| Assumption under pressure from a refuted prediction | Explicitly review the assumption; the graph flags it, it does not change the assumption's status |
 | Analysis re-run with new parameters | Record the new result; transition the prediction status if warranted |
 

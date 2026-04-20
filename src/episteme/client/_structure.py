@@ -23,7 +23,7 @@ class _EpistemeClientStructureHelpers:
         source: str | None = None,
         notes: str | None = None,
     ) -> ClientResult[Parameter]:
-        """Register a named parameter in the epistemic web.
+        """Register a named parameter in the epistemic graph.
 
         Parameters capture physical or statistical quantities whose values
         inform or constrain predictions and analyses.
@@ -58,7 +58,7 @@ class _EpistemeClientStructureHelpers:
         measurement_regime: MeasurementRegime | str | None = None,
         notes: str | None = None,
     ) -> ClientResult[IndependenceGroup]:
-        """Register an independence group in the epistemic web.
+        """Register an independence group in the epistemic graph.
 
         Independence groups collect evidence streams that are statistically
         independent of one another, which is used to evaluate whether the

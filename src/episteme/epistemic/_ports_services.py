@@ -1,26 +1,26 @@
-"""Service protocols that act on an epistemic web."""
+"""Service protocols that act on an epistemic graph."""
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Protocol
 
-from ._ports_web import EpistemicWebPort
+from ._ports_graph import EpistemicGraphPort
 from .types import Finding
 
 
-class WebValidator(Protocol):
-    """Validate an epistemic web and return a structured finding list.
+class GraphValidator(Protocol):
+    """Validate an epistemic graph and return a structured finding list.
 
     Implementations may run domain invariant checks (``DomainValidator``)
     or deployment-specific structural checks. Multiple validators can be
     composed via ``validate_project``.
     """
 
-    def validate(self, web: EpistemicWebPort) -> list[Finding]:
+    def validate(self, graph: EpistemicGraphPort) -> list[Finding]:
         """Run all validation rules and return findings.
 
         Args:
-            web: The epistemic web to validate.
+            graph: The epistemic graph to validate.
 
         Returns:
             list[Finding]: Zero or more findings describing integrity
@@ -40,14 +40,14 @@ class ProseSync(Protocol):
 
     def sync(
         self,
-        web: EpistemicWebPort,
+        graph: EpistemicGraphPort,
         *,
         dry_run: bool = False,
     ) -> dict[str, object]:
         """Update managed prose blocks to match canonical state.
 
         Args:
-            web: The epistemic web to derive prose from.
+            graph: The epistemic graph to derive prose from.
             dry_run: When ``True``, compute changes but do not write
                 anything to disk.
 
@@ -57,15 +57,15 @@ class ProseSync(Protocol):
         """
         ...
 
-    def verify(self, web: EpistemicWebPort) -> list[Finding]:
+    def verify(self, graph: EpistemicGraphPort) -> list[Finding]:
         """Report prose blocks that have drifted from canonical state.
 
         Args:
-            web: The epistemic web to check against.
+            graph: The epistemic graph to check against.
 
         Returns:
             list[Finding]: One finding per block whose on-disk content
-                differs from what the web would generate.
+                differs from what the graph would generate.
         """
         ...
 
@@ -94,7 +94,7 @@ class TransactionLog(Protocol):
 
 
 class PayloadValidator(Protocol):
-    """Validate inbound mutation payloads before the gateway mutates the web.
+    """Validate inbound mutation payloads before the gateway mutates the graph.
 
     Implementations perform schema checks against the declared payload
     structure for each resource type. The gateway calls this before
@@ -117,4 +117,4 @@ class PayloadValidator(Protocol):
         ...
 
 
-__all__ = ["PayloadValidator", "ProseSync", "TransactionLog", "WebValidator"]
+__all__ = ["PayloadValidator", "ProseSync", "TransactionLog", "GraphValidator"]

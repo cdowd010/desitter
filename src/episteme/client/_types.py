@@ -26,7 +26,7 @@ class ClientResult(Generic[ResultData]):
         status: Outcome of the operation. Mirrors ``GatewayResult.status``.
             Common values: ``"ok"`` (success), ``"BLOCKED"`` (domain
             invariant blocked the write), ``"error"`` (bad input).
-        changed: ``True`` when the in-memory web was modified. Always
+        changed: ``True`` when the in-memory graph was modified. Always
             ``False`` for ``dry_run=True`` calls and read operations.
         message: Human-readable summary of the outcome.
         findings: Structured findings produced during the operation

@@ -1,10 +1,10 @@
 """Validation rules that span multiple entities.
 
-These require looking at the web as a whole. Each function is pure:
-(EpistemicWeb) -> list[Finding].
+These require looking at the graph as a whole. Each function is pure:
+(EpistemicGraph) -> list[Finding].
 
 Structural invariants (refs exist, no cycles, bidirectional links) live
-in web.py and are enforced at mutation time.
+in graph.py and are enforced at mutation time.
 
 Semantic/coverage invariants live here and are checked on demand.
 """
@@ -25,13 +25,13 @@ from .types import (
     Severity,
     TheoryStatus,
 )
-from .ports import EpistemicWebPort
+from .ports import EpistemicGraphPort
 
 
-def validate_tier_constraints(web: EpistemicWebPort) -> list[Finding]:
+def validate_tier_constraints(graph: EpistemicGraphPort) -> list[Finding]:
     """Validate confidence tier and measurement regime constraints across predictions.
 
-    Enforces the following rules for each prediction in the web:
+    Enforces the following rules for each prediction in the graph:
 
     - ``FULLY_SPECIFIED`` predictions must have exactly zero free parameters.
       Violation severity: CRITICAL.
@@ -48,13 +48,13 @@ def validate_tier_constraints(web: EpistemicWebPort) -> list[Finding]:
     workflow of registering a prediction before observations are recorded.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: All tier/measurement findings found.
     """
     findings: list[Finding] = []
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         if pred.tier == ConfidenceTier.FULLY_SPECIFIED and pred.free_params != 0:
             findings.append(Finding(
                 Severity.CRITICAL,
@@ -97,7 +97,7 @@ def validate_tier_constraints(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_independence_semantics(web: EpistemicWebPort) -> list[Finding]:
+def validate_independence_semantics(graph: EpistemicGraphPort) -> list[Finding]:
     """Validate independence group membership consistency and separation completeness.
 
     Checks two distinct properties:
@@ -112,7 +112,7 @@ def validate_independence_semantics(web: EpistemicWebPort) -> list[Finding]:
        are exempt to avoid registration deadlocks.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: All independence-related findings found.
@@ -120,9 +120,9 @@ def validate_independence_semantics(web: EpistemicWebPort) -> list[Finding]:
     findings: list[Finding] = []
 
     # Check group membership consistency
-    for gid, group in web.independence_groups.items():
+    for gid, group in graph.independence_groups.items():
         for pid in group.member_predictions:
-            pred = web.predictions.get(pid)
+            pred = graph.predictions.get(pid)
             if pred is None:
                 continue
             if pred.independence_group != gid:
@@ -138,16 +138,16 @@ def validate_independence_semantics(web: EpistemicWebPort) -> list[Finding]:
     # separation before any predictions exist creates an unresolvable
     # registration deadlock (the separation needs both groups, the second
     # group needs the separation to pass validation).
-    group_ids = sorted(web.independence_groups.keys())
+    group_ids = sorted(graph.independence_groups.keys())
     seen_pairs: set[tuple[str, str]] = set()
-    for ps in web.pairwise_separations.values():
+    for ps in graph.pairwise_separations.values():
         pair = (min(ps.group_a, ps.group_b), max(ps.group_a, ps.group_b))
         seen_pairs.add(pair)
 
     for i, a in enumerate(group_ids):
         for b in group_ids[i + 1:]:
-            if (not web.independence_groups[a].member_predictions
-                    or not web.independence_groups[b].member_predictions):
+            if (not graph.independence_groups[a].member_predictions
+                    or not graph.independence_groups[b].member_predictions):
                 continue
             pair = (min(a, b), max(a, b))
             if pair not in seen_pairs:
@@ -160,8 +160,8 @@ def validate_independence_semantics(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_coverage(web: EpistemicWebPort) -> list[Finding]:
-    """Check for analysis and prediction coverage gaps across the web.
+def validate_coverage(graph: EpistemicGraphPort) -> list[Finding]:
+    """Check for analysis and prediction coverage gaps across the graph.
 
     Reports advisory findings for structural blind spots:
 
@@ -170,14 +170,14 @@ def validate_coverage(web: EpistemicWebPort) -> list[Finding]:
     - Any predictions in ``STRESSED`` status requiring vigilance (WARNING).
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: All coverage findings found.
     """
     findings: list[Finding] = []
 
-    for cid, claim in web.claims.items():
+    for cid, claim in graph.claims.items():
         if claim.category == ClaimCategory.NUMERICAL and not claim.analyses:
             findings.append(Finding(
                 Severity.INFO,
@@ -185,7 +185,7 @@ def validate_coverage(web: EpistemicWebPort) -> list[Finding]:
                 "Numerical claim has no linked analyses",
             ))
 
-    for aid, assumption in web.assumptions.items():
+    for aid, assumption in graph.assumptions.items():
         if assumption.type == AssumptionType.EMPIRICAL and not assumption.falsifiable_consequence:
             findings.append(Finding(
                 Severity.WARNING,
@@ -194,7 +194,7 @@ def validate_coverage(web: EpistemicWebPort) -> list[Finding]:
             ))
 
     stressed = [
-        pid for pid, p in web.predictions.items()
+        pid for pid, p in graph.predictions.items()
         if p.status == PredictionStatus.STRESSED
     ]
     if stressed:
@@ -207,22 +207,22 @@ def validate_coverage(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_assumption_testability(web: EpistemicWebPort) -> list[Finding]:
+def validate_assumption_testability(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag assumptions with a falsifiable consequence but no testing predictions.
 
     If an assumption declares a ``falsifiable_consequence`` but has an empty
     ``tested_by`` set, it means the assumption claims to be testable but
-    nothing in the web is actually testing it. Severity: WARNING.
+    nothing in the graph is actually testing it. Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per untested assumption with a
             falsifiable consequence.
     """
     findings: list[Finding] = []
-    for aid, assumption in web.assumptions.items():
+    for aid, assumption in graph.assumptions.items():
         if assumption.falsifiable_consequence and not assumption.tested_by:
             findings.append(Finding(
                 Severity.WARNING,
@@ -232,7 +232,7 @@ def validate_assumption_testability(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_retracted_claim_citations(web: EpistemicWebPort) -> list[Finding]:
+def validate_retracted_claim_citations(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag predictions or claims that still cite a retracted claim.
 
     Retracted claims are invalidated assertions that should not be relied
@@ -241,7 +241,7 @@ def validate_retracted_claim_citations(web: EpistemicWebPort) -> list[Finding]:
     structural integrity violation. Severity: CRITICAL.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One CRITICAL finding per prediction or claim that
@@ -249,12 +249,12 @@ def validate_retracted_claim_citations(web: EpistemicWebPort) -> list[Finding]:
     """
     findings: list[Finding] = []
     retracted = {
-        cid for cid, c in web.claims.items()
+        cid for cid, c in graph.claims.items()
         if c.status == ClaimStatus.RETRACTED
     }
     if not retracted:
         return findings
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         cited = pred.claim_ids & retracted
         if cited:
             findings.append(Finding(
@@ -262,7 +262,7 @@ def validate_retracted_claim_citations(web: EpistemicWebPort) -> list[Finding]:
                 f"predictions/{pid}",
                 f"Prediction cites retracted claim(s): {sorted(cited)}",
             ))
-    for cid, claim in web.claims.items():
+    for cid, claim in graph.claims.items():
         bad_deps = claim.depends_on & retracted
         if bad_deps:
             findings.append(Finding(
@@ -273,7 +273,7 @@ def validate_retracted_claim_citations(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_implicit_assumption_coverage(web: EpistemicWebPort) -> list[Finding]:
+def validate_implicit_assumption_coverage(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag assumptions that silently underpin predictions but are never tested.
 
     An assumption is 'silently depended on' if it appears in the implicit
@@ -286,7 +286,7 @@ def validate_implicit_assumption_coverage(web: EpistemicWebPort) -> list[Finding
     may represent blind spots in the testing strategy.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One INFO finding per uncovered implicit assumption.
@@ -295,18 +295,18 @@ def validate_implicit_assumption_coverage(web: EpistemicWebPort) -> list[Finding
 
     # Build: for each assumption, which predictions implicitly depend on it
     implicit_dependents: dict = {}
-    for pid in web.predictions:
-        for aid in web.prediction_implicit_assumptions(pid):
+    for pid in graph.predictions:
+        for aid in graph.prediction_implicit_assumptions(pid):
             implicit_dependents.setdefault(aid, set()).add(pid)
 
     for aid, pids in implicit_dependents.items():
-        assumption = web.assumptions.get(aid)
+        assumption = graph.assumptions.get(aid)
         if assumption is None:
             continue
         # Explicit testers: predictions in the dependent set that list this assumption in tests_assumptions
         explicit_testers = {
             pid for pid in pids
-            if aid in web.predictions[pid].tests_assumptions
+            if aid in graph.predictions[pid].tests_assumptions
         }
         if not assumption.tested_by and not explicit_testers:
             findings.append(Finding(
@@ -319,7 +319,7 @@ def validate_implicit_assumption_coverage(web: EpistemicWebPort) -> list[Finding
     return findings
 
 
-def validate_tests_conditional_overlap(web: EpistemicWebPort) -> list[Finding]:
+def validate_tests_conditional_overlap(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag predictions that both test and condition on the same assumption.
 
     ``tests_assumptions`` means 'this outcome bears on whether the assumption
@@ -329,14 +329,14 @@ def validate_tests_conditional_overlap(web: EpistemicWebPort) -> list[Finding]:
     true. Severity: CRITICAL.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One CRITICAL finding per prediction with overlap
             between ``tests_assumptions`` and ``conditional_on``.
     """
     findings: list[Finding] = []
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         overlap = pred.tests_assumptions & pred.conditional_on
         if overlap:
             findings.append(Finding(
@@ -348,7 +348,7 @@ def validate_tests_conditional_overlap(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_foundational_claim_deps(web: EpistemicWebPort) -> list[Finding]:
+def validate_foundational_claim_deps(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag foundational claims that have dependencies on other claims.
 
     Foundational claims are axioms — by definition they should not depend
@@ -356,14 +356,14 @@ def validate_foundational_claim_deps(web: EpistemicWebPort) -> list[Finding]:
     indicates a misclassification or structural error. Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per foundational claim with non-empty
             ``depends_on``.
     """
     findings: list[Finding] = []
-    for cid, claim in web.claims.items():
+    for cid, claim in graph.claims.items():
         if claim.type == ClaimType.FOUNDATIONAL and claim.depends_on:
             findings.append(Finding(
                 Severity.WARNING,
@@ -374,7 +374,7 @@ def validate_foundational_claim_deps(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_evidence_consistency(web: EpistemicWebPort) -> list[Finding]:
+def validate_evidence_consistency(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag logically inconsistent evidence_kind/tier combinations.
 
     ``FIT_CHECK`` is a fit/consistency check by definition — it cannot
@@ -382,14 +382,14 @@ def validate_evidence_consistency(web: EpistemicWebPort) -> list[Finding]:
     ``FULLY_SPECIFIED`` or ``CONDITIONAL``). Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per prediction with a FIT_CHECK tier
             marked as NOVEL_PREDICTION evidence kind.
     """
     findings: list[Finding] = []
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         if (pred.tier == ConfidenceTier.FIT_CHECK
                 and pred.evidence_kind == EvidenceKind.NOVEL_PREDICTION):
             findings.append(Finding(
@@ -401,7 +401,7 @@ def validate_evidence_consistency(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_conditional_assumption_pressure(web: EpistemicWebPort) -> list[Finding]:
+def validate_conditional_assumption_pressure(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag confirmed/stressed predictions conditional on assumptions under pressure.
 
     If prediction P is conditional on assumption A (A in ``P.conditional_on``),
@@ -419,7 +419,7 @@ def validate_conditional_assumption_pressure(web: EpistemicWebPort) -> list[Find
     Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per affected prediction, identifying
@@ -439,7 +439,7 @@ def validate_conditional_assumption_pressure(web: EpistemicWebPort) -> list[Find
     # This does NOT automatically change any prediction's status. It surfaces
     # the structural connection so the researcher cannot silently overlook it.
     refuted_tests: dict = {}
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         if pred.status == PredictionStatus.REFUTED:
             for aid in pred.tests_assumptions:
                 refuted_tests.setdefault(aid, set()).add(pid)
@@ -448,7 +448,7 @@ def validate_conditional_assumption_pressure(web: EpistemicWebPort) -> list[Find
         return findings
 
     active_statuses = {PredictionStatus.CONFIRMED, PredictionStatus.STRESSED}
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         if pred.status not in active_statuses:
             continue
         pressured = pred.conditional_on & refuted_tests.keys()
@@ -469,7 +469,7 @@ def validate_conditional_assumption_pressure(web: EpistemicWebPort) -> list[Find
     return findings
 
 
-def validate_stress_criteria(web: EpistemicWebPort) -> list[Finding]:
+def validate_stress_criteria(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag STRESSED predictions without explicit stress criteria.
 
     The boundary between CONFIRMED and STRESSED is philosophically
@@ -479,14 +479,14 @@ def validate_stress_criteria(web: EpistemicWebPort) -> list[Finding]:
     ad-hoc. Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per STRESSED prediction missing
             ``stress_criteria``.
     """
     findings: list[Finding] = []
-    for pid, pred in web.predictions.items():
+    for pid, pred in graph.predictions.items():
         if pred.status == PredictionStatus.STRESSED and not pred.stress_criteria:
             findings.append(Finding(
                 Severity.WARNING,
@@ -497,7 +497,7 @@ def validate_stress_criteria(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_retracted_observation_citations(web: EpistemicWebPort) -> list[Finding]:
+def validate_retracted_observation_citations(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag observations that still link to retracted claims or disputed/retracted observations.
 
     If an observation's ``related_claims`` includes claims that have been
@@ -506,17 +506,17 @@ def validate_retracted_observation_citations(web: EpistemicWebPort) -> list[Find
     predictions. Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per problematic observation.
     """
     findings: list[Finding] = []
     retracted_claims = {
-        cid for cid, c in web.claims.items()
+        cid for cid, c in graph.claims.items()
         if c.status == ClaimStatus.RETRACTED
     }
-    for oid, obs in web.observations.items():
+    for oid, obs in graph.observations.items():
         cited = obs.related_claims & retracted_claims
         if cited:
             findings.append(Finding(
@@ -534,7 +534,7 @@ def validate_retracted_observation_citations(web: EpistemicWebPort) -> list[Find
     return findings
 
 
-def validate_theory_abandonment_impact(web: EpistemicWebPort) -> list[Finding]:
+def validate_theory_abandonment_impact(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag claims whose only theoretical motivation comes from abandoned/superseded theories.
 
     If all theories referenced by a claim have been abandoned or superseded,
@@ -543,7 +543,7 @@ def validate_theory_abandonment_impact(web: EpistemicWebPort) -> list[Finding]:
     should be aware. Severity: WARNING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One WARNING per claim with only abandoned/superseded
@@ -551,12 +551,12 @@ def validate_theory_abandonment_impact(web: EpistemicWebPort) -> list[Finding]:
     """
     findings: list[Finding] = []
     terminal_statuses = {TheoryStatus.ABANDONED, TheoryStatus.SUPERSEDED}
-    for cid, claim in web.claims.items():
+    for cid, claim in graph.claims.items():
         if not claim.theories:
             continue
         all_terminal = all(
-            web.theories.get(tid) is not None
-            and web.theories[tid].status in terminal_statuses
+            graph.theories.get(tid) is not None
+            and graph.theories[tid].status in terminal_statuses
             for tid in claim.theories
         )
         if all_terminal:
@@ -570,7 +570,7 @@ def validate_theory_abandonment_impact(web: EpistemicWebPort) -> list[Finding]:
     return findings
 
 
-def validate_load_bearing_assumption_coverage(web: EpistemicWebPort) -> list[Finding]:
+def validate_load_bearing_assumption_coverage(graph: EpistemicGraphPort) -> list[Finding]:
     """Flag LOAD_BEARING or HIGH criticality assumptions with no tested_by coverage.
 
     Load-bearing assumptions are single points of failure. If they have
@@ -578,13 +578,13 @@ def validate_load_bearing_assumption_coverage(web: EpistemicWebPort) -> list[Fin
     Severity: WARNING for HIGH, CRITICAL for LOAD_BEARING.
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: One finding per high-criticality untested assumption.
     """
     findings: list[Finding] = []
-    for aid, assumption in web.assumptions.items():
+    for aid, assumption in graph.assumptions.items():
         if assumption.criticality == Criticality.LOAD_BEARING and not assumption.tested_by:
             findings.append(Finding(
                 Severity.CRITICAL,
@@ -601,13 +601,13 @@ def validate_load_bearing_assumption_coverage(web: EpistemicWebPort) -> list[Fin
     return findings
 
 
-def validate_all(web: EpistemicWebPort) -> list[Finding]:
+def validate_all(graph: EpistemicGraphPort) -> list[Finding]:
     """Run all domain invariant validators and return the combined findings.
 
     Executes every semantic/coverage validator in a fixed order and
     concatenates their results. Structural invariants (refs exist, no
     cycles, bidirectional links) are enforced at mutation time in
-    ``web.py``; this function covers the on-demand semantic checks.
+    ``graph.py``; this function covers the on-demand semantic checks.
 
     Validator execution order:
         1. Retracted claim citations
@@ -626,25 +626,25 @@ def validate_all(web: EpistemicWebPort) -> list[Finding]:
         14. Load-bearing assumption coverage
 
     Args:
-        web: The epistemic web to validate.
+        graph: The epistemic graph to validate.
 
     Returns:
         list[Finding]: All findings from all validators, concatenated
             in execution order.
     """
     return (
-        validate_retracted_claim_citations(web)
-        + validate_tests_conditional_overlap(web)
-        + validate_tier_constraints(web)
-        + validate_evidence_consistency(web)
-        + validate_independence_semantics(web)
-        + validate_coverage(web)
-        + validate_assumption_testability(web)
-        + validate_implicit_assumption_coverage(web)
-        + validate_foundational_claim_deps(web)
-        + validate_conditional_assumption_pressure(web)
-        + validate_stress_criteria(web)
-        + validate_retracted_observation_citations(web)
-        + validate_theory_abandonment_impact(web)
-        + validate_load_bearing_assumption_coverage(web)
+        validate_retracted_claim_citations(graph)
+        + validate_tests_conditional_overlap(graph)
+        + validate_tier_constraints(graph)
+        + validate_evidence_consistency(graph)
+        + validate_independence_semantics(graph)
+        + validate_coverage(graph)
+        + validate_assumption_testability(graph)
+        + validate_implicit_assumption_coverage(graph)
+        + validate_foundational_claim_deps(graph)
+        + validate_conditional_assumption_pressure(graph)
+        + validate_stress_criteria(graph)
+        + validate_retracted_observation_citations(graph)
+        + validate_theory_abandonment_impact(graph)
+        + validate_load_bearing_assumption_coverage(graph)
     )

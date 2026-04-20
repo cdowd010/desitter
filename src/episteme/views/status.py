@@ -1,6 +1,6 @@
 """Project-status read model, snapshot builder, and serialization.
 
-Computes a compact summary of an epistemic web suitable for dashboards,
+Computes a compact summary of an epistemic graph suitable for dashboards,
 AI agent context, and MCP status responses.
 """
 from __future__ import annotations
@@ -8,8 +8,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..epistemic.ports import EpistemicWebPort
-from .metrics import WebMetrics
+from ..epistemic.ports import EpistemicGraphPort
+from .metrics import GraphMetrics
 
 
 # ── Read model ───────────────────────────────────────────────────
@@ -20,12 +20,12 @@ class ProjectStatus:
     """High-level project status snapshot.
 
     Suitable for any consumer that needs a compact summary of a loaded
-    epistemic web.
+    epistemic graph.
 
     Attributes:
         project_name: Display name of the project.
         location: Optional deployment-specific location label.
-        metrics: Full ``WebMetrics`` snapshot.
+        metrics: Full ``GraphMetrics`` snapshot.
         health_summary: One of ``"HEALTHY"``, ``"WARNINGS"``, or
             ``"CRITICAL"``.
         governance_session: Current governance session number if
@@ -35,7 +35,7 @@ class ProjectStatus:
 
     project_name: str
     location: str
-    metrics: WebMetrics
+    metrics: GraphMetrics
     health_summary: str
     governance_session: int | None
     extra: dict[str, object] = field(default_factory=dict)
@@ -45,7 +45,7 @@ class ProjectStatus:
 
 
 def get_status(
-    web: EpistemicWebPort,
+    graph: EpistemicGraphPort,
     *,
     project_name: str = "",
     location: str = "",
@@ -56,10 +56,10 @@ def get_status(
     """Build a full project status snapshot.
 
     Computes metrics and assembles a ``ProjectStatus`` from an already-
-    loaded web plus optional caller-supplied metadata.
+    loaded graph plus optional caller-supplied metadata.
 
     Args:
-        web: The epistemic web to snapshot.
+        graph: The epistemic graph to snapshot.
         project_name: Optional display name supplied by the caller.
         location: Optional deployment-specific location label.
         health_summary: Optional pre-computed health summary label.

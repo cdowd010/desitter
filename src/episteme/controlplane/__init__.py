@@ -5,7 +5,7 @@ Consumer adapters route through these services.
 
 Modules:
   gateway    — Single mutation/query boundary
-  validate   — Web validation orchestration (read-only)
+  validate   — Graph validation orchestration (read-only)
   check      — Structural diagnostics: ref checks, staleness (read-only, no I/O)
   prose      — Managed-prose sync (I/O via ProseSync collaborator)
   results    — Record analysis results (planned Phase 6)

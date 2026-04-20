@@ -38,7 +38,7 @@ class _EpistemeClientHypothesisHelpers:
         parameter_constraints: Mapping[str, str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Claim]:
-        """Register a claim in the epistemic web.
+        """Register a claim in the epistemic graph.
 
         Args:
             id: Unique identifier for the claim (e.g. ``"c-mass-energy"``).
@@ -48,7 +48,7 @@ class _EpistemeClientHypothesisHelpers:
             falsifiability: Description of how this claim could be falsified.
             dry_run: Simulate the mutation without committing. Defaults to
                 ``False``.
-            status: Initial lifecycle status. Falls back to the web default
+            status: Initial lifecycle status. Falls back to the graph default
                 when ``None``.
             category: Optional category tag (``ClaimCategory`` enum or string
                 key).
@@ -82,7 +82,7 @@ class _EpistemeClientHypothesisHelpers:
         source: str | None = None,
         notes: str | None = None,
     ) -> ClientResult[Assumption]:
-        """Register an assumption in the epistemic web.
+        """Register an assumption in the epistemic graph.
 
         Args:
             id: Unique identifier for the assumption.
@@ -132,7 +132,7 @@ class _EpistemeClientHypothesisHelpers:
         source: str | None = None,
         notes: str | None = None,
     ) -> ClientResult[Prediction]:
-        """Register a prediction in the epistemic web.
+        """Register a prediction in the epistemic graph.
 
         Args:
             id: Unique identifier for the prediction.
@@ -187,7 +187,7 @@ class _EpistemeClientHypothesisHelpers:
         last_result_sha: str | None = None,
         last_result_date: date | str | None = None,
     ) -> ClientResult[Analysis]:
-        """Register an analysis node in the epistemic web.
+        """Register an analysis node in the epistemic graph.
 
         An analysis represents a runnable computation or procedure that
         produces evidence for one or more predictions or claims.

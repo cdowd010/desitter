@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from ._core import _EpistemeClientCore
 from ._resources import _EpistemeClientResourceHelpers
-from ..epistemic.ports import EpistemicWebPort, WebRepository
+from ..epistemic.ports import EpistemicGraphPort, GraphRepository
 
 
 class EpistemeClient(_EpistemeClientResourceHelpers, _EpistemeClientCore):
@@ -41,24 +41,24 @@ class EpistemeClient(_EpistemeClientResourceHelpers, _EpistemeClientCore):
 
 def connect(
     *,
-    repo: WebRepository | None = None,
-    web: EpistemicWebPort | None = None,
+    repo: GraphRepository | None = None,
+    graph: EpistemicGraphPort | None = None,
 ) -> EpistemeClient:
     """Build a ``EpistemeClient``, optionally backed by a repository.
 
     The typical researcher workflow is simply ``ds.connect()`` from a
     project workspace directory. The function loads the project config,
-    derives paths, hydrates the web, builds the gateway, and returns a
+    derives paths, hydrates the graph, builds the gateway, and returns a
     ready-to-use client.
 
     Args:
-        repo: Optional ``WebRepository`` implementation to use for
-            loading and saving. When provided, the web is loaded from
+        repo: Optional ``GraphRepository`` implementation to use for
+            loading and saving. When provided, the graph is loaded from
             the repository before the client is returned. When ``None``,
             ``connect`` locates the repository automatically by searching
             for a ``episteme.toml`` in the current directory tree.
-        web: Optional pre-loaded ``EpistemicWebPort`` instance. When
-            provided, this web is used directly and no repository load
+        graph: Optional pre-loaded ``EpistemicGraphPort`` instance. When
+            provided, this graph is used directly and no repository load
             is performed. Useful for testing or in-memory workflows.
             Cannot be combined with ``repo``.
 

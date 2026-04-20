@@ -10,9 +10,9 @@
        Public surface:
          from desitter.epistemic.types import ClaimId, Finding, Severity, …
          from desitter.epistemic.model import Claim, Assumption, Prediction, …
-         from desitter.epistemic.web import EpistemicWeb
+         from desitter.epistemic.graph import EpistemicGraph
          from desitter.epistemic.invariants import validate_all
-         from desitter.epistemic.ports import WebRepository, WebRenderer, …
+         from desitter.epistemic.ports import GraphRepository, GraphRenderer, …
        """
        
     1: from .model import (
@@ -54,12 +54,12 @@
            TheoryId,
            TheoryStatus,
        )
-    1: from .web import (
+    1: from .graph import (
            BrokenReferenceError,
            CycleError,
            DuplicateIdError,
            EpistemicError,
-           EpistemicWeb,
+           EpistemicGraph,
            InvariantViolation,
        )
        
@@ -74,7 +74,7 @@
            # model
            "Claim", "Assumption", "Prediction", "Theory", "IndependenceGroup",
            "PairwiseSeparation", "Analysis", "Discovery", "DeadEnd", "Concept", "Parameter",
-           # web
-           "EpistemicWeb", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
+           # graph
+           "EpistemicGraph", "EpistemicError", "DuplicateIdError", "BrokenReferenceError",
            "CycleError", "InvariantViolation",
        ]

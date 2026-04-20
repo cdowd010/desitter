@@ -20,7 +20,7 @@ class GatewayResult:
             ``"ok"`` — success; ``"BLOCKED"`` — domain invariant
             violation blocked the mutation; ``"error"`` — bad input
             (unknown resource, broken reference, missing required field).
-        changed: ``True`` when the in-memory web was modified as a result
+        changed: ``True`` when the in-memory graph was modified as a result
             of this operation. Always ``False`` for ``dry_run=True`` calls
             and for read operations (``get``, ``list``, ``query``).
         message: Human-readable summary of the outcome. Suitable for

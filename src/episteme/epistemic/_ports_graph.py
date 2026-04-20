@@ -39,16 +39,16 @@ from .types import (
 )
 
 
-class EpistemicWebPort(Protocol):
-    """Dependency-inversion point for the epistemic web aggregate.
+class EpistemicGraphPort(Protocol):
+    """Dependency-inversion point for the epistemic graph aggregate.
 
     Any implementation that satisfies this protocol — an in-memory
-    ``EpistemicWeb``, a DB-backed proxy, or a test double — can be used
-    wherever an epistemic web is required. The ``Gateway`` and all
+    ``EpistemicGraph``, a DB-backed proxy, or a test double — can be used
+    wherever an epistemic graph is required. The ``Gateway`` and all
     control-plane code depend on this protocol rather than the concrete
-    ``EpistemicWeb`` class.
+    ``EpistemicGraph`` class.
 
-    Every mutation method returns a NEW web instance. Callers must
+    Every mutation method returns a NEW graph instance. Callers must
     replace their reference with the return value. The old instance is
     never modified.
 
@@ -251,14 +251,14 @@ class EpistemicWebPort(Protocol):
 
     # ── Registration mutations ────────────────────────────────────
 
-    def register_claim(self, claim: Claim) -> EpistemicWebPort:
-        """Register a new claim. Returns a new web instance.
+    def register_claim(self, claim: Claim) -> EpistemicGraphPort:
+        """Register a new claim. Returns a new graph instance.
 
         Args:
             claim: The claim to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered claim.
+            EpistemicGraphPort: New graph containing the registered claim.
 
         Raises:
             DuplicateIdError: If ``claim.id`` already exists.
@@ -267,14 +267,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_assumption(self, assumption: Assumption) -> EpistemicWebPort:
-        """Register a new assumption. Returns a new web instance.
+    def register_assumption(self, assumption: Assumption) -> EpistemicGraphPort:
+        """Register a new assumption. Returns a new graph instance.
 
         Args:
             assumption: The assumption to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered assumption.
+            EpistemicGraphPort: New graph containing the registered assumption.
 
         Raises:
             DuplicateIdError: If ``assumption.id`` already exists.
@@ -283,14 +283,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_prediction(self, prediction: Prediction) -> EpistemicWebPort:
-        """Register a new prediction. Returns a new web instance.
+    def register_prediction(self, prediction: Prediction) -> EpistemicGraphPort:
+        """Register a new prediction. Returns a new graph instance.
 
         Args:
             prediction: The prediction to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered prediction.
+            EpistemicGraphPort: New graph containing the registered prediction.
 
         Raises:
             DuplicateIdError: If ``prediction.id`` already exists.
@@ -298,14 +298,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_analysis(self, analysis: Analysis) -> EpistemicWebPort:
-        """Register a new analysis reference. Returns a new web instance.
+    def register_analysis(self, analysis: Analysis) -> EpistemicGraphPort:
+        """Register a new analysis reference. Returns a new graph instance.
 
         Args:
             analysis: The analysis to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered analysis.
+            EpistemicGraphPort: New graph containing the registered analysis.
 
         Raises:
             DuplicateIdError: If ``analysis.id`` already exists.
@@ -313,14 +313,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_theory(self, theory: Theory) -> EpistemicWebPort:
-        """Register a new theory. Returns a new web instance.
+    def register_theory(self, theory: Theory) -> EpistemicGraphPort:
+        """Register a new theory. Returns a new graph instance.
 
         Args:
             theory: The theory to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered theory.
+            EpistemicGraphPort: New graph containing the registered theory.
 
         Raises:
             DuplicateIdError: If ``theory.id`` already exists.
@@ -329,14 +329,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_independence_group(self, group: IndependenceGroup) -> EpistemicWebPort:
-        """Register a new independence group. Returns a new web instance.
+    def register_independence_group(self, group: IndependenceGroup) -> EpistemicGraphPort:
+        """Register a new independence group. Returns a new graph instance.
 
         Args:
             group: The group to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered group.
+            EpistemicGraphPort: New graph containing the registered group.
 
         Raises:
             DuplicateIdError: If ``group.id`` already exists.
@@ -345,14 +345,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_discovery(self, discovery: Discovery) -> EpistemicWebPort:
-        """Register a new discovery. Returns a new web instance.
+    def register_discovery(self, discovery: Discovery) -> EpistemicGraphPort:
+        """Register a new discovery. Returns a new graph instance.
 
         Args:
             discovery: The discovery to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered discovery.
+            EpistemicGraphPort: New graph containing the registered discovery.
 
         Raises:
             DuplicateIdError: If ``discovery.id`` already exists.
@@ -360,14 +360,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_dead_end(self, dead_end: DeadEnd) -> EpistemicWebPort:
-        """Register a new dead end record. Returns a new web instance.
+    def register_dead_end(self, dead_end: DeadEnd) -> EpistemicGraphPort:
+        """Register a new dead end record. Returns a new graph instance.
 
         Args:
             dead_end: The dead end to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered dead end.
+            EpistemicGraphPort: New graph containing the registered dead end.
 
         Raises:
             DuplicateIdError: If ``dead_end.id`` already exists.
@@ -375,22 +375,22 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_parameter(self, parameter: Parameter) -> EpistemicWebPort:
-        """Register a new parameter. Returns a new web instance.
+    def register_parameter(self, parameter: Parameter) -> EpistemicGraphPort:
+        """Register a new parameter. Returns a new graph instance.
 
         Args:
             parameter: The parameter to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered parameter.
+            EpistemicGraphPort: New graph containing the registered parameter.
 
         Raises:
             DuplicateIdError: If ``parameter.id`` already exists.
         """
         ...
 
-    def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicWebPort:
-        """Register a pairwise independence separation. Returns a new web instance.
+    def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicGraphPort:
+        """Register a pairwise independence separation. Returns a new graph instance.
 
         Both referenced groups must already exist and must be distinct.
 
@@ -398,7 +398,7 @@ class EpistemicWebPort(Protocol):
             sep: The separation record to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the separation record.
+            EpistemicGraphPort: New graph containing the separation record.
 
         Raises:
             DuplicateIdError: If ``sep.id`` already exists.
@@ -407,8 +407,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def register_observation(self, observation: Observation) -> EpistemicWebPort:
-        """Register a new observation. Returns a new web instance.
+    def register_observation(self, observation: Observation) -> EpistemicGraphPort:
+        """Register a new observation. Returns a new graph instance.
 
         Validates that all referenced predictions, claims, and assumptions
         exist. Updates ``Prediction.observations`` backlinks.
@@ -417,7 +417,7 @@ class EpistemicWebPort(Protocol):
             observation: The observation to add. Must have a unique ``id``.
 
         Returns:
-            EpistemicWebPort: New web containing the registered observation.
+            EpistemicGraphPort: New graph containing the registered observation.
 
         Raises:
             DuplicateIdError: If ``observation.id`` already exists.
@@ -427,8 +427,8 @@ class EpistemicWebPort(Protocol):
 
     # ── Update mutations ──────────────────────────────────────────
 
-    def update_claim(self, new_claim: Claim) -> EpistemicWebPort:
-        """Replace a claim's fields. Returns a new web instance.
+    def update_claim(self, new_claim: Claim) -> EpistemicGraphPort:
+        """Replace a claim's fields. Returns a new graph instance.
 
         The new claim must share the same ``id`` as an existing claim.
         Bidirectional links are updated by diffing old vs new references.
@@ -437,7 +437,7 @@ class EpistemicWebPort(Protocol):
             new_claim: The updated claim. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated claim.
+            EpistemicGraphPort: New graph with the updated claim.
 
         Raises:
             BrokenReferenceError: If the claim does not exist or if any
@@ -446,8 +446,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_assumption(self, new_assumption: Assumption) -> EpistemicWebPort:
-        """Replace an assumption's fields. Returns a new web instance.
+    def update_assumption(self, new_assumption: Assumption) -> EpistemicGraphPort:
+        """Replace an assumption's fields. Returns a new graph instance.
 
         Backlinks ``used_in_claims`` and ``tested_by`` are preserved.
 
@@ -455,7 +455,7 @@ class EpistemicWebPort(Protocol):
             new_assumption: The updated assumption. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated assumption.
+            EpistemicGraphPort: New graph with the updated assumption.
 
         Raises:
             BrokenReferenceError: If the assumption does not exist or if
@@ -464,8 +464,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_prediction(self, new_prediction: Prediction) -> EpistemicWebPort:
-        """Replace a prediction's fields. Returns a new web instance.
+    def update_prediction(self, new_prediction: Prediction) -> EpistemicGraphPort:
+        """Replace a prediction's fields. Returns a new graph instance.
 
         Bidirectional links with assumptions and independence groups are
         updated by diffing old vs new references.
@@ -474,7 +474,7 @@ class EpistemicWebPort(Protocol):
             new_prediction: The updated prediction. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated prediction.
+            EpistemicGraphPort: New graph with the updated prediction.
 
         Raises:
             BrokenReferenceError: If the prediction does not exist or if
@@ -482,8 +482,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_parameter(self, new_parameter: Parameter) -> EpistemicWebPort:
-        """Replace a parameter's fields. Returns a new web instance.
+    def update_parameter(self, new_parameter: Parameter) -> EpistemicGraphPort:
+        """Replace a parameter's fields. Returns a new graph instance.
 
         The ``used_in_analyses`` backlink is preserved from the existing record.
 
@@ -491,15 +491,15 @@ class EpistemicWebPort(Protocol):
             new_parameter: The updated parameter. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated parameter.
+            EpistemicGraphPort: New graph with the updated parameter.
 
         Raises:
             BrokenReferenceError: If the parameter does not exist.
         """
         ...
 
-    def update_analysis(self, new_analysis: Analysis) -> EpistemicWebPort:
-        """Replace an analysis's fields. Returns a new web instance.
+    def update_analysis(self, new_analysis: Analysis) -> EpistemicGraphPort:
+        """Replace an analysis's fields. Returns a new graph instance.
 
         ``claims_covered`` is preserved; ``Parameter.used_in_analyses``
         backlinks are updated by diffing old vs new ``uses_parameters``.
@@ -508,7 +508,7 @@ class EpistemicWebPort(Protocol):
             new_analysis: The updated analysis. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated analysis.
+            EpistemicGraphPort: New graph with the updated analysis.
 
         Raises:
             BrokenReferenceError: If the analysis does not exist or if
@@ -516,14 +516,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_theory(self, new_theory: Theory) -> EpistemicWebPort:
-        """Replace a theory's fields. Returns a new web instance.
+    def update_theory(self, new_theory: Theory) -> EpistemicGraphPort:
+        """Replace a theory's fields. Returns a new graph instance.
 
         Args:
             new_theory: The updated theory. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated theory.
+            EpistemicGraphPort: New graph with the updated theory.
 
         Raises:
             BrokenReferenceError: If the theory does not exist or if any
@@ -531,8 +531,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicWebPort:
-        """Replace an independence group's annotation fields. Returns a new web instance.
+    def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicGraphPort:
+        """Replace an independence group's annotation fields. Returns a new graph instance.
 
         ``member_predictions`` backlink is preserved from the existing record.
 
@@ -540,7 +540,7 @@ class EpistemicWebPort(Protocol):
             new_group: The updated group. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated group.
+            EpistemicGraphPort: New graph with the updated group.
 
         Raises:
             BrokenReferenceError: If the group does not exist or if any
@@ -548,14 +548,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicWebPort:
-        """Replace a pairwise separation record's fields. Returns a new web instance.
+    def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicGraphPort:
+        """Replace a pairwise separation record's fields. Returns a new graph instance.
 
         Args:
             new_sep: The updated separation. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated separation record.
+            EpistemicGraphPort: New graph with the updated separation record.
 
         Raises:
             BrokenReferenceError: If the separation does not exist, if
@@ -563,14 +563,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_discovery(self, new_discovery: Discovery) -> EpistemicWebPort:
-        """Replace a discovery's fields. Returns a new web instance.
+    def update_discovery(self, new_discovery: Discovery) -> EpistemicGraphPort:
+        """Replace a discovery's fields. Returns a new graph instance.
 
         Args:
             new_discovery: The updated discovery. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated discovery.
+            EpistemicGraphPort: New graph with the updated discovery.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist or if
@@ -578,14 +578,14 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicWebPort:
-        """Replace a dead end's fields. Returns a new web instance.
+    def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicGraphPort:
+        """Replace a dead end's fields. Returns a new graph instance.
 
         Args:
             new_dead_end: The updated dead end. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated dead end.
+            EpistemicGraphPort: New graph with the updated dead end.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist or if
@@ -593,8 +593,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def update_observation(self, new_observation: Observation) -> EpistemicWebPort:
-        """Replace an observation's fields. Returns a new web instance.
+    def update_observation(self, new_observation: Observation) -> EpistemicGraphPort:
+        """Replace an observation's fields. Returns a new graph instance.
 
         Diffs ``predictions`` links and updates ``Prediction.observations``
         backlinks accordingly.
@@ -603,7 +603,7 @@ class EpistemicWebPort(Protocol):
             new_observation: The updated observation. Must match an existing ``id``.
 
         Returns:
-            EpistemicWebPort: New web with the updated observation.
+            EpistemicGraphPort: New graph with the updated observation.
 
         Raises:
             BrokenReferenceError: If the observation does not exist or if
@@ -613,90 +613,90 @@ class EpistemicWebPort(Protocol):
 
     # ── Status transitions ────────────────────────────────────────
 
-    def transition_prediction(self, pid: PredictionId, new_status: PredictionStatus) -> EpistemicWebPort:
-        """Change a prediction's lifecycle status. Returns a new web instance.
+    def transition_prediction(self, pid: PredictionId, new_status: PredictionStatus) -> EpistemicGraphPort:
+        """Change a prediction's lifecycle status. Returns a new graph instance.
 
         Args:
             pid: The prediction ID to transition.
             new_status: The target ``PredictionStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated prediction status.
+            EpistemicGraphPort: New graph with the updated prediction status.
 
         Raises:
             BrokenReferenceError: If the prediction does not exist.
         """
         ...
 
-    def transition_dead_end(self, did: DeadEndId, new_status: DeadEndStatus) -> EpistemicWebPort:
-        """Change a dead end's lifecycle status. Returns a new web instance.
+    def transition_dead_end(self, did: DeadEndId, new_status: DeadEndStatus) -> EpistemicGraphPort:
+        """Change a dead end's lifecycle status. Returns a new graph instance.
 
         Args:
             did: The dead end ID to transition.
             new_status: The target ``DeadEndStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated dead end status.
+            EpistemicGraphPort: New graph with the updated dead end status.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
         """
         ...
 
-    def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicWebPort:
-        """Change a claim's lifecycle status. Returns a new web instance.
+    def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicGraphPort:
+        """Change a claim's lifecycle status. Returns a new graph instance.
 
         Args:
             cid: The claim ID to transition.
             new_status: The target ``ClaimStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated claim status.
+            EpistemicGraphPort: New graph with the updated claim status.
 
         Raises:
             BrokenReferenceError: If the claim does not exist.
         """
         ...
 
-    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicWebPort:
-        """Change a theory's lifecycle status. Returns a new web instance.
+    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicGraphPort:
+        """Change a theory's lifecycle status. Returns a new graph instance.
 
         Args:
             tid: The theory ID to transition.
             new_status: The target ``TheoryStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated theory status.
+            EpistemicGraphPort: New graph with the updated theory status.
 
         Raises:
             BrokenReferenceError: If the theory does not exist.
         """
         ...
 
-    def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicWebPort:
-        """Change a discovery's lifecycle status. Returns a new web instance.
+    def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicGraphPort:
+        """Change a discovery's lifecycle status. Returns a new graph instance.
 
         Args:
             did: The discovery ID to transition.
             new_status: The target ``DiscoveryStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated discovery status.
+            EpistemicGraphPort: New graph with the updated discovery status.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
         """
         ...
 
-    def transition_observation(self, oid: ObservationId, new_status: ObservationStatus) -> EpistemicWebPort:
-        """Change an observation's lifecycle status. Returns a new web instance.
+    def transition_observation(self, oid: ObservationId, new_status: ObservationStatus) -> EpistemicGraphPort:
+        """Change an observation's lifecycle status. Returns a new graph instance.
 
         Args:
             oid: The observation ID to transition.
             new_status: The target ``ObservationStatus`` value.
 
         Returns:
-            EpistemicWebPort: New web with the updated observation status.
+            EpistemicGraphPort: New graph with the updated observation status.
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
@@ -712,8 +712,8 @@ class EpistemicWebPort(Protocol):
         *,
         git_sha: str | None = None,
         result_date: date | None = None,
-    ) -> EpistemicWebPort:
-        """Record the output of a completed analysis run. Returns a new web instance.
+    ) -> EpistemicGraphPort:
+        """Record the output of a completed analysis run. Returns a new graph instance.
 
         Sets ``last_result``, ``last_result_sha``, and ``last_result_date``
         on the analysis, preserving all other fields.
@@ -725,7 +725,7 @@ class EpistemicWebPort(Protocol):
             result_date: Optional date when the result was recorded.
 
         Returns:
-            EpistemicWebPort: New web with the analysis result recorded.
+            EpistemicGraphPort: New graph with the analysis result recorded.
 
         Raises:
             BrokenReferenceError: If the analysis does not exist.
@@ -734,8 +734,8 @@ class EpistemicWebPort(Protocol):
 
     # ── Removal mutations ─────────────────────────────────────────
 
-    def remove_prediction(self, pid: PredictionId) -> EpistemicWebPort:
-        """Remove a prediction from the web. Returns a new web instance.
+    def remove_prediction(self, pid: PredictionId) -> EpistemicGraphPort:
+        """Remove a prediction from the graph. Returns a new graph instance.
 
         Tears down backlinks and scrubs soft references in theories,
         dead ends, and discoveries.
@@ -744,15 +744,15 @@ class EpistemicWebPort(Protocol):
             pid: The prediction ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the prediction.
+            EpistemicGraphPort: New graph without the prediction.
 
         Raises:
             BrokenReferenceError: If the prediction does not exist.
         """
         ...
 
-    def remove_claim(self, cid: ClaimId) -> EpistemicWebPort:
-        """Remove a claim from the web. Returns a new web instance.
+    def remove_claim(self, cid: ClaimId) -> EpistemicGraphPort:
+        """Remove a claim from the graph. Returns a new graph instance.
 
         Raises if any claim or prediction still hard-references this claim.
         Callers must first update or remove all referencing entities.
@@ -761,7 +761,7 @@ class EpistemicWebPort(Protocol):
             cid: The claim ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the claim.
+            EpistemicGraphPort: New graph without the claim.
 
         Raises:
             BrokenReferenceError: If the claim does not exist or is still
@@ -769,8 +769,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def remove_assumption(self, aid: AssumptionId) -> EpistemicWebPort:
-        """Remove an assumption from the web. Returns a new web instance.
+    def remove_assumption(self, aid: AssumptionId) -> EpistemicGraphPort:
+        """Remove an assumption from the graph. Returns a new graph instance.
 
         Raises if any claim, prediction, or other assumption still
         references this assumption.
@@ -779,7 +779,7 @@ class EpistemicWebPort(Protocol):
             aid: The assumption ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the assumption.
+            EpistemicGraphPort: New graph without the assumption.
 
         Raises:
             BrokenReferenceError: If the assumption does not exist or is
@@ -787,8 +787,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def remove_parameter(self, pid: ParameterId) -> EpistemicWebPort:
-        """Remove a parameter from the web. Returns a new web instance.
+    def remove_parameter(self, pid: ParameterId) -> EpistemicGraphPort:
+        """Remove a parameter from the graph. Returns a new graph instance.
 
         Raises if any analysis still references this parameter.
 
@@ -796,7 +796,7 @@ class EpistemicWebPort(Protocol):
             pid: The parameter ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the parameter.
+            EpistemicGraphPort: New graph without the parameter.
 
         Raises:
             BrokenReferenceError: If the parameter does not exist or is
@@ -804,8 +804,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def remove_analysis(self, anid: AnalysisId) -> EpistemicWebPort:
-        """Remove an analysis from the web. Returns a new web instance.
+    def remove_analysis(self, anid: AnalysisId) -> EpistemicGraphPort:
+        """Remove an analysis from the graph. Returns a new graph instance.
 
         Raises if any claim or prediction still hard-references this analysis.
 
@@ -813,7 +813,7 @@ class EpistemicWebPort(Protocol):
             anid: The analysis ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the analysis.
+            EpistemicGraphPort: New graph without the analysis.
 
         Raises:
             BrokenReferenceError: If the analysis does not exist or is
@@ -821,8 +821,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicWebPort:
-        """Remove an independence group from the web. Returns a new web instance.
+    def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicGraphPort:
+        """Remove an independence group from the graph. Returns a new graph instance.
 
         Raises if any prediction or pairwise separation still references
         this group.
@@ -831,7 +831,7 @@ class EpistemicWebPort(Protocol):
             gid: The independence group ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the group.
+            EpistemicGraphPort: New graph without the group.
 
         Raises:
             BrokenReferenceError: If the group does not exist or is still
@@ -839,8 +839,8 @@ class EpistemicWebPort(Protocol):
         """
         ...
 
-    def remove_theory(self, tid: TheoryId) -> EpistemicWebPort:
-        """Remove a theory from the web. Returns a new web instance.
+    def remove_theory(self, tid: TheoryId) -> EpistemicGraphPort:
+        """Remove a theory from the graph. Returns a new graph instance.
 
         Theories are leaf entities — removal is always structurally safe.
 
@@ -848,15 +848,15 @@ class EpistemicWebPort(Protocol):
             tid: The theory ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the theory.
+            EpistemicGraphPort: New graph without the theory.
 
         Raises:
             BrokenReferenceError: If the theory does not exist.
         """
         ...
 
-    def remove_discovery(self, did: DiscoveryId) -> EpistemicWebPort:
-        """Remove a discovery from the web. Returns a new web instance.
+    def remove_discovery(self, did: DiscoveryId) -> EpistemicGraphPort:
+        """Remove a discovery from the graph. Returns a new graph instance.
 
         Discoveries are leaf entities — removal is always structurally safe.
 
@@ -864,15 +864,15 @@ class EpistemicWebPort(Protocol):
             did: The discovery ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the discovery.
+            EpistemicGraphPort: New graph without the discovery.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
         """
         ...
 
-    def remove_dead_end(self, did: DeadEndId) -> EpistemicWebPort:
-        """Remove a dead end from the web. Returns a new web instance.
+    def remove_dead_end(self, did: DeadEndId) -> EpistemicGraphPort:
+        """Remove a dead end from the graph. Returns a new graph instance.
 
         Dead ends are leaf entities — removal is always structurally safe.
 
@@ -880,29 +880,29 @@ class EpistemicWebPort(Protocol):
             did: The dead end ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the dead end.
+            EpistemicGraphPort: New graph without the dead end.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
         """
         ...
 
-    def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicWebPort:
-        """Remove a pairwise separation record from the web. Returns a new web instance.
+    def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicGraphPort:
+        """Remove a pairwise separation record from the graph. Returns a new graph instance.
 
         Args:
             sid: The separation record ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the separation record.
+            EpistemicGraphPort: New graph without the separation record.
 
         Raises:
             BrokenReferenceError: If the separation does not exist.
         """
         ...
 
-    def remove_observation(self, oid: ObservationId) -> EpistemicWebPort:
-        """Remove an observation from the web. Returns a new web instance.
+    def remove_observation(self, oid: ObservationId) -> EpistemicGraphPort:
+        """Remove an observation from the graph. Returns a new graph instance.
 
         Tears down ``Prediction.observations`` backlinks. Observations are
         provenance records — nothing hard-blocks their removal.
@@ -911,7 +911,7 @@ class EpistemicWebPort(Protocol):
             oid: The observation ID to remove.
 
         Returns:
-            EpistemicWebPort: New web without the observation.
+            EpistemicGraphPort: New graph without the observation.
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
@@ -919,8 +919,8 @@ class EpistemicWebPort(Protocol):
         ...
 
 
-class WebRepository(Protocol):
-    """Persistence abstraction for loading and saving the epistemic web.
+class GraphRepository(Protocol):
+    """Persistence abstraction for loading and saving the epistemic graph.
 
     Implementors provide storage-specific serialization/deserialization
     logic. The ``Gateway`` and ``EpistemeClient`` depend on this protocol
@@ -931,19 +931,19 @@ class WebRepository(Protocol):
     - Future: database-backed, remote API, etc.
     """
 
-    def load(self) -> EpistemicWebPort:
-        """Deserialize and return the full epistemic web from storage.
+    def load(self) -> EpistemicGraphPort:
+        """Deserialize and return the full epistemic graph from storage.
 
         Returns:
-            EpistemicWebPort: The fully hydrated epistemic web.
+            EpistemicGraphPort: The fully hydrated epistemic graph.
         """
         ...
 
-    def save(self, web: EpistemicWebPort) -> None:
-        """Serialize and persist the epistemic web to storage.
+    def save(self, graph: EpistemicGraphPort) -> None:
+        """Serialize and persist the epistemic graph to storage.
 
         Args:
-            web: The web instance to persist.
+            graph: The graph instance to persist.
         """
         ...
 
@@ -961,4 +961,4 @@ class WebRepository(Protocol):
         return False
 
 
-__all__ = ["EpistemicWebPort", "WebRepository"]
+__all__ = ["EpistemicGraphPort", "GraphRepository"]

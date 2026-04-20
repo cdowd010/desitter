@@ -10,20 +10,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ResourceSpec:
-    """Metadata describing how a resource type maps to ``EpistemicWebPort`` methods.
+    """Metadata describing how a resource type maps to ``EpistemicGraphPort`` methods.
 
     The gateway uses this to resolve generic operation names (``register``,
-    ``set``, ``transition``) to the concrete method names on the web
+    ``set``, ``transition``) to the concrete method names on the graph
     aggregate and to the attribute name where entities are stored.
 
     Attributes:
-        collection_attr: Name of the ``EpistemicWebPort`` attribute that
+        collection_attr: Name of the ``EpistemicGraphPort`` attribute that
             holds all entities of this type, e.g. ``"claims"``.
-        register_method: Method name on ``EpistemicWebPort`` to call when
+        register_method: Method name on ``EpistemicGraphPort`` to call when
             registering a new entity, e.g. ``"register_claim"``.
-        update_method: Method name on ``EpistemicWebPort`` to call when
+        update_method: Method name on ``EpistemicGraphPort`` to call when
             updating an existing entity, e.g. ``"update_claim"``.
-        transition_method: Method name on ``EpistemicWebPort`` to call
+        transition_method: Method name on ``EpistemicGraphPort`` to call
             when transitioning entity status, e.g. ``"transition_claim"``.
             ``None`` for resource types that do not support status transitions.
     """
@@ -39,11 +39,11 @@ class QuerySpec:
     """Metadata describing a named read-only query exposed by the gateway.
 
     Each entry in ``QUERY_SPECS`` maps a caller-facing query name to the
-    concrete ``EpistemicWebPort`` method that implements it, and declares
+    concrete ``EpistemicGraphPort`` method that implements it, and declares
     which parameters must be coerced to typed entity IDs before dispatch.
 
     Attributes:
-        method_name: Name of the ``EpistemicWebPort`` method to call,
+        method_name: Name of the ``EpistemicGraphPort`` method to call,
             e.g. ``"claim_lineage"``.
         parameter_resources: Mapping of parameter name to resource key
             for parameters that must be coerced to typed IDs before the
@@ -98,7 +98,7 @@ QUERY_SPECS: dict[str, QuerySpec] = {
 Each entry declares a named read-only query that the gateway exposes
 via ``Gateway.query(query_type, **params)``. Parameters listed in
 ``QuerySpec.parameter_resources`` are coerced to typed entity IDs
-before the underlying web method is invoked.
+before the underlying graph method is invoked.
 """
 
 

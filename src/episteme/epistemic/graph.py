@@ -1,9 +1,9 @@
-"""The EpistemicWeb: aggregate root for the epistemic domain.
+"""The EpistemicGraph: aggregate root for the epistemic domain.
 
 External code NEVER modifies entities directly — it calls methods on the
-web, and the web ensures consistency.
+graph, and the graph ensures consistency.
 
-Every mutation method returns a NEW web. This gives free undo/redo and
+Every mutation method returns a NEW graph. This gives free undo/redo and
 eliminates state corruption.
 """
 from __future__ import annotations
@@ -54,21 +54,21 @@ from .types import (
 
 
 @dataclass
-class EpistemicWeb:
+class EpistemicGraph:
     """Complete epistemic state of a research project.
 
-    The EpistemicWeb is the aggregate root for the epistemic domain.
+    The EpistemicGraph is the aggregate root for the epistemic domain.
     External code NEVER modifies entities directly — it calls methods
-    on the web, and the web ensures consistency.
+    on the graph, and the graph ensures consistency.
 
-    Every mutation method returns a NEW web instance. The old web is
+    Every mutation method returns a NEW graph instance. The old graph is
     left untouched, providing free rollback/undo semantics and
     eliminating state corruption from partial mutations.
 
     All bidirectional links between entities (e.g.
     ``Assumption.used_in_claims`` ↔ ``Claim.assumptions``,
     ``Parameter.used_in_analyses`` ↔ ``Analysis.uses_parameters``)
-    are maintained automatically by the web's register/update/remove
+    are maintained automatically by the graph's register/update/remove
     methods.
 
     Attributes:
@@ -119,7 +119,7 @@ class EpistemicWeb:
         return self.claims.get(cid)
 
     def get_assumption(self, aid: AssumptionId) -> Assumption | None:
-        """Return an assumption by ID, or ``None`` when absent from the web.
+        """Return an assumption by ID, or ``None`` when absent from the graph.
 
         Args:
             aid: The unique identifier of the assumption to look up.
@@ -433,23 +433,23 @@ class EpistemicWeb:
             "affected_predictions": affected_predictions,
         }
 
-    # ── Mutations (return new web) ────────────────────────────────
+    # ── Mutations (return new graph) ────────────────────────────────
 
-    def register_claim(self, claim: Claim) -> EpistemicWeb:
-        """Register a new claim in the web.
+    def register_claim(self, claim: Claim) -> EpistemicGraph:
+        """Register a new claim in the graph.
 
         Enforces: no duplicate IDs, all referenced assumptions/claims/analyses/
         parameters exist, no dependency cycles in ``depends_on``, and
         bidirectional backlinks are updated on assumptions and analyses.
 
         The incoming entity is deep-copied so the caller's reference cannot
-        mutate the web's stored copy after registration.
+        mutate the graph's stored copy after registration.
 
         Args:
             claim: The claim to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered claim.
+            EpistemicGraph: A new graph instance containing the registered claim.
 
         Raises:
             DuplicateIdError: If ``claim.id`` already exists.
@@ -467,7 +467,7 @@ class EpistemicWeb:
 
         new = self._copy()
         # Deep-copy the incoming entity so a caller who keeps a reference
-        # cannot mutate the web's stored copy after registration. All
+        # cannot mutate the graph's stored copy after registration. All
         # register_* methods follow this same pattern.
         new.claims[claim.id] = copy.deepcopy(claim)
 
@@ -488,8 +488,8 @@ class EpistemicWeb:
 
         return new
 
-    def register_assumption(self, assumption: Assumption) -> EpistemicWeb:
-        """Register a new assumption in the web.
+    def register_assumption(self, assumption: Assumption) -> EpistemicGraph:
+        """Register a new assumption in the graph.
 
         Validates that all ``depends_on`` references exist and that no
         cycle would be introduced. Backlinks ``used_in_claims`` and
@@ -500,7 +500,7 @@ class EpistemicWeb:
             assumption: The assumption to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered assumption.
+            EpistemicGraph: A new graph instance containing the registered assumption.
 
         Raises:
             DuplicateIdError: If ``assumption.id`` already exists.
@@ -518,8 +518,8 @@ class EpistemicWeb:
         new.assumptions[assumption.id] = stored
         return new
 
-    def register_prediction(self, prediction: Prediction) -> EpistemicWeb:
-        """Register a new prediction in the web.
+    def register_prediction(self, prediction: Prediction) -> EpistemicGraph:
+        """Register a new prediction in the graph.
 
         Validates that all referenced claims, assumptions, analysis, and
         independence group exist. Updates bidirectional backlinks:
@@ -529,7 +529,7 @@ class EpistemicWeb:
             prediction: The prediction to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered prediction.
+            EpistemicGraph: A new graph instance containing the registered prediction.
 
         Raises:
             DuplicateIdError: If ``prediction.id`` already exists.
@@ -566,8 +566,8 @@ class EpistemicWeb:
 
         return new
 
-    def register_analysis(self, analysis: Analysis) -> EpistemicWeb:
-        """Register a new analysis reference in the web.
+    def register_analysis(self, analysis: Analysis) -> EpistemicGraph:
+        """Register a new analysis reference in the graph.
 
         Validates that all ``uses_parameters`` IDs exist and updates the
         bidirectional ``Parameter.used_in_analyses`` backlink.
@@ -578,7 +578,7 @@ class EpistemicWeb:
             analysis: The analysis to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered analysis.
+            EpistemicGraph: A new graph instance containing the registered analysis.
 
         Raises:
             DuplicateIdError: If ``analysis.id`` already exists.
@@ -600,8 +600,8 @@ class EpistemicWeb:
 
         return new
 
-    def register_theory(self, theory: Theory) -> EpistemicWeb:
-        """Register a new theory in the web.
+    def register_theory(self, theory: Theory) -> EpistemicGraph:
+        """Register a new theory in the graph.
 
         Validates that all ``related_predictions`` IDs exist.
         ``motivates_claims`` is a backlink maintained by claim
@@ -611,7 +611,7 @@ class EpistemicWeb:
             theory: The theory to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered theory.
+            EpistemicGraph: A new graph instance containing the registered theory.
 
         Raises:
             DuplicateIdError: If ``theory.id`` already exists.
@@ -626,8 +626,8 @@ class EpistemicWeb:
         new.theories[theory.id] = stored
         return new
 
-    def register_independence_group(self, group: IndependenceGroup) -> EpistemicWeb:
-        """Register a new independence group in the web.
+    def register_independence_group(self, group: IndependenceGroup) -> EpistemicGraph:
+        """Register a new independence group in the graph.
 
         Validates that all ``claim_lineage`` and ``assumption_lineage`` IDs
         exist. ``member_predictions`` is a backlink owned by prediction
@@ -637,7 +637,7 @@ class EpistemicWeb:
             group: The independence group to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered group.
+            EpistemicGraph: A new graph instance containing the registered group.
 
         Raises:
             DuplicateIdError: If ``group.id`` already exists.
@@ -653,8 +653,8 @@ class EpistemicWeb:
         new.independence_groups[group.id] = stored
         return new
 
-    def register_discovery(self, discovery: Discovery) -> EpistemicWeb:
-        """Register a new discovery in the web.
+    def register_discovery(self, discovery: Discovery) -> EpistemicGraph:
+        """Register a new discovery in the graph.
 
         Validates that all ``related_claims`` and ``related_predictions``
         IDs exist.
@@ -663,7 +663,7 @@ class EpistemicWeb:
             discovery: The discovery to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered discovery.
+            EpistemicGraph: A new graph instance containing the registered discovery.
 
         Raises:
             DuplicateIdError: If ``discovery.id`` already exists.
@@ -677,8 +677,8 @@ class EpistemicWeb:
         new.discoveries[discovery.id] = copy.deepcopy(discovery)
         return new
 
-    def register_dead_end(self, dead_end: DeadEnd) -> EpistemicWeb:
-        """Register a new dead end record in the web.
+    def register_dead_end(self, dead_end: DeadEnd) -> EpistemicGraph:
+        """Register a new dead end record in the graph.
 
         Validates that all ``related_claims`` and ``related_predictions``
         IDs exist.
@@ -687,7 +687,7 @@ class EpistemicWeb:
             dead_end: The dead end to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered dead end.
+            EpistemicGraph: A new graph instance containing the registered dead end.
 
         Raises:
             DuplicateIdError: If ``dead_end.id`` already exists.
@@ -701,8 +701,8 @@ class EpistemicWeb:
         new.dead_ends[dead_end.id] = copy.deepcopy(dead_end)
         return new
 
-    def register_parameter(self, parameter: Parameter) -> EpistemicWeb:
-        """Register a new parameter constant in the web.
+    def register_parameter(self, parameter: Parameter) -> EpistemicGraph:
+        """Register a new parameter constant in the graph.
 
         ``used_in_analyses`` is a backlink owned by analysis operations
         and starts empty.
@@ -711,7 +711,7 @@ class EpistemicWeb:
             parameter: The parameter to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered parameter.
+            EpistemicGraph: A new graph instance containing the registered parameter.
 
         Raises:
             DuplicateIdError: If ``parameter.id`` already exists.
@@ -724,7 +724,7 @@ class EpistemicWeb:
         new.parameters[parameter.id] = stored
         return new
 
-    def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicWeb:
+    def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicGraph:
         """Register a pairwise separation record between two independence groups.
 
         Documents why two independence groups provide genuinely separate
@@ -734,7 +734,7 @@ class EpistemicWeb:
             sep: The separation record to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered separation.
+            EpistemicGraph: A new graph instance containing the registered separation.
 
         Raises:
             DuplicateIdError: If ``sep.id`` already exists.
@@ -755,7 +755,7 @@ class EpistemicWeb:
 
     def transition_prediction(
         self, pid: PredictionId, new_status: PredictionStatus
-    ) -> EpistemicWeb:
+    ) -> EpistemicGraph:
         """Change a prediction's lifecycle status.
 
         Args:
@@ -763,7 +763,7 @@ class EpistemicWeb:
             new_status: The new status to assign.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the prediction does not exist.
@@ -779,7 +779,7 @@ class EpistemicWeb:
         self,
         did: DeadEndId,
         new_status: DeadEndStatus,
-    ) -> EpistemicWeb:
+    ) -> EpistemicGraph:
         """Change a dead end's lifecycle status.
 
         Args:
@@ -787,7 +787,7 @@ class EpistemicWeb:
             new_status: The new status to assign (ACTIVE, RESOLVED, or ARCHIVED).
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
@@ -799,7 +799,7 @@ class EpistemicWeb:
         new.dead_ends[did].status = new_status
         return new
 
-    def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicWeb:
+    def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicGraph:
         """Change a claim's lifecycle status.
 
         Args:
@@ -807,7 +807,7 @@ class EpistemicWeb:
             new_status: The new status (ACTIVE, REVISED, or RETRACTED).
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the claim does not exist.
@@ -819,7 +819,7 @@ class EpistemicWeb:
         new.claims[cid].status = new_status
         return new
 
-    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicWeb:
+    def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicGraph:
         """Change a theory's lifecycle status.
 
         Args:
@@ -827,7 +827,7 @@ class EpistemicWeb:
             new_status: The new status (ACTIVE, REFINED, ABANDONED, or SUPERSEDED).
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the theory does not exist.
@@ -839,7 +839,7 @@ class EpistemicWeb:
         new.theories[tid].status = new_status
         return new
 
-    def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicWeb:
+    def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicGraph:
         """Change a discovery's lifecycle status.
 
         Args:
@@ -847,7 +847,7 @@ class EpistemicWeb:
             new_status: The new status (NEW, INTEGRATED, or ARCHIVED).
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
@@ -866,7 +866,7 @@ class EpistemicWeb:
         *,
         git_sha: str | None = None,
         result_date: date | None = None,
-    ) -> EpistemicWeb:
+    ) -> EpistemicGraph:
         """Record the output of a completed analysis run.
 
         Sets ``last_result``, ``last_result_sha``, and ``last_result_date``
@@ -884,7 +884,7 @@ class EpistemicWeb:
             result_date: Optional date when the result was recorded.
 
         Returns:
-            EpistemicWeb: A new web instance with the analysis result recorded.
+            EpistemicGraph: A new graph instance with the analysis result recorded.
 
         Raises:
             BrokenReferenceError: If the analysis does not exist.
@@ -900,7 +900,7 @@ class EpistemicWeb:
 
     # ── Update mutations — re-links bidirectional relationships ───
 
-    def update_claim(self, new_claim: Claim) -> EpistemicWeb:
+    def update_claim(self, new_claim: Claim) -> EpistemicGraph:
         """Replace a claim's fields while maintaining all bidirectional links.
 
         The new claim must have the same ID as an existing claim. Diffs
@@ -910,10 +910,10 @@ class EpistemicWeb:
 
         Args:
             new_claim: The updated claim. Must have the same ``id`` as
-                an existing claim in the web.
+                an existing claim in the graph.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated claim and
+            EpistemicGraph: A new graph instance with the updated claim and
                 corrected bidirectional links.
 
         Raises:
@@ -960,7 +960,7 @@ class EpistemicWeb:
 
         return new
 
-    def update_assumption(self, new_assumption: Assumption) -> EpistemicWeb:
+    def update_assumption(self, new_assumption: Assumption) -> EpistemicGraph:
         """Replace an assumption's fields, preserving owned backlinks.
 
         ``used_in_claims`` and ``tested_by`` are maintained by claim and
@@ -972,7 +972,7 @@ class EpistemicWeb:
                 as an existing assumption.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated assumption.
+            EpistemicGraph: A new graph instance with the updated assumption.
 
         Raises:
             BrokenReferenceError: If the assumption does not exist or if
@@ -993,7 +993,7 @@ class EpistemicWeb:
         new.assumptions[new_assumption.id] = updated
         return new
 
-    def update_prediction(self, new_prediction: Prediction) -> EpistemicWeb:
+    def update_prediction(self, new_prediction: Prediction) -> EpistemicGraph:
         """Replace a prediction's fields while maintaining all bidirectional links.
 
         Diffs old vs new ``tests_assumptions`` and ``independence_group``
@@ -1005,7 +1005,7 @@ class EpistemicWeb:
                 as an existing prediction.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated prediction and
+            EpistemicGraph: A new graph instance with the updated prediction and
                 corrected bidirectional links.
 
         Raises:
@@ -1047,7 +1047,7 @@ class EpistemicWeb:
 
         return new
 
-    def update_parameter(self, new_parameter: Parameter) -> EpistemicWeb:
+    def update_parameter(self, new_parameter: Parameter) -> EpistemicGraph:
         """Replace a parameter's fields (value, unit, uncertainty, etc.).
 
         ``used_in_analyses`` is a backlink maintained by analysis operations
@@ -1059,7 +1059,7 @@ class EpistemicWeb:
                 as an existing parameter.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated parameter.
+            EpistemicGraph: A new graph instance with the updated parameter.
 
         Raises:
             BrokenReferenceError: If the parameter does not exist.
@@ -1073,7 +1073,7 @@ class EpistemicWeb:
         new.parameters[new_parameter.id] = updated
         return new
 
-    def update_analysis(self, new_analysis: Analysis) -> EpistemicWeb:
+    def update_analysis(self, new_analysis: Analysis) -> EpistemicGraph:
         """Replace an analysis's fields while maintaining bidirectional links.
 
         ``claims_covered`` is a backlink maintained by claim operations and
@@ -1085,7 +1085,7 @@ class EpistemicWeb:
                 as an existing analysis.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated analysis and
+            EpistemicGraph: A new graph instance with the updated analysis and
                 corrected parameter backlinks.
 
         Raises:
@@ -1114,7 +1114,7 @@ class EpistemicWeb:
 
         return new
 
-    def update_theory(self, new_theory: Theory) -> EpistemicWeb:
+    def update_theory(self, new_theory: Theory) -> EpistemicGraph:
         """Replace a theory's fields.
 
         Validates that all ``related_predictions`` IDs exist.
@@ -1126,7 +1126,7 @@ class EpistemicWeb:
                 as an existing theory.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated theory.
+            EpistemicGraph: A new graph instance with the updated theory.
 
         Raises:
             BrokenReferenceError: If the theory does not exist or if
@@ -1142,7 +1142,7 @@ class EpistemicWeb:
         new.theories[new_theory.id] = updated
         return new
 
-    def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicWeb:
+    def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicGraph:
         """Replace an independence group's annotation fields.
 
         ``member_predictions`` is a backlink maintained by prediction
@@ -1154,7 +1154,7 @@ class EpistemicWeb:
                 ``id`` as an existing group.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated group.
+            EpistemicGraph: A new graph instance with the updated group.
 
         Raises:
             BrokenReferenceError: If the group does not exist or if
@@ -1172,7 +1172,7 @@ class EpistemicWeb:
         new.independence_groups[new_group.id] = updated
         return new
 
-    def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicWeb:
+    def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicGraph:
         """Replace a pairwise separation record's fields.
 
         Validates that both referenced groups still exist and are distinct.
@@ -1182,7 +1182,7 @@ class EpistemicWeb:
                 as an existing record.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated separation.
+            EpistemicGraph: A new graph instance with the updated separation.
 
         Raises:
             BrokenReferenceError: If the separation does not exist, if either
@@ -1200,7 +1200,7 @@ class EpistemicWeb:
         new.pairwise_separations[new_sep.id] = copy.deepcopy(new_sep)
         return new
 
-    def update_discovery(self, new_discovery: Discovery) -> EpistemicWeb:
+    def update_discovery(self, new_discovery: Discovery) -> EpistemicGraph:
         """Replace a discovery's fields.
 
         Validates that all ``related_claims`` and ``related_predictions``
@@ -1211,7 +1211,7 @@ class EpistemicWeb:
                 as an existing discovery.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated discovery.
+            EpistemicGraph: A new graph instance with the updated discovery.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist or if
@@ -1225,7 +1225,7 @@ class EpistemicWeb:
         new.discoveries[new_discovery.id] = copy.deepcopy(new_discovery)
         return new
 
-    def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicWeb:
+    def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicGraph:
         """Replace a dead end's fields.
 
         Validates that all ``related_claims`` and ``related_predictions``
@@ -1236,7 +1236,7 @@ class EpistemicWeb:
                 as an existing dead end.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated dead end.
+            EpistemicGraph: A new graph instance with the updated dead end.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist or if
@@ -1252,8 +1252,8 @@ class EpistemicWeb:
 
     # ── Remove mutations — safe deletion with ref checks ──────────
 
-    def remove_prediction(self, pid: PredictionId) -> EpistemicWeb:
-        """Remove a prediction from the web.
+    def remove_prediction(self, pid: PredictionId) -> EpistemicGraph:
+        """Remove a prediction from the graph.
 
         Tears down all backlinks (``Assumption.tested_by``,
         ``IndependenceGroup.member_predictions``) and scrubs soft
@@ -1264,7 +1264,7 @@ class EpistemicWeb:
             pid: The prediction ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the prediction.
+            EpistemicGraph: A new graph instance without the prediction.
 
         Raises:
             BrokenReferenceError: If the prediction does not exist.
@@ -1302,8 +1302,8 @@ class EpistemicWeb:
                 new.observations[oid].predictions.discard(pid)
         return new
 
-    def remove_claim(self, cid: ClaimId) -> EpistemicWeb:
-        """Remove a claim from the web.
+    def remove_claim(self, cid: ClaimId) -> EpistemicGraph:
+        """Remove a claim from the graph.
 
         Raises if any other claim's ``depends_on`` or any prediction's
         ``claim_ids`` still references this claim. Callers must first
@@ -1317,7 +1317,7 @@ class EpistemicWeb:
             cid: The claim ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the claim.
+            EpistemicGraph: A new graph instance without the claim.
 
         Raises:
             BrokenReferenceError: If the claim does not exist or is still
@@ -1375,8 +1375,8 @@ class EpistemicWeb:
                 new.independence_groups[gid].claim_lineage.discard(cid)
         return new
 
-    def remove_assumption(self, aid: AssumptionId) -> EpistemicWeb:
-        """Remove an assumption from the web.
+    def remove_assumption(self, aid: AssumptionId) -> EpistemicGraph:
+        """Remove an assumption from the graph.
 
         Raises if any claim, prediction, or other assumption still
         references this assumption. Scrubs ``assumption_lineage``
@@ -1386,7 +1386,7 @@ class EpistemicWeb:
             aid: The assumption ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the assumption.
+            EpistemicGraph: A new graph instance without the assumption.
 
         Raises:
             BrokenReferenceError: If the assumption does not exist or is
@@ -1425,8 +1425,8 @@ class EpistemicWeb:
                 new.observations[oid].related_assumptions.discard(aid)
         return new
 
-    def remove_parameter(self, pid: ParameterId) -> EpistemicWeb:
-        """Remove a parameter from the web.
+    def remove_parameter(self, pid: ParameterId) -> EpistemicGraph:
+        """Remove a parameter from the graph.
 
         Raises if any analysis still references this parameter via
         ``uses_parameters``. On success, cleans up dangling
@@ -1436,7 +1436,7 @@ class EpistemicWeb:
             pid: The parameter ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the parameter.
+            EpistemicGraph: A new graph instance without the parameter.
 
         Raises:
             BrokenReferenceError: If the parameter does not exist or is
@@ -1461,8 +1461,8 @@ class EpistemicWeb:
                 new.claims[cid].parameter_constraints.pop(pid, None)
         return new
 
-    def remove_analysis(self, anid: AnalysisId) -> EpistemicWeb:
-        """Remove an analysis from the web.
+    def remove_analysis(self, anid: AnalysisId) -> EpistemicGraph:
+        """Remove an analysis from the graph.
 
         Raises if any claim's ``analyses`` or any prediction's ``analysis``
         still references this analysis. Tears down
@@ -1472,7 +1472,7 @@ class EpistemicWeb:
             anid: The analysis ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the analysis.
+            EpistemicGraph: A new graph instance without the analysis.
 
         Raises:
             BrokenReferenceError: If the analysis does not exist or is
@@ -1500,8 +1500,8 @@ class EpistemicWeb:
                 new.parameters[pid].used_in_analyses.discard(anid)
         return new
 
-    def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicWeb:
-        """Remove an independence group from the web.
+    def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicGraph:
+        """Remove an independence group from the graph.
 
         Raises if any prediction's ``independence_group`` or any pairwise
         separation still references this group.
@@ -1510,7 +1510,7 @@ class EpistemicWeb:
             gid: The independence group ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the group.
+            EpistemicGraph: A new graph instance without the group.
 
         Raises:
             BrokenReferenceError: If the group does not exist or is still
@@ -1535,8 +1535,8 @@ class EpistemicWeb:
         del new.independence_groups[gid]
         return new
 
-    def remove_theory(self, tid: TheoryId) -> EpistemicWeb:
-        """Remove a theory from the web.
+    def remove_theory(self, tid: TheoryId) -> EpistemicGraph:
+        """Remove a theory from the graph.
 
         Scrubs ``Claim.theories`` references on any claims that were
         motivated by this theory. Does not block on claims — a claim
@@ -1546,7 +1546,7 @@ class EpistemicWeb:
             tid: The theory ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the theory.
+            EpistemicGraph: A new graph instance without the theory.
 
         Raises:
             BrokenReferenceError: If the theory does not exist.
@@ -1562,8 +1562,8 @@ class EpistemicWeb:
                 new.claims[cid].theories.discard(tid)
         return new
 
-    def remove_discovery(self, did: DiscoveryId) -> EpistemicWeb:
-        """Remove a discovery from the web.
+    def remove_discovery(self, did: DiscoveryId) -> EpistemicGraph:
+        """Remove a discovery from the graph.
 
         Discoveries are leaf entities — nothing references them by ID, so
         removal is always safe.
@@ -1572,7 +1572,7 @@ class EpistemicWeb:
             did: The discovery ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the discovery.
+            EpistemicGraph: A new graph instance without the discovery.
 
         Raises:
             BrokenReferenceError: If the discovery does not exist.
@@ -1583,8 +1583,8 @@ class EpistemicWeb:
         del new.discoveries[did]
         return new
 
-    def remove_dead_end(self, did: DeadEndId) -> EpistemicWeb:
-        """Remove a dead end from the web.
+    def remove_dead_end(self, did: DeadEndId) -> EpistemicGraph:
+        """Remove a dead end from the graph.
 
         Dead ends are leaf entities — nothing references them by ID, so
         removal is always safe.
@@ -1593,7 +1593,7 @@ class EpistemicWeb:
             did: The dead end ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the dead end.
+            EpistemicGraph: A new graph instance without the dead end.
 
         Raises:
             BrokenReferenceError: If the dead end does not exist.
@@ -1604,14 +1604,14 @@ class EpistemicWeb:
         del new.dead_ends[did]
         return new
 
-    def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicWeb:
-        """Remove a pairwise separation record from the web.
+    def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicGraph:
+        """Remove a pairwise separation record from the graph.
 
         Args:
             sid: The separation record ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the separation record.
+            EpistemicGraph: A new graph instance without the separation record.
 
         Raises:
             BrokenReferenceError: If the separation does not exist.
@@ -1622,8 +1622,8 @@ class EpistemicWeb:
         del new.pairwise_separations[sid]
         return new
 
-    def register_observation(self, observation: Observation) -> EpistemicWeb:
-        """Register a new observation in the web.
+    def register_observation(self, observation: Observation) -> EpistemicGraph:
+        """Register a new observation in the graph.
 
         Validates that all referenced predictions, claims, and assumptions
         exist. Updates bidirectional ``Prediction.observations`` backlinks.
@@ -1632,7 +1632,7 @@ class EpistemicWeb:
             observation: The observation to register. Must have a unique ``id``.
 
         Returns:
-            EpistemicWeb: A new web instance containing the registered observation.
+            EpistemicGraph: A new graph instance containing the registered observation.
 
         Raises:
             DuplicateIdError: If ``observation.id`` already exists.
@@ -1654,7 +1654,7 @@ class EpistemicWeb:
 
         return new
 
-    def update_observation(self, new_observation: Observation) -> EpistemicWeb:
+    def update_observation(self, new_observation: Observation) -> EpistemicGraph:
         """Replace an observation's fields while maintaining bidirectional links.
 
         Diffs old vs new ``predictions`` sets and updates
@@ -1665,7 +1665,7 @@ class EpistemicWeb:
                 ``id`` as an existing observation.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated observation.
+            EpistemicGraph: A new graph instance with the updated observation.
 
         Raises:
             BrokenReferenceError: If the observation does not exist or if
@@ -1692,8 +1692,8 @@ class EpistemicWeb:
 
         return new
 
-    def remove_observation(self, oid: ObservationId) -> EpistemicWeb:
-        """Remove an observation from the web.
+    def remove_observation(self, oid: ObservationId) -> EpistemicGraph:
+        """Remove an observation from the graph.
 
         Tears down ``Prediction.observations`` backlinks. Observations
         are provenance records — nothing else hard-blocks their removal.
@@ -1702,7 +1702,7 @@ class EpistemicWeb:
             oid: The observation ID to remove.
 
         Returns:
-            EpistemicWeb: A new web instance without the observation.
+            EpistemicGraph: A new graph instance without the observation.
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
@@ -1721,7 +1721,7 @@ class EpistemicWeb:
 
     def transition_observation(
         self, oid: ObservationId, new_status: ObservationStatus
-    ) -> EpistemicWeb:
+    ) -> EpistemicGraph:
         """Change an observation's lifecycle status.
 
         Args:
@@ -1729,7 +1729,7 @@ class EpistemicWeb:
             new_status: The new status to assign.
 
         Returns:
-            EpistemicWeb: A new web instance with the updated status.
+            EpistemicGraph: A new graph instance with the updated status.
 
         Raises:
             BrokenReferenceError: If the observation does not exist.
@@ -1815,7 +1815,7 @@ class EpistemicWeb:
             if upstream:
                 stack.extend(upstream.depends_on)
 
-    def _copy(self) -> EpistemicWeb:
+    def _copy(self) -> EpistemicGraph:
         """Create a shallow copy for copy-on-write mutation semantics.
 
         Creates new dict instances for all collections but shares entity
@@ -1828,9 +1828,9 @@ class EpistemicWeb:
         status deep-copies only that prediction, not all 1000.
 
         Returns:
-            EpistemicWeb: A copy with independent dict instances.
+            EpistemicGraph: A copy with independent dict instances.
         """
-        return EpistemicWeb(
+        return EpistemicGraph(
             version=self.version,
             claims=dict(self.claims),
             assumptions=dict(self.assumptions),
@@ -1847,7 +1847,7 @@ class EpistemicWeb:
 
 
 # Domain exceptions live in errors.py — imported at the top of this module.
-# Re-exported here so that ``from episteme.epistemic.web import <Error>``
+# Re-exported here so that ``from episteme.epistemic.graph import <Error>``
 # continues to work for any caller that imports directly from this module.
 __all_errors__ = [
     "BrokenReferenceError",

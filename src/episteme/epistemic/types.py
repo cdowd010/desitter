@@ -211,12 +211,12 @@ class DiscoveryStatus(Enum):
     NEW:
         Recently recorded and not yet integrated into formal structures.
     INTEGRATED:
-        Mapped into claims/predictions or otherwise incorporated into the web.
+        Mapped into claims/predictions or otherwise incorporated into the graph.
     ARCHIVED:
         Retained for provenance, with no active integration work.
     """
 
-    NEW = "new"                    # recently found, not yet integrated into the web
+    NEW = "new"                    # recently found, not yet integrated into the graph
     INTEGRATED = "integrated"      # incorporated as claims or predictions
     ARCHIVED = "archived"          # historical record only
 
@@ -279,7 +279,7 @@ class AssumptionType(Enum):
 
 
 class Criticality(Enum):
-    """How load-bearing an assumption is within the epistemic web.
+    """How load-bearing an assumption is within the epistemic graph.
 
     LOW:
         Assumption supports a narrow or peripheral part of the project.

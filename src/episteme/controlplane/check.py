@@ -1,12 +1,12 @@
 """Read-only structural diagnostics.
 
-Pure functions that inspect the epistemic web and return findings without
+Pure functions that inspect the epistemic graph and return findings without
 mutating state or performing I/O. Managed-prose operations (which carry
 a filesystem collaborator) live in ``prose.py``.
 """
 from __future__ import annotations
 
-from ..epistemic.ports import EpistemicWebPort
+from ..epistemic.ports import EpistemicGraphPort
 from ..epistemic.types import Finding, Severity
 
 
@@ -14,15 +14,15 @@ from ..epistemic.types import Finding, Severity
 
 
 def check_refs(
-    web: EpistemicWebPort,
+    graph: EpistemicGraphPort,
 ) -> list[Finding]:
-    """Verify all cross-references in the epistemic web are consistent.
+    """Verify all cross-references in the epistemic graph are consistent.
 
-    Checks that every ID reference in the web (e.g. ``Claim.assumptions``,
+    Checks that every ID reference in the graph (e.g. ``Claim.assumptions``,
     ``Prediction.claims``) points to an existing entity.
 
     Args:
-        web: The epistemic web to check.
+        graph: The epistemic graph to check.
 
     Returns:
         list[Finding]: Findings for any broken references.
@@ -34,7 +34,7 @@ def check_refs(
 
 
 def check_stale(
-    web: EpistemicWebPort,
+    graph: EpistemicGraphPort,
 ) -> list[Finding]:
     """Identify analyses that should be reviewed after parameter changes.
 
@@ -50,7 +50,7 @@ def check_stale(
     ``parameter_impact`` and includes affected predictions in the finding.
 
     Args:
-        web: The epistemic web to check.
+        graph: The epistemic graph to check.
 
     Returns:
         list[Finding]: WARNING findings for stale analyses and their
@@ -60,11 +60,11 @@ def check_stale(
     # Build reverse index: analysis → set of stale parameter IDs
     stale_params_by_analysis: dict[str, set[str]] = {}
 
-    for par_id, param in web.parameters.items():
+    for par_id, param in graph.parameters.items():
         if param.last_modified is None:
             continue
         for an_id in param.used_in_analyses:
-            analysis = web.analyses.get(an_id)
+            analysis = graph.analyses.get(an_id)
             if analysis is None:
                 continue
             if analysis.last_result_date is None:
@@ -74,17 +74,17 @@ def check_stale(
                 stale_params_by_analysis.setdefault(an_id, set()).add(par_id)
 
     for an_id, stale_pars in stale_params_by_analysis.items():
-        analysis = web.analyses.get(an_id)
+        analysis = graph.analyses.get(an_id)
         if analysis is None:
             continue
         # Find downstream predictions linked to this analysis
         affected_predictions = {
-            pid for pid, pred in web.predictions.items()
+            pid for pid, pred in graph.predictions.items()
             if pred.analysis == an_id
         }
         # Also find predictions via claims covered by this analysis
         for cid in analysis.claims_covered:
-            affected_predictions.update(web.predictions_depending_on_claim(cid))
+            affected_predictions.update(graph.predictions_depending_on_claim(cid))
 
         msg = (
             f"Analysis {an_id} may be stale: parameter(s) "

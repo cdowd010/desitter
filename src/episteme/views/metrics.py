@@ -1,4 +1,4 @@
-"""Epistemic-web metric read models and computation.
+"""Epistemic-graph metric read models and computation.
 
 Pure functions — no I/O, no side effects. Counts entities, computes
 detailed prediction statistics, and identifies coverage gaps.
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..epistemic.ports import EpistemicWebPort
+from ..epistemic.ports import EpistemicGraphPort
 
 
 # ── Read models ──────────────────────────────────────────────────
@@ -18,7 +18,7 @@ class PredictionMetrics:
     """Aggregate statistics for predictions.
 
     Attributes:
-        total: Total number of predictions in the web.
+        total: Total number of predictions in the graph.
         by_status: Count of predictions per ``PredictionStatus`` value.
         by_tier: Count of predictions per ``ConfidenceTier`` value.
         tier_a_confirmed: Number of Tier-A predictions with
@@ -37,8 +37,8 @@ class PredictionMetrics:
 
 
 @dataclass
-class WebMetrics:
-    """Full metrics snapshot of an ``EpistemicWeb``.
+class GraphMetrics:
+    """Full metrics snapshot of an ``EpistemicGraph``.
 
     Provides entity counts for every collection plus detailed prediction
     metrics and coverage gap lists.
@@ -77,18 +77,18 @@ class WebMetrics:
 # ── Computation ──────────────────────────────────────────────────
 
 
-def compute_metrics(web: EpistemicWebPort) -> WebMetrics:
-    """Compute aggregate metrics from the epistemic web.
+def compute_metrics(graph: EpistemicGraphPort) -> GraphMetrics:
+    """Compute aggregate metrics from the epistemic graph.
 
     Pure function — no I/O, no side effects. Counts entities in every
     collection, computes detailed prediction statistics, and identifies
     coverage gaps.
 
     Args:
-        web: The epistemic web to analyze.
+        graph: The epistemic graph to analyze.
 
     Returns:
-        WebMetrics: A complete metrics snapshot.
+        GraphMetrics: A complete metrics snapshot.
 
     Raises:
         NotImplementedError: Not yet implemented.
@@ -97,7 +97,7 @@ def compute_metrics(web: EpistemicWebPort) -> WebMetrics:
     raise NotImplementedError
 
 
-def tier_a_evidence_summary(web: EpistemicWebPort) -> dict[str, object]:
+def tier_a_evidence_summary(graph: EpistemicGraphPort) -> dict[str, object]:
     """Summarize Tier-A prediction evidence, flagging correlated groups.
 
     Identifies which Tier-A predictions share independence groups and
@@ -105,7 +105,7 @@ def tier_a_evidence_summary(web: EpistemicWebPort) -> dict[str, object]:
     Returns a dict suitable for inclusion in status output.
 
     Args:
-        web: The epistemic web to analyze.
+        graph: The epistemic graph to analyze.
 
     Returns:
         dict[str, object]: Summary keyed by independence group with
@@ -120,7 +120,7 @@ def tier_a_evidence_summary(web: EpistemicWebPort) -> dict[str, object]:
 
 __all__ = [
     "PredictionMetrics",
-    "WebMetrics",
+    "GraphMetrics",
     "compute_metrics",
     "tier_a_evidence_summary",
 ]

@@ -1,9 +1,9 @@
 """Core epistemic entities.
 
 Relationships are ID references, not object references. To traverse
-the graph, go through the EpistemicWeb.
+the graph, go through the EpistemicGraph.
 
-Native Python collections throughout: set, list, dict. The web is
+Native Python collections throughout: set, list, dict. The graph is
 the encapsulation boundary, not the type system.
 """
 from __future__ import annotations
@@ -42,13 +42,13 @@ from .types import (
 
 @dataclass
 class Claim:
-    """An atomic, falsifiable assertion in the epistemic web.
+    """An atomic, falsifiable assertion in the epistemic graph.
 
     Claims are the fundamental building blocks of the knowledge graph.
     They form a directed acyclic graph via ``depends_on``, where derived
     claims reference the foundational claims they rest upon.
 
-    The EpistemicWeb maintains bidirectional links between claims and
+    The EpistemicGraph maintains bidirectional links between claims and
     their assumptions (``Assumption.used_in_claims``) and analyses
     (``Analysis.claims_covered``). These backlinks are updated
     automatically during registration and updates — callers should
@@ -67,7 +67,7 @@ class Claim:
         assumptions: IDs of assumptions this claim depends on. Bidirectional
             with ``Assumption.used_in_claims``.
         depends_on: IDs of other claims this claim is derived from. Forms a
-            DAG enforced by the web's cycle-detection logic.
+            DAG enforced by the graph's cycle-detection logic.
         analyses: IDs of analyses linked to this claim. Bidirectional with
             ``Analysis.claims_covered``.
         theories: IDs of theories that motivate this claim. Bidirectional
@@ -96,7 +96,7 @@ class Claim:
 
 @dataclass
 class Assumption:
-    """A premise taken as given within the epistemic web.
+    """A premise taken as given within the epistemic graph.
 
     Assumptions underpin claims and may themselves form presupposition
     chains via ``depends_on``. For example, "the detector is linear"
@@ -122,7 +122,7 @@ class Assumption:
         used_in_claims: IDs of claims that reference this assumption.
             Backlink maintained by claim operations — not set by callers.
         depends_on: IDs of other assumptions this one presupposes.
-            Forms a DAG enforced by the web's cycle-detection logic.
+            Forms a DAG enforced by the graph's cycle-detection logic.
         falsifiable_consequence: A description of what evidence would
             falsify this assumption. Required for empirical assumptions
             to pass coverage validation.
@@ -148,7 +148,7 @@ class Assumption:
 class Prediction:
     """A testable consequence of one or more claims.
 
-    Predictions are the empirical interface between the epistemic web
+    Predictions are the empirical interface between the epistemic graph
     and the real world. Each prediction derives from a set of claims
     (``claim_ids``), carries a confidence tier and evidence
     classification, and tracks lifecycle status as evidence accumulates.
@@ -157,7 +157,7 @@ class Prediction:
 
     - ``claim_ids``: The claims that jointly imply this prediction (the
       logical derivation chain). Most non-trivial predictions require
-      multiple claims. No backlink exists on Claim — the web validates
+      multiple claims. No backlink exists on Claim — the graph validates
       existence only.
     - ``tests_assumptions``: Assumptions this prediction was explicitly
       designed to test — its outcome bears on whether those assumptions
@@ -294,7 +294,7 @@ class PairwiseSeparation:
 
 @dataclass
 class Analysis:
-    """A piece of analytical work whose results feed back into the epistemic web.
+    """A piece of analytical work whose results feed back into the epistemic graph.
 
     Episteme does not run analyses — the researcher runs them using their
     preferred tools (SageMath, Python, R, Jupyter, etc.) and records the
@@ -345,7 +345,7 @@ class Theory:
 
     A theory motivates and organises claims. Claims declare which theories
     motivate them via ``Claim.theories``, and this entity's
-    ``motivates_claims`` backlink is maintained automatically by the web.
+    ``motivates_claims`` backlink is maintained automatically by the graph.
     This makes the relationship structural: when a theory is abandoned,
     the system can answer "which claims lose their theoretical motivation?"
 
@@ -451,7 +451,7 @@ class Parameter:
     location.
 
     ``used_in_analyses`` is a backlink to ``Analysis.uses_parameters``
-    maintained automatically by the EpistemicWeb when analyses are
+    maintained automatically by the EpistemicGraph when analyses are
     registered. It enables staleness detection: when this parameter
     changes, ``health_check`` surfaces all analyses (and linked
     predictions) that need to be re-run.

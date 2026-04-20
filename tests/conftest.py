@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from episteme.epistemic.web import EpistemicWeb
+from episteme.epistemic.graph import EpistemicGraph
 from episteme.epistemic.model import (
     Analysis,
     AnalysisId,
@@ -36,8 +36,8 @@ from episteme.epistemic.types import (
 
 
 @pytest.fixture
-def base_web() -> EpistemicWeb:
-    """EpistemicWeb populated with the standard set of test entities.
+def base_graph() -> EpistemicGraph:
+    """EpistemicGraph populated with the standard set of test entities.
 
     Entity graph:
         Theory T-001  ←→  Claim C-001  →  Assumption A-001 (LOAD_BEARING)
@@ -49,13 +49,13 @@ def base_web() -> EpistemicWeb:
         Parameter PAR-001 (last_modified=2026-04-10)
         Analysis AN-001   (last_result_date=2026-04-05)  ← stale
     """
-    web = EpistemicWeb()
+    graph = EpistemicGraph()
 
-    web = web.register_theory(
+    graph = graph.register_theory(
         Theory(id=TheoryId("T-001"), title="Catalysis Theory", status=TheoryStatus.ACTIVE)
     )
 
-    web = web.register_assumption(
+    graph = graph.register_assumption(
         Assumption(
             id=AssumptionId("A-001"),
             statement="Detector calibrated",
@@ -65,7 +65,7 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_claim(
+    graph = graph.register_claim(
         Claim(
             id=ClaimId("C-001"),
             statement="Catalyst X increases yield",
@@ -77,7 +77,7 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_prediction(
+    graph = graph.register_prediction(
         Prediction(
             id=PredictionId("P-001"),
             observable="yield",
@@ -91,7 +91,7 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_observation(
+    graph = graph.register_observation(
         Observation(
             id=ObservationId("OBS-001"),
             description="Initial yield measurement",
@@ -101,7 +101,7 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_observation(
+    graph = graph.register_observation(
         Observation(
             id=ObservationId("OBS-002"),
             description="Controlled experiment result",
@@ -112,7 +112,7 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_parameter(
+    graph = graph.register_parameter(
         Parameter(
             id=ParameterId("PAR-001"),
             name="threshold",
@@ -121,12 +121,12 @@ def base_web() -> EpistemicWeb:
         )
     )
 
-    web = web.register_analysis(
+    graph = graph.register_analysis(
         Analysis(id=AnalysisId("AN-001"), uses_parameters={ParameterId("PAR-001")})
     )
 
-    web = web.record_analysis_result(
+    graph = graph.record_analysis_result(
         AnalysisId("AN-001"), result=42, result_date=date(2026, 4, 5)
     )
 
-    return web
+    return graph

@@ -23,7 +23,7 @@ class _EpistemeClientRegistryHelpers:
         related_predictions: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Theory]:
-        """Register a theory in the epistemic web.
+        """Register a theory in the epistemic graph.
 
         A theory is a high-level narrative construct that groups related claims
         and predictions into a coherent explanatory framework. Claims declare
@@ -65,7 +65,7 @@ class _EpistemeClientRegistryHelpers:
         references: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Discovery]:
-        """Register a discovery in the epistemic web.
+        """Register a discovery in the epistemic graph.
 
         A discovery records a confirmed empirical or theoretical result that
         advances the project's understanding.
@@ -108,7 +108,7 @@ class _EpistemeClientRegistryHelpers:
         references: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[DeadEnd]:
-        """Register a dead end in the epistemic web.
+        """Register a dead end in the epistemic graph.
 
         A dead end documents an approach or hypothesis that was pursued but
         ultimately abandoned, preserving the negative knowledge.

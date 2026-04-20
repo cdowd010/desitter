@@ -1,10 +1,10 @@
-    1: """deSitter (desitter) — control plane for research epistemic webs.
+    1: """deSitter (desitter) — control plane for research epistemic graphs.
 
        Layer cake (top to bottom):
          interfaces      — optional consumer adapters
          views           — read-only summaries and computed projections
          controlplane    — orchestration boundary above the epistemic kernel
-         epistemic       — domain kernel: EpistemicWeb, entities, invariants, ports
+         epistemic       — domain kernel: EpistemicGraph, entities, invariants, ports
          local edge      — optional deployment adapters such as local workspaces
 
        Programmatic entry point:

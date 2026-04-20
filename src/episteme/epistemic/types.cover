@@ -93,7 +93,7 @@
        
        
     2: class DiscoveryStatus(Enum):
-    1:     NEW = "new"                    # recently found, not yet integrated into the web
+    1:     NEW = "new"                    # recently found, not yet integrated into the graph
     1:     INTEGRATED = "integrated"      # incorporated as claims or predictions
     1:     ARCHIVED = "archived"          # historical record only
        

@@ -1,9 +1,9 @@
-    1: """The EpistemicWeb: aggregate root for the epistemic domain.
+    1: """The EpistemicGraph: aggregate root for the epistemic domain.
        
        External code NEVER modifies entities directly — it calls methods on the
-       web, and the web ensures consistency.
+       graph, and the graph ensures consistency.
        
-       Every mutation method returns a NEW web. This gives free undo/redo and
+       Every mutation method returns a NEW graph. This gives free undo/redo and
        eliminates state corruption.
        """
     1: from __future__ import annotations
@@ -45,11 +45,11 @@
        
        
     3: @dataclass
-    2: class EpistemicWeb:
+    2: class EpistemicGraph:
     1:     """Complete epistemic state of a research project.
        
            All mutations go through methods that enforce invariants and return
-           a new web. The old web is left untouched (free rollback).
+           a new graph. The old graph is left untouched (free rollback).
            """
     1:     claims: dict[ClaimId, Claim] = field(default_factory=dict)
     1:     assumptions: dict[AssumptionId, Assumption] = field(default_factory=dict)
@@ -268,9 +268,9 @@
     4:             "affected_predictions": affected_predictions,
                }
        
-           # ── Mutations (return new web) ────────────────────────────────
+           # ── Mutations (return new graph) ────────────────────────────────
        
-    1:     def register_claim(self, claim: Claim) -> EpistemicWeb:
+    1:     def register_claim(self, claim: Claim) -> EpistemicGraph:
                """Add a claim. Enforces: no duplicates, refs exist, no cycles,
                bidirectional links updated."""
   234:         if claim.id in self.claims:
@@ -283,7 +283,7 @@
        
   228:         new = self._copy()
                # Deep-copy the incoming entity so a caller who keeps a reference
-               # cannot mutate the web's stored copy after registration. All
+               # cannot mutate the graph's stored copy after registration. All
                # register_* methods follow this same pattern.
   228:         new.claims[claim.id] = copy.deepcopy(claim)
        
@@ -297,7 +297,7 @@
        
   228:         return new
        
-    1:     def register_assumption(self, assumption: Assumption) -> EpistemicWeb:
+    1:     def register_assumption(self, assumption: Assumption) -> EpistemicGraph:
                """Add an assumption. Validates depends_on refs exist and no cycles.
        
                Backlinks (used_in_claims, tested_by) are owned by claim/prediction
@@ -314,7 +314,7 @@
   252:         new.assumptions[assumption.id] = stored
   252:         return new
        
-    1:     def register_prediction(self, prediction: Prediction) -> EpistemicWeb:
+    1:     def register_prediction(self, prediction: Prediction) -> EpistemicGraph:
                """Add a prediction. Enforces: refs exist, bidirectional links updated."""
   104:         if prediction.id in self.predictions:
     1:             raise DuplicateIdError(f"Prediction {prediction.id} already exists")
@@ -346,7 +346,7 @@
        
    98:         return new
        
-    1:     def register_analysis(self, analysis: Analysis) -> EpistemicWeb:
+    1:     def register_analysis(self, analysis: Analysis) -> EpistemicGraph:
                """Add an analysis reference. Maintains bidirectional uses_parameters link.
        
                claims_covered is a backlink owned by claim operations and starts empty.
@@ -366,7 +366,7 @@
        
    85:         return new
        
-    1:     def register_theory(self, theory: Theory) -> EpistemicWeb:
+    1:     def register_theory(self, theory: Theory) -> EpistemicGraph:
                """Add a theory. Validates related_claims and related_predictions refs."""
    72:         if theory.id in self.theories:
     1:             raise DuplicateIdError(f"Theory {theory.id} already exists")
@@ -376,7 +376,7 @@
    69:         new.theories[theory.id] = copy.deepcopy(theory)
    69:         return new
        
-    1:     def register_independence_group(self, group: IndependenceGroup) -> EpistemicWeb:
+    1:     def register_independence_group(self, group: IndependenceGroup) -> EpistemicGraph:
                """Add an independence group. Validates claim_lineage and assumption_lineage refs.
        
                member_predictions is a backlink owned by prediction operations and
@@ -392,7 +392,7 @@
    99:         new.independence_groups[group.id] = stored
    99:         return new
        
-    1:     def register_discovery(self, discovery: Discovery) -> EpistemicWeb:
+    1:     def register_discovery(self, discovery: Discovery) -> EpistemicGraph:
                """Add a discovery. Validates related_claims and related_predictions refs."""
    73:         if discovery.id in self.discoveries:
     1:             raise DuplicateIdError(f"Discovery {discovery.id} already exists")
@@ -402,7 +402,7 @@
    70:         new.discoveries[discovery.id] = copy.deepcopy(discovery)
    70:         return new
        
-    1:     def register_dead_end(self, dead_end: DeadEnd) -> EpistemicWeb:
+    1:     def register_dead_end(self, dead_end: DeadEnd) -> EpistemicGraph:
                """Add a dead end record. Validates related_claims and related_predictions refs."""
    72:         if dead_end.id in self.dead_ends:
     1:             raise DuplicateIdError(f"DeadEnd {dead_end.id} already exists")
@@ -412,7 +412,7 @@
    69:         new.dead_ends[dead_end.id] = copy.deepcopy(dead_end)
    69:         return new
        
-    1:     def register_concept(self, concept: Concept) -> EpistemicWeb:
+    1:     def register_concept(self, concept: Concept) -> EpistemicGraph:
                """Add a concept definition."""
    69:         if concept.id in self.concepts:
     1:             raise DuplicateIdError(f"Concept {concept.id} already exists")
@@ -420,7 +420,7 @@
    68:         new.concepts[concept.id] = copy.deepcopy(concept)
    68:         return new
        
-    1:     def register_parameter(self, parameter: Parameter) -> EpistemicWeb:
+    1:     def register_parameter(self, parameter: Parameter) -> EpistemicGraph:
                """Add a parameter constant.
        
                used_in_analyses is a backlink owned by analysis operations and starts empty.
@@ -433,7 +433,7 @@
   118:         new.parameters[parameter.id] = stored
   118:         return new
        
-    1:     def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicWeb:
+    1:     def add_pairwise_separation(self, sep: PairwiseSeparation) -> EpistemicGraph:
                """Document why two independence groups are separate."""
    14:         if sep.id in self.pairwise_separations:
     1:             raise DuplicateIdError(f"PairwiseSeparation {sep.id} already exists")
@@ -449,7 +449,7 @@
        
     4:     def transition_prediction(
     2:         self, pid: PredictionId, new_status: PredictionStatus
-    1:     ) -> EpistemicWeb:
+    1:     ) -> EpistemicGraph:
                """Change a prediction's status."""
     4:         if pid not in self.predictions:
     1:             raise BrokenReferenceError(f"Prediction {pid} does not exist")
@@ -461,7 +461,7 @@
                self,
     1:         did: DeadEndId,
     1:         new_status: DeadEndStatus,
-    1:     ) -> EpistemicWeb:
+    1:     ) -> EpistemicGraph:
                """Change a dead end's status."""
     3:         if did not in self.dead_ends:
     1:             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
@@ -469,7 +469,7 @@
     2:         new.dead_ends[did].status = new_status
     2:         return new
        
-    1:     def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicWeb:
+    1:     def transition_claim(self, cid: ClaimId, new_status: ClaimStatus) -> EpistemicGraph:
                """Change a claim's status (ACTIVE → REVISED → RETRACTED)."""
     7:         if cid not in self.claims:
     1:             raise BrokenReferenceError(f"Claim {cid} does not exist")
@@ -477,7 +477,7 @@
     6:         new.claims[cid].status = new_status
     6:         return new
        
-    1:     def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicWeb:
+    1:     def transition_theory(self, tid: TheoryId, new_status: TheoryStatus) -> EpistemicGraph:
                """Change a theory's status."""
     3:         if tid not in self.theories:
     1:             raise BrokenReferenceError(f"Theory {tid} does not exist")
@@ -485,7 +485,7 @@
     2:         new.theories[tid].status = new_status
     2:         return new
        
-    1:     def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicWeb:
+    1:     def transition_discovery(self, did: DiscoveryId, new_status: DiscoveryStatus) -> EpistemicGraph:
                """Change a discovery's status."""
     3:         if did not in self.discoveries:
     1:             raise BrokenReferenceError(f"Discovery {did} does not exist")
@@ -495,7 +495,7 @@
        
            # ── Update mutations — re-links bidirectional relationships ───
        
-    1:     def update_claim(self, new_claim: Claim) -> EpistemicWeb:
+    1:     def update_claim(self, new_claim: Claim) -> EpistemicGraph:
                """Replace a claim's fields, maintaining all bidirectional links.
        
                The new_claim must have the same ID as the existing claim.
@@ -528,7 +528,7 @@
        
     4:         return new
        
-    1:     def update_assumption(self, new_assumption: Assumption) -> EpistemicWeb:
+    1:     def update_assumption(self, new_assumption: Assumption) -> EpistemicGraph:
                """Replace an assumption's fields.
        
                used_in_claims and tested_by are maintained by claims/predictions,
@@ -549,7 +549,7 @@
     3:         new.assumptions[new_assumption.id] = updated
     3:         return new
        
-    1:     def update_prediction(self, new_prediction: Prediction) -> EpistemicWeb:
+    1:     def update_prediction(self, new_prediction: Prediction) -> EpistemicGraph:
                """Replace a prediction's fields, maintaining all bidirectional links."""
     9:         if new_prediction.id not in self.predictions:
     1:             raise BrokenReferenceError(f"Prediction {new_prediction.id} does not exist")
@@ -580,7 +580,7 @@
        
     4:         return new
        
-    1:     def update_parameter(self, new_parameter: Parameter) -> EpistemicWeb:
+    1:     def update_parameter(self, new_parameter: Parameter) -> EpistemicGraph:
                """Replace a parameter's fields (value, unit, uncertainty, etc.).
        
                used_in_analyses is a backlink maintained by analyses — it is
@@ -596,7 +596,7 @@
     2:         new.parameters[new_parameter.id] = updated
     2:         return new
        
-    1:     def update_analysis(self, new_analysis: Analysis) -> EpistemicWeb:
+    1:     def update_analysis(self, new_analysis: Analysis) -> EpistemicGraph:
                """Replace an analysis's fields, maintaining bidirectional links.
        
                claims_covered is a backlink maintained by claim operations — preserved
@@ -622,7 +622,7 @@
        
     2:         return new
        
-    1:     def update_theory(self, new_theory: Theory) -> EpistemicWeb:
+    1:     def update_theory(self, new_theory: Theory) -> EpistemicGraph:
                """Replace a theory's fields. Validates related refs."""
     3:         if new_theory.id not in self.theories:
     1:             raise BrokenReferenceError(f"Theory {new_theory.id} does not exist")
@@ -632,7 +632,7 @@
     1:         new.theories[new_theory.id] = copy.deepcopy(new_theory)
     1:         return new
        
-    1:     def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicWeb:
+    1:     def update_independence_group(self, new_group: IndependenceGroup) -> EpistemicGraph:
                """Replace an independence group's annotation fields.
        
                member_predictions is a backlink maintained by prediction operations —
@@ -651,7 +651,7 @@
     1:         new.independence_groups[new_group.id] = updated
     1:         return new
        
-    1:     def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicWeb:
+    1:     def update_pairwise_separation(self, new_sep: PairwiseSeparation) -> EpistemicGraph:
                """Replace a pairwise separation's fields (e.g. updated basis text).
                Validates group refs still exist."""
     4:         if new_sep.id not in self.pairwise_separations:
@@ -666,7 +666,7 @@
     1:         new.pairwise_separations[new_sep.id] = copy.deepcopy(new_sep)
     1:         return new
        
-    1:     def update_discovery(self, new_discovery: Discovery) -> EpistemicWeb:
+    1:     def update_discovery(self, new_discovery: Discovery) -> EpistemicGraph:
                """Replace a discovery's fields. Validates related refs."""
     4:         if new_discovery.id not in self.discoveries:
     1:             raise BrokenReferenceError(f"Discovery {new_discovery.id} does not exist")
@@ -676,7 +676,7 @@
     1:         new.discoveries[new_discovery.id] = copy.deepcopy(new_discovery)
     1:         return new
        
-    1:     def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicWeb:
+    1:     def update_dead_end(self, new_dead_end: DeadEnd) -> EpistemicGraph:
                """Replace a dead end's fields. Validates related refs."""
     4:         if new_dead_end.id not in self.dead_ends:
     1:             raise BrokenReferenceError(f"DeadEnd {new_dead_end.id} does not exist")
@@ -686,7 +686,7 @@
     1:         new.dead_ends[new_dead_end.id] = copy.deepcopy(new_dead_end)
     1:         return new
        
-    1:     def update_concept(self, new_concept: Concept) -> EpistemicWeb:
+    1:     def update_concept(self, new_concept: Concept) -> EpistemicGraph:
                """Replace a concept's fields."""
     2:         if new_concept.id not in self.concepts:
     1:             raise BrokenReferenceError(f"Concept {new_concept.id} does not exist")
@@ -696,7 +696,7 @@
        
            # ── Remove mutations — safe deletion with ref checks ──────────
        
-    1:     def remove_prediction(self, pid: PredictionId) -> EpistemicWeb:
+    1:     def remove_prediction(self, pid: PredictionId) -> EpistemicGraph:
                """Remove a prediction. Tears down all backlinks and scrubs soft references.
        
                No entity hard-blocks prediction removal; Theory, DeadEnd, and Discovery
@@ -721,7 +721,7 @@
    12:             discovery.related_predictions.discard(pid)
    10:         return new
        
-    1:     def remove_claim(self, cid: ClaimId) -> EpistemicWeb:
+    1:     def remove_claim(self, cid: ClaimId) -> EpistemicGraph:
                """Remove a claim. Raises if any other claim or prediction references it.
        
                Tear down the claim's own backlinks on assumptions and analyses.
@@ -763,7 +763,7 @@
     6:             group.claim_lineage.discard(cid)
     9:         return new
        
-    1:     def remove_assumption(self, aid: AssumptionId) -> EpistemicWeb:
+    1:     def remove_assumption(self, aid: AssumptionId) -> EpistemicGraph:
                """Remove an assumption. Raises if any claim, prediction, or other
                assumption references it."""
     7:         if aid not in self.assumptions:
@@ -792,11 +792,11 @@
     1:             group.assumption_lineage.discard(aid)
     2:         return new
        
-    1:     def remove_parameter(self, pid: ParameterId) -> EpistemicWeb:
+    1:     def remove_parameter(self, pid: ParameterId) -> EpistemicGraph:
                """Remove a parameter. Raises if any analysis references it.
        
                Also cleans up dangling parameter_constraints annotations on claims
-               so the web stays consistent.
+               so the graph stays consistent.
                """
     5:         if pid not in self.parameters:
     1:             raise BrokenReferenceError(f"Parameter {pid} does not exist")
@@ -815,7 +815,7 @@
     2:             claim.parameter_constraints.pop(pid, None)
     3:         return new
        
-    1:     def remove_analysis(self, anid: AnalysisId) -> EpistemicWeb:
+    1:     def remove_analysis(self, anid: AnalysisId) -> EpistemicGraph:
                """Remove an analysis. Raises if any claim or prediction still references it.
        
                Tears down parameter.used_in_analyses backlinks.
@@ -841,7 +841,7 @@
     2:                 new.parameters[pid].used_in_analyses.discard(anid)
     2:         return new
        
-    1:     def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicWeb:
+    1:     def remove_independence_group(self, gid: IndependenceGroupId) -> EpistemicGraph:
                """Remove an independence group. Raises if any prediction or pairwise
                separation still references it."""
     5:         if gid not in self.independence_groups:
@@ -863,7 +863,7 @@
     2:         del new.independence_groups[gid]
     2:         return new
        
-    1:     def remove_theory(self, tid: TheoryId) -> EpistemicWeb:
+    1:     def remove_theory(self, tid: TheoryId) -> EpistemicGraph:
                """Remove a theory. Theories are leaves — nothing references them by ID."""
     2:         if tid not in self.theories:
     1:             raise BrokenReferenceError(f"Theory {tid} does not exist")
@@ -871,7 +871,7 @@
     1:         del new.theories[tid]
     1:         return new
        
-    1:     def remove_discovery(self, did: DiscoveryId) -> EpistemicWeb:
+    1:     def remove_discovery(self, did: DiscoveryId) -> EpistemicGraph:
                """Remove a discovery. Discoveries are leaves — nothing references them by ID."""
     2:         if did not in self.discoveries:
     1:             raise BrokenReferenceError(f"Discovery {did} does not exist")
@@ -879,7 +879,7 @@
     1:         del new.discoveries[did]
     1:         return new
        
-    1:     def remove_dead_end(self, did: DeadEndId) -> EpistemicWeb:
+    1:     def remove_dead_end(self, did: DeadEndId) -> EpistemicGraph:
                """Remove a dead end. Dead ends are leaves — nothing references them by ID."""
     2:         if did not in self.dead_ends:
     1:             raise BrokenReferenceError(f"DeadEnd {did} does not exist")
@@ -887,7 +887,7 @@
     1:         del new.dead_ends[did]
     1:         return new
        
-    1:     def remove_concept(self, coid: ConceptId) -> EpistemicWeb:
+    1:     def remove_concept(self, coid: ConceptId) -> EpistemicGraph:
                """Remove a concept. Concepts are leaves — nothing references them by ID."""
     2:         if coid not in self.concepts:
     1:             raise BrokenReferenceError(f"Concept {coid} does not exist")
@@ -895,7 +895,7 @@
     1:         del new.concepts[coid]
     1:         return new
        
-    1:     def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicWeb:
+    1:     def remove_pairwise_separation(self, sid: PairwiseSeparationId) -> EpistemicGraph:
                """Remove a pairwise separation record."""
     3:         if sid not in self.pairwise_separations:
     1:             raise BrokenReferenceError(f"PairwiseSeparation {sid} does not exist")
@@ -944,7 +944,7 @@
    71:             if upstream:
    71:                 stack.extend(upstream.depends_on)
        
-    1:     def _copy(self) -> EpistemicWeb:
+    1:     def _copy(self) -> EpistemicGraph:
                """Deep copy for copy-on-write mutation semantics.
        
                O(n) cost per mutation where n is total entity count. Acceptable
