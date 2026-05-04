@@ -35,13 +35,15 @@ class JsonlTransactionLog:
 
     # ── TransactionLog protocol ────────────────────────────────────
 
-    def append(self, operation: str, identifier: str) -> str:
+    def append(self, operation: str, identifier: str, resource_type: str) -> str:
         """Record a completed operation and return its transaction ID.
 
         Args:
             operation: Human-readable operation name,
                 e.g. ``"register_hypothesis"``.
             identifier: The primary entity ID affected by this operation.
+            resource_type: Canonical resource key (e.g. ``"hypothesis"``)
+                for easy filtering without parsing the operation string.
 
         Returns:
             str: A UUID4 transaction ID unique to this log entry.
@@ -50,6 +52,7 @@ class JsonlTransactionLog:
         entry = {
             "transaction_id": transaction_id,
             "operation": operation,
+            "resource_type": resource_type,
             "identifier": identifier,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }

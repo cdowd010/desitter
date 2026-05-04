@@ -507,7 +507,7 @@ class Gateway:
         data = {"resource": entity_to_dict(entity)} if entity is not None else None
         transaction_id: str | None = None
         if not dry_run and self._transaction_log is not None:
-            transaction_id = self._transaction_log.append(operation, identifier)
+            transaction_id = self._transaction_log.append(operation, identifier, resource)
         return GatewayResult(
             status="ok",
             changed=not dry_run,

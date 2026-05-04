@@ -78,13 +78,16 @@ class TransactionLog(Protocol):
     decides the storage format (e.g. ``transaction_log.jsonl``).
     """
 
-    def append(self, operation: str, identifier: str) -> str:
+    def append(self, operation: str, identifier: str, resource_type: str) -> str:
         """Record a completed operation and return its transaction ID.
 
         Args:
             operation: Human-readable operation name, e.g.
                 ``"register_hypothesis"``.
             identifier: The primary entity ID affected by the operation.
+            resource_type: Canonical resource key (e.g. ``"hypothesis"``,
+                ``"prediction"``) for easy log filtering without parsing
+                the operation string.
 
         Returns:
             str: A unique transaction ID for this log entry (e.g. a
