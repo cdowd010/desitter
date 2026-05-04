@@ -18,6 +18,7 @@ from typing import Any, Mapping, Union, get_args, get_origin, get_type_hints
 from .model import (
     Analysis,
     Assumption,
+    Experiment,
     Hypothesis,
     DeadEnd,
     Discovery,
@@ -42,6 +43,7 @@ ENTITY_TYPES: dict[str, type[object]] = {
     "independence_group": IndependenceGroup,
     "pairwise_separation": PairwiseSeparation,
     "observation": Observation,
+    "experiment": Experiment,
 }
 """Mapping of canonical resource keys to their dataclass types.
 

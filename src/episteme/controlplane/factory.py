@@ -34,4 +34,5 @@ def build_gateway(
     Returns:
         Gateway: A ready-to-use gateway owning the given graph.
     """
-    raise NotImplementedError
+    validator = DomainValidator()
+    return Gateway(graph, validator, payload_validator=payload_validator)

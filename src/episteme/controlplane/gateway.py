@@ -24,6 +24,7 @@ from collections.abc import Mapping
 from ._gateway_catalog import QUERY_SPECS, RESOURCE_SPECS, QuerySpec, ResourceSpec
 from ._gateway_results import GatewayResult
 from ..epistemic.codec import (
+    build_entity,
     entity_id_type,
     entity_to_dict,
     normalize_payload,
@@ -68,12 +69,15 @@ class Gateway:
             payload_validator: Optional schema validator for incoming
                 payloads. If ``None``, schema validation is skipped.
         """
-        raise NotImplementedError
+        self._graph = graph
+        self._validator = validator
+        self._payload_validator = payload_validator
+
 
     @property
     def graph(self) -> EpistemicGraphPort:
         """The current in-memory epistemic graph."""
-        raise NotImplementedError
+        return self._graph
 
     def resolve_resource(self, resource: str) -> str:
         """Validate and return a canonical resource key.
@@ -88,7 +92,9 @@ class Gateway:
         Raises:
             KeyError: If the resource is not supported.
         """
-        raise NotImplementedError
+        if resource not in RESOURCE_SPECS:
+            raise KeyError(f"Unknown resource: {resource}")
+        return resource
 
     def register(
         self,
@@ -111,7 +117,41 @@ class Gateway:
             GatewayResult: ``"ok"`` on success, ``"BLOCKED"`` on invariant
                 failure, ``"error"`` on bad input.
         """
-        raise NotImplementedError
+        try:
+            self.resolve_resource(resource)
+        except KeyError as exc:
+            return self._error_result(str(exc))
+
+        findings = self._validate_payload(resource, payload)
+        critical = [f for f in findings if f.severity == Severity.CRITICAL]
+        if critical:
+            return GatewayResult(
+                status="error",
+                changed=False,
+                message="Payload validation failed",
+                findings=findings,
+            )
+
+        try:
+            entity = build_entity(resource, payload)
+        except (KeyError, TypeError, ValueError) as exc:
+            return self._error_result(f"Invalid payload: {exc}")
+
+        spec = self._resource_spec(resource)
+        try:
+            new_graph = getattr(self._graph, spec.register_method)(entity)
+        except EpistemicError as exc:
+            return self._error_result(str(exc))
+
+        identifier = str(payload.get("id", ""))
+        return self._finalize_mutation(
+            operation=f"register_{resource}",
+            resource=resource,
+            identifier=identifier,
+            new_graph=new_graph,
+            dry_run=dry_run,
+            message=f"Registered {resource} {identifier!r}",
+        )
 
     def get(self, resource: str, identifier: str) -> GatewayResult:
         """Retrieve a single resource entity by ID.
@@ -124,7 +164,21 @@ class Gateway:
             GatewayResult: ``data["resource"]`` is the serialized entity
                 on success, or ``status="error"`` if not found.
         """
-        raise NotImplementedError
+        try:
+            self.resolve_resource(resource)
+        except KeyError as exc:
+            return self._error_result(str(exc))
+
+        entity = self._lookup_entity(resource, identifier)
+        if entity is None:
+            return self._error_result(f"{resource} {identifier!r} not found")
+
+        return GatewayResult(
+            status="ok",
+            changed=False,
+            message=f"Found {resource} {identifier!r}",
+            data={"resource": entity_to_dict(entity)},
+        )
 
     def list(self, resource: str, **filters: object) -> GatewayResult:
         """List all entities of a resource type, optionally filtered.
@@ -140,7 +194,28 @@ class Gateway:
             GatewayResult: ``data["items"]`` is the matching entity list;
                 ``data["count"]`` is the total.
         """
-        raise NotImplementedError
+        try:
+            self.resolve_resource(resource)
+        except KeyError as exc:
+            return self._error_result(str(exc))
+
+        spec = self._resource_spec(resource)
+        collection = getattr(self._graph, spec.collection_attr)
+
+        items = sorted(
+            [entity_to_dict(entity) for entity in collection.values()],
+            key=lambda d: str(d.get("id", "")),
+        )
+
+        if filters:
+            items = [item for item in items if self._matches_filters(item, filters)]
+
+        return GatewayResult(
+            status="ok",
+            changed=False,
+            message=f"Listed {len(items)} {resource}(s)",
+            data={"items": items, "count": len(items)},
+        )
 
     def set(
         self,
@@ -165,7 +240,46 @@ class Gateway:
             GatewayResult: ``"ok"`` on success, ``"BLOCKED"`` on invariant
                 failure, ``"error"`` on bad input.
         """
-        raise NotImplementedError
+        try:
+            self.resolve_resource(resource)
+        except KeyError as exc:
+            return self._error_result(str(exc))
+
+        entity = self._lookup_entity(resource, identifier)
+        if entity is None:
+            return self._error_result(f"{resource} {identifier!r} not found")
+
+        merged = {**entity_to_dict(entity), **normalize_payload(payload)}
+
+        findings = self._validate_payload(resource, merged)
+        critical = [f for f in findings if f.severity == Severity.CRITICAL]
+        if critical:
+            return GatewayResult(
+                status="error",
+                changed=False,
+                message="Payload validation failed",
+                findings=findings,
+            )
+
+        try:
+            updated = build_entity(resource, merged)
+        except (KeyError, TypeError, ValueError) as exc:
+            return self._error_result(f"Invalid payload: {exc}")
+
+        spec = self._resource_spec(resource)
+        try:
+            new_graph = getattr(self._graph, spec.update_method)(updated)
+        except EpistemicError as exc:
+            return self._error_result(str(exc))
+
+        return self._finalize_mutation(
+            operation=f"update_{resource}",
+            resource=resource,
+            identifier=identifier,
+            new_graph=new_graph,
+            dry_run=dry_run,
+            message=f"Updated {resource} {identifier!r}",
+        )
 
     def transition(
         self,
@@ -188,7 +302,39 @@ class Gateway:
             GatewayResult: ``"ok"`` on success, ``"error"`` if the
                 resource does not support transitions.
         """
-        raise NotImplementedError
+        try:
+            self.resolve_resource(resource)
+        except KeyError as exc:
+            return self._error_result(str(exc))
+
+        spec = self._resource_spec(resource)
+        if spec.transition_method is None:
+            return self._error_result(f"{resource!r} does not support status transitions")
+
+        entity = self._lookup_entity(resource, identifier)
+        if entity is None:
+            return self._error_result(f"{resource} {identifier!r} not found")
+
+        status_cls = status_enum_type(resource)
+        try:
+            target_status = status_cls(new_status)
+        except ValueError:
+            return self._error_result(f"Invalid status {new_status!r} for {resource}")
+
+        typed_id = self._typed_identifier(resource, identifier)
+        try:
+            new_graph = getattr(self._graph, spec.transition_method)(typed_id, target_status)
+        except EpistemicError as exc:
+            return self._error_result(str(exc))
+
+        return self._finalize_mutation(
+            operation=f"transition_{resource}",
+            resource=resource,
+            identifier=identifier,
+            new_graph=new_graph,
+            dry_run=dry_run,
+            message=f"Transitioned {resource} {identifier!r} to {new_status!r}",
+        )
 
     def query(self, query_type: str, **params: object) -> GatewayResult:
         """Run a named read-only query across the epistemic graph.
@@ -201,7 +347,30 @@ class Gateway:
             GatewayResult: ``data`` holds the serialized query result.
                 ``status="error"`` if query type is unknown.
         """
-        raise NotImplementedError
+        if query_type not in QUERY_SPECS:
+            return self._error_result(f"Unknown query type: {query_type!r}")
+
+        spec = QUERY_SPECS[query_type]
+
+        coerced: dict[str, object] = {}
+        for key, value in params.items():
+            res = spec.parameter_resources.get(key)
+            if res is not None:
+                coerced[key] = entity_id_type(res)(value)
+            else:
+                coerced[key] = value
+
+        try:
+            result = getattr(self._graph, spec.method_name)(**coerced)
+        except EpistemicError as exc:
+            return self._error_result(str(exc))
+
+        return GatewayResult(
+            status="ok",
+            changed=False,
+            message=f"Query {query_type!r} completed",
+            data={"result": serialize_value(result)},
+        )
 
     # ── Private helpers ───────────────────────────────────────────
 
@@ -217,7 +386,7 @@ class Gateway:
         Raises:
             KeyError: If ``resource`` is not in ``RESOURCE_SPECS``.
         """
-        raise NotImplementedError
+        return RESOURCE_SPECS[resource]
 
     def _typed_identifier(self, resource: str, identifier: str) -> object:
         """Coerce a string identifier to the resource's typed ID NewType.
@@ -232,7 +401,8 @@ class Gateway:
         Raises:
             KeyError: If ``resource`` is not recognized.
         """
-        raise NotImplementedError
+        id_constructor = entity_id_type(resource)
+        return id_constructor(identifier)
 
     def _lookup_entity(self, resource: str, identifier: str) -> object | None:
         """Find an entity in the in-memory graph by resource key and string ID.
@@ -245,7 +415,10 @@ class Gateway:
             object | None: The domain entity instance, or ``None`` if the
                 entity does not exist in the graph.
         """
-        raise NotImplementedError
+        spec = self._resource_spec(resource)
+        collection = getattr(self._graph, spec.collection_attr)
+        typed_id = self._typed_identifier(resource, identifier)
+        return collection.get(typed_id)
 
     def _validate_payload(
         self,
@@ -265,7 +438,9 @@ class Gateway:
             list[Finding]: Zero or more schema findings. Empty when
                 no validator is configured or no issues are found.
         """
-        raise NotImplementedError
+        if self._payload_validator is None:
+            return []
+        return self._payload_validator.validate(resource, payload)
 
     def _finalize_mutation(
         self,
@@ -302,7 +477,23 @@ class Gateway:
                 ``"ok"`` with ``changed=False`` on a clean dry_run;
                 ``"BLOCKED"`` if any CRITICAL findings were produced.
         """
-        raise NotImplementedError
+        findings = self._validator.validate(new_graph)
+        critical = [f for f in findings if f.severity == Severity.CRITICAL]
+        if critical:
+            return GatewayResult(
+                status="BLOCKED",
+                changed=False,
+                message=f"Mutation blocked: {len(critical)} CRITICAL finding(s)",
+                findings=findings,
+            )
+        if not dry_run:
+            self._graph = new_graph
+        return GatewayResult(
+            status="ok",
+            changed=not dry_run,
+            message=message,
+            findings=findings,
+        )
 
     def _matches_filters(
         self,
@@ -325,7 +516,20 @@ class Gateway:
         Returns:
             bool: ``True`` if every filter predicate matches the item.
         """
-        raise NotImplementedError
+        for key, expected in filters.items():
+            actual = item.get(key)
+            if isinstance(actual, list):
+                if expected not in actual:
+                    return False
+            elif isinstance(actual, dict):
+                if not isinstance(expected, dict):
+                    return False
+                if not all(actual.get(k) == v for k, v in expected.items()):
+                    return False
+            else:
+                if actual != expected:
+                    return False
+        return True
 
     def _error_result(
         self,
@@ -344,5 +548,10 @@ class Gateway:
             GatewayResult: Result with ``status="error"``,
                 ``changed=False``, and the provided message and findings.
         """
-        raise NotImplementedError
+        return GatewayResult(
+            status="error",
+            changed=False,
+            message=message,
+            findings=findings or [],
+        )
 
