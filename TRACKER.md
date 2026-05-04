@@ -28,7 +28,7 @@ These are execution constraints. Work that violates them should be rejected.
 
 ## Milestone 1: Epistemic Kernel -- COMPLETE
 
-> 11 entity types, 31 validators, 7 transition tables, 112 tests.
+> 12 entity types, 33 validators, 8 transition tables, 133 tests.
 
 - [x] `types.py` -- 11 typed IDs, 19 enums, 7 transition tables, Finding, 3 typed query dataclasses (RefutationImpact, AssumptionSupportStatus, ParameterImpact)
 - [x] `model.py` -- 11 entity dataclasses: Hypothesis, Assumption, Prediction, Observation, Analysis, Parameter, Objective, Discovery, DeadEnd, IndependenceGroup, PairwiseSeparation
@@ -43,8 +43,8 @@ These are execution constraints. Work that violates them should be rejected.
 
 ### Tests (Milestone 1)
 
-- [x] `tests/epistemic/test_graph.py` -- 44 tests: register/update/remove round-trips for all entity types, transitions, backlinks, cycle detection, broken refs, duplicate IDs
-- [x] `tests/epistemic/test_invariants.py` -- 62 tests: one or more tests for each of the 31 validators
+- [x] `tests/epistemic/test_graph.py` -- 65 tests: register/update/remove round-trips for all entity types, transitions, backlinks, cycle detection, broken refs, duplicate IDs
+- [x] `tests/epistemic/test_invariants.py` -- 67 tests: one or more tests for each of the 31 validators
 - [x] `tests/controlplane/test_check.py` -- 1 test
 
 ---
@@ -58,123 +58,80 @@ These are execution constraints. Work that violates them should be rejected.
 
 ---
 
-## Milestone 3: Gateway
+## Milestone 3: Gateway -- COMPLETE
 
 > requires: Epistemic Kernel
 
 - [x] Gateway metadata: `_gateway_catalog.py` (RESOURCE_SPECS, QUERY_SPECS), `_gateway_results.py` (GatewayResult)
 - [x] `controlplane/validate.py` -- `DomainValidator.validate()` delegates to `validate_all`
-- [ ] `Gateway.__init__` -- store graph, validator, payload_validator
-- [ ] `Gateway.graph` property -- return current in-memory graph
-- [ ] `Gateway.resolve_resource` -- validate and return canonical resource key
-- [ ] `Gateway._resource_spec` -- look up ResourceSpec by resource key
-- [ ] `Gateway._typed_identifier` -- coerce string ID to NewType
-- [ ] `Gateway._lookup_entity` -- find entity by resource key and ID
-- [ ] `Gateway._validate_payload` -- delegate to PayloadValidator if configured
-- [ ] `Gateway._matches_filters` -- test serialized entity dict against filter predicates
-- [ ] `Gateway._error_result` -- construct error GatewayResult
-- [ ] `Gateway._finalize_mutation` -- run validators on new graph; CRITICAL blocks; swap on success; support `dry_run`
-- [ ] `Gateway.register(resource, payload, *, dry_run)` -- validate payload, build entity, call kernel, finalize
-- [ ] `Gateway.get` -- look up entity, serialize, return
-- [ ] `Gateway.list` -- collect all entities of type, filter, serialize, return
-- [ ] `Gateway.set(resource, identifier, payload, *, dry_run)` -- fetch existing, merge payload, rebuild entity, call kernel, finalize
-- [ ] `Gateway.transition(resource, identifier, new_status, *, dry_run)` -- fetch existing, call kernel transition, finalize
-- [ ] `Gateway.query` -- resolve QuerySpec, coerce params, call graph method, serialize, return
-- [ ] `Gateway.record_analysis_result` -- narrow wrapper over `EpistemicGraph.record_analysis_result`
+- [x] `Gateway.__init__` -- store graph, validator, payload_validator
+- [x] `Gateway.graph` property -- return current in-memory graph
+- [x] `Gateway.resolve_resource` -- validate and return canonical resource key
+- [x] `Gateway._resource_spec` -- look up ResourceSpec by resource key
+- [x] `Gateway._typed_identifier` -- coerce string ID to NewType
+- [x] `Gateway._lookup_entity` -- find entity by resource key and ID
+- [x] `Gateway._validate_payload` -- delegate to PayloadValidator if configured
+- [x] `Gateway._matches_filters` -- test serialized entity dict against filter predicates
+- [x] `Gateway._error_result` -- construct error GatewayResult
+- [x] `Gateway._finalize_mutation` -- run validators on new graph; CRITICAL blocks; swap on success; hydrate entity data; support `dry_run`
+- [x] `Gateway.register(resource, payload, *, dry_run)` -- validate payload, build entity, call kernel, finalize
+- [x] `Gateway.get` -- look up entity, serialize, return
+- [x] `Gateway.list` -- collect all entities of type, filter, serialize, return
+- [x] `Gateway.set(resource, identifier, payload, *, dry_run)` -- fetch existing, merge payload, rebuild entity, call kernel, finalize
+- [x] `Gateway.transition(resource, identifier, new_status, *, dry_run)` -- fetch existing, call kernel transition, finalize
+- [x] `Gateway.query` -- resolve QuerySpec, coerce params, call graph method, serialize, return
+- [x] `build_gateway(graph, *, payload_validator)` -- instantiate `DomainValidator`, construct and return `Gateway`
 
-### Factory
+### Tests (Milestone 3)
 
-- [ ] `build_gateway(graph, *, payload_validator)` -- instantiate `DomainValidator`, construct and return `Gateway`
-
-### Gateway Tests
-
-- [ ] Register round-trip for at least one entity (hypothesis)
-- [ ] get / list / set / transition round-trips
-- [ ] Query round-trips (hypothesis_lineage, refutation_impact, parameter_impact)
-- [ ] CRITICAL finding blocks mutation, graph unchanged
-- [ ] dry_run returns findings without mutating
-- [ ] Broken reference returns error result
-- [ ] Duplicate ID returns error result
-- [ ] record_analysis_result round-trip
+- [x] `tests/controlplane/test_gateway.py` -- 64 tests: register/get/list/set/transition/query round-trips; CRITICAL blocks; dry_run; broken refs; duplicate IDs; payload validation; filter matching
 
 ---
 
-## Milestone 4: Adapters
+## Milestone 4: Adapters -- COMPLETE
 
 > requires: Epistemic Kernel, ports.py protocols
 
-- [ ] `adapters/json_repository.py` -- load/save EpistemicGraph to JSON via `GraphRepository` protocol
-- [ ] `adapters/transaction_log.py` -- append-only JSONL mutation journal via `TransactionLog` protocol
-- [ ] `adapters/payload_validator.py` -- schema validation against payload specs via `PayloadValidator` protocol
+- [x] `adapters/json_repository.py` -- load/save EpistemicGraph to JSON via `GraphRepository` protocol
+- [x] `adapters/transaction_log.py` -- append-only JSONL mutation journal via `TransactionLog` protocol
+- [x] `adapters/payload_validator.py` -- schema validation against payload specs via `PayloadValidator` protocol
+
+### Tests (Milestone 4)
+
+- [x] `tests/adapters/test_json_repository.py` -- 14 tests
+- [x] `tests/adapters/test_payload_validator.py` -- 13 tests
+- [x] `tests/adapters/test_transaction_log.py` -- 12 tests
 
 ---
 
-## Milestone 5: Config
+## Milestone 5: Config -- COMPLETE
 
 - [x] Config dataclasses: `EpistemeConfig`, `ProjectPaths`, `ProjectContext`
 - [x] `load_config(workspace: Path) -> EpistemeConfig` -- parse `episteme.toml`; return defaults if absent
 - [x] `build_context(workspace: Path, config: EpistemeConfig) -> ProjectContext` -- derive all paths
-- [ ] `validate_workspace(workspace: Path)` -- sanity-check workspace path
+- [x] `validate_workspace(context: ProjectContext) -> list[Finding]` -- sanity-check workspace paths
 
 ---
 
-## Milestone 6: Client
+## Milestone 6: Client -- COMPLETE
 
 > requires: Gateway, Adapters, Config
 
-### Core (`_core.py`)
+- [x] `_EpistemeClientCore.__init__(gateway, *, repo)` -- store gateway and repo
+- [x] `_EpistemeClientCore.gateway` property
+- [x] `_EpistemeClientCore.save()` -- call `repo.save(gateway.graph)` if repo present
+- [x] `_EpistemeClientCore.__enter__` / `__exit__` -- context manager; auto-save on exit
+- [x] `_EpistemeClientCore.register / get / list / set / transition / query` -- generic verbs returning `ClientResult`
+- [x] `_EpistemeClientCore.validate(*, extra_validators)` -> `list[Finding]`
+- [x] `_EpistemeClientCore._invoke_gateway` / `_handle_resource_result` / `_handle_resource_list_result` / `_handle_query_result`
+- [x] `connect(*, repo, graph, workspace)` -- build gateway from graph, repo, or workspace config; return `EpistemeClient`
+- [x] `_hypothesis.py` -- register/get/list/set/transition for hypothesis, assumption, prediction, analysis, observation
+- [x] `_structure.py` -- register/get/list/set for parameter, independence_group, pairwise_separation
+- [x] `_registry.py` -- register/get/list/set/transition for objective, discovery, dead_end
 
-- [ ] `_EpistemeClientCore.__init__(gateway, *, repo)` -- store gateway and repo
-- [ ] `_EpistemeClientCore.gateway` property
-- [ ] `_EpistemeClientCore.save()` -- call `repo.save(gateway.graph)` if repo present
-- [ ] `_EpistemeClientCore.__enter__` / `__exit__` -- context manager; auto-save on exit
-- [ ] `_EpistemeClientCore.register(resource, *, dry_run, **payload)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.get(resource, identifier)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.list(resource, **filters)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.set(resource, identifier, *, dry_run, **payload)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.transition(resource, identifier, new_status, *, dry_run)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.query(query_type, **params)` -> `ClientResult`
-- [ ] `_EpistemeClientCore.validate(*, extra_validators)` -> `list[Finding]` -- run `DomainValidator` (and any extras) against current graph
-- [ ] `_EpistemeClientCore._invoke_gateway` -- call gateway method, wrap unexpected errors
-- [ ] `_EpistemeClientCore._handle_resource_result` -- convert GatewayResult to ClientResult
+### Tests (Milestone 6)
 
-### Connect
-
-- [ ] `connect(*, repo, graph)` -- load config, build graph, build gateway, return EpistemeClient
-- [ ] `_without_none(**payload)` -- strip None values from payload dict
-
-### Typed Helpers
-
-All three helper mixins have signatures but raise `NotImplementedError`. Implement all as thin wrappers over `self.register(...)`, `self.get(...)`, `self.list(...)`, `self.set(...)`, `self.transition(...)`.
-
-**`_hypothesis.py`** (Hypotheses, Assumptions, Predictions, Analyses, Observations)
-- [ ] `register_hypothesis`, `get_hypothesis`, `list_hypotheses`, `set_hypothesis`, `transition_hypothesis`
-- [ ] `register_assumption`, `get_assumption`, `list_assumptions`, `set_assumption`
-- [ ] `register_prediction`, `get_prediction`, `list_predictions`, `set_prediction`, `transition_prediction`
-- [ ] `register_analysis`, `get_analysis`, `list_analyses`, `set_analysis`
-- [ ] `register_observation`, `get_observation`, `list_observations`, `set_observation`, `transition_observation`
-- [ ] `record_analysis_result(analysis_id, result, *, sha, date)` -- delegate to gateway
-
-**`_structure.py`** (Parameters, IndependenceGroups, PairwiseSeparations)
-- [ ] `register_parameter`, `get_parameter`, `list_parameters`, `set_parameter`
-- [ ] `register_independence_group`, `get_independence_group`, `list_independence_groups`, `set_independence_group`
-- [ ] `register_pairwise_separation`, `get_pairwise_separation`, `list_pairwise_separations`
-
-**`_registry.py`** (Objectives, Discoveries, DeadEnds)
-- [ ] `register_objective`, `get_objective`, `list_objectives`, `set_objective`, `transition_objective`
-- [ ] `register_discovery`, `get_discovery`, `list_discoveries`, `set_discovery`, `transition_discovery`
-- [ ] `register_dead_end`, `get_dead_end`, `list_dead_ends`, `set_dead_end`, `transition_dead_end`
-
-### Client Tests
-
-- [ ] `connect()` returns a working client against a temp workspace
-- [ ] register_* / get_* / list_* helpers for all entity types
-- [ ] set_* helpers for all entity types
-- [ ] transition_* helpers for status-bearing entities
-- [ ] record_analysis_result round-trip through client
-- [ ] validate() returns findings on a graph with violations
-- [ ] dry_run=True validates without writing
-- [ ] Schema validation errors surface as ClientResult errors, not exceptions
+- [x] `tests/client/test_client.py` -- 63 tests: connect() branches, lifecycle, all generic verbs, all 10 typed helper families, error handling, dry_run
 
 ---
 

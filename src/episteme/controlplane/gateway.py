@@ -35,6 +35,7 @@ from ..epistemic.ports import (
     EpistemicGraphPort,
     PayloadValidator,
     GraphValidator,
+    TransactionLog,
 )
 from ..epistemic.types import Finding, Severity
 from ..epistemic.errors import EpistemicError
@@ -57,6 +58,7 @@ class Gateway:
         graph: EpistemicGraphPort,
         validator: GraphValidator,
         payload_validator: PayloadValidator | None = None,
+        transaction_log: TransactionLog | None = None,
     ) -> None:
         """Initialize a gateway with an epistemic graph instance.
 
@@ -72,12 +74,20 @@ class Gateway:
         self._graph = graph
         self._validator = validator
         self._payload_validator = payload_validator
-
+        self._transaction_log = transaction_log
 
     @property
     def graph(self) -> EpistemicGraphPort:
         """The current in-memory epistemic graph."""
         return self._graph
+
+    def validate(self) -> list[Finding]:
+        """Run domain validation against the current in-memory graph.
+
+        Returns:
+            list[Finding]: All findings from the domain validator.
+        """
+        return self._validator.validate(self._graph)
 
     def resolve_resource(self, resource: str) -> str:
         """Validate and return a canonical resource key.
@@ -488,11 +498,23 @@ class Gateway:
             )
         if not dry_run:
             self._graph = new_graph
+        # Hydrate the result with the entity from the post-mutation graph so
+        # that client callers receive the typed entity without a second round-trip.
+        spec = self._resource_spec(resource)
+        collection = getattr(new_graph, spec.collection_attr)
+        typed_id = self._typed_identifier(resource, identifier)
+        entity = collection.get(typed_id)
+        data = {"resource": entity_to_dict(entity)} if entity is not None else None
+        transaction_id: str | None = None
+        if not dry_run and self._transaction_log is not None:
+            transaction_id = self._transaction_log.append(operation, identifier)
         return GatewayResult(
             status="ok",
             changed=not dry_run,
             message=message,
             findings=findings,
+            transaction_id=transaction_id,
+            data=data,
         )
 
     def _matches_filters(

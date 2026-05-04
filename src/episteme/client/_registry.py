@@ -12,6 +12,8 @@ from ..epistemic.types import DeadEndStatus, DiscoveryStatus, ObjectiveStatus
 class _EpistemeClientRegistryHelpers:
     """Typed helpers for objectives, discoveries, and dead ends."""
 
+    # ── Objective ─────────────────────────────────────────────────
+
     def register_objective(
         self,
         id: str,
@@ -27,41 +29,43 @@ class _EpistemeClientRegistryHelpers:
         related_discoveries: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Objective]:
-        """Register an objective in the epistemic graph.
+        status_str = status.value if isinstance(status, ObjectiveStatus) else status
+        return self.register(
+            "objective",
+            dry_run=dry_run,
+            id=id,
+            title=title,
+            kind=kind,
+            status=status_str,
+            summary=summary,
+            success_criteria=success_criteria,
+            related_predictions=list(related_predictions) if related_predictions is not None else None,
+            related_dead_ends=list(related_dead_ends) if related_dead_ends is not None else None,
+            related_discoveries=list(related_discoveries) if related_discoveries is not None else None,
+            source=source,
+        )
 
-        An objective is a research goal that motivates and organises hypotheses.
-        It unifies explanatory frameworks, goal-directed research, and exploratory
-        investigations. Hypotheses declare which objectives motivate them via
-        ``Hypothesis.objectives``; the objective's ``motivates_hypotheses``
-        backlink is auto-maintained.
+    def get_objective(self, identifier: str) -> ClientResult[Objective]:
+        return self.get("objective", identifier)
 
-        Args:
-            id: Unique identifier for the objective.
-            title: Short descriptive title.
-            kind: The type of objective (``ObjectiveKind`` string key .
-                ``"EXPLANATORY"``, ``"GOAL"``, or ``"EXPLORATORY"``).
-            status: Initial lifecycle status (``ObjectiveStatus`` enum or string
-                key).
-            dry_run: Simulate without committing.
-            summary: Extended free-text summary of the objective.
-            success_criteria: What counts as achieving this objective.
-                Required for ``GOAL`` kind; optional for others.
-            related_predictions: IDs of predictions associated with this
-                objective.
-            related_dead_ends: IDs of dead ends representing failed
-                approaches toward this objective.
-            related_discoveries: IDs of discoveries made while pursuing
-                this objective.
-            source: Citation or reference.
+    def list_objectives(self, **filters: object) -> ClientResult[list[Objective]]:
+        return self.list("objective", **filters)
 
-        Returns:
-            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` holding
-            the registered entity on success.
+    def set_objective(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Objective]:
+        return self.set("objective", identifier, dry_run=dry_run, **payload)
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def transition_objective(
+        self,
+        identifier: str,
+        new_status: ObjectiveStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Objective]:
+        return self.transition("objective", identifier, new_status, dry_run=dry_run)
+
+    # ── Discovery ─────────────────────────────────────────────────
 
     def register_discovery(
         self,
@@ -78,35 +82,44 @@ class _EpistemeClientRegistryHelpers:
         references: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Discovery]:
-        """Register a discovery in the epistemic graph.
+        status_str = status.value if isinstance(status, DiscoveryStatus) else status
+        date_str = date.isoformat() if hasattr(date, "isoformat") else date
+        return self.register(
+            "discovery",
+            dry_run=dry_run,
+            id=id,
+            title=title,
+            date=date_str,
+            summary=summary,
+            impact=impact,
+            status=status_str,
+            related_hypotheses=list(related_hypotheses) if related_hypotheses is not None else None,
+            related_predictions=list(related_predictions) if related_predictions is not None else None,
+            references=list(references) if references is not None else None,
+            source=source,
+        )
 
-        A discovery records a confirmed empirical or theoretical result that
-        advances the project's understanding.
+    def get_discovery(self, identifier: str) -> ClientResult[Discovery]:
+        return self.get("discovery", identifier)
 
-        Args:
-            id: Unique identifier for the discovery.
-            title: Short descriptive title.
-            date: Date the discovery was made (``date`` object or ISO string).
-            summary: Human-readable summary of what was discovered.
-            impact: Description of the scientific impact.
-            status: Initial lifecycle status (``DiscoveryStatus`` enum or
-                string key).
-            dry_run: Simulate without committing.
-            related_hypotheses: IDs of hypotheses that this discovery supports or
-                refines.
-            related_predictions: IDs of predictions that this discovery
-                confirms or falsifies.
-            references: Citations or URLs documenting the discovery.
-            source: General citation or reference.
+    def list_discoveries(self, **filters: object) -> ClientResult[list[Discovery]]:
+        return self.list("discovery", **filters)
 
-        Returns:
-            ``ClientResult[Discovery]`` with ``status="ok"`` and ``data``
-            holding the registered entity on success.
+    def set_discovery(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Discovery]:
+        return self.set("discovery", identifier, dry_run=dry_run, **payload)
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def transition_discovery(
+        self,
+        identifier: str,
+        new_status: DiscoveryStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Discovery]:
+        return self.transition("discovery", identifier, new_status, dry_run=dry_run)
+
+    # ── DeadEnd ───────────────────────────────────────────────────
 
     def register_dead_end(
         self,
@@ -121,175 +134,30 @@ class _EpistemeClientRegistryHelpers:
         references: Iterable[str] | None = None,
         source: str | None = None,
     ) -> ClientResult[DeadEnd]:
-        """Register a dead end in the epistemic graph.
-
-        A dead end documents an approach or hypothesis that was pursued but
-        ultimately abandoned, preserving the negative knowledge.
-
-        Args:
-            id: Unique identifier for the dead end.
-            title: Short descriptive title.
-            description: Detailed description of the approach and why it
-                failed.
-            status: Initial lifecycle status (``DeadEndStatus`` enum or
-                string key).
-            dry_run: Simulate without committing.
-            related_predictions: IDs of predictions that were falsified or
-                superseded by this dead end.
-            related_hypotheses: IDs of hypotheses this dead end is connected to.
-            references: Citations or URLs documenting the failed approach.
-            source: General citation or reference.
-
-        Returns:
-            ``ClientResult[DeadEnd]`` with ``status="ok"`` and ``data``
-            holding the registered entity on success.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def get_objective(self, identifier: str) -> ClientResult[Objective]:
-        """Retrieve a objective by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the objective to look up.
-
-        Returns:
-            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` set to
-            the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def get_discovery(self, identifier: str) -> ClientResult[Discovery]:
-        """Retrieve a discovery by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the discovery to look up.
-
-        Returns:
-            ``ClientResult[Discovery]`` with ``status="ok"`` and ``data``
-            set to the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+        status_str = status.value if isinstance(status, DeadEndStatus) else status
+        return self.register(
+            "dead_end",
+            dry_run=dry_run,
+            id=id,
+            title=title,
+            description=description,
+            status=status_str,
+            related_predictions=list(related_predictions) if related_predictions is not None else None,
+            related_hypotheses=list(related_hypotheses) if related_hypotheses is not None else None,
+            references=list(references) if references is not None else None,
+            source=source,
+        )
 
     def get_dead_end(self, identifier: str) -> ClientResult[DeadEnd]:
-        """Retrieve a dead end by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the dead end to look up.
-
-        Returns:
-            ``ClientResult[DeadEnd]`` with ``status="ok"`` and ``data`` set
-            to the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def list_objectives(self, **filters: object) -> ClientResult[list[Objective]]:
-        """Return all objectives, applying any keyword attribute filters.
-
-        Args:
-            **filters: Attribute-value pairs to filter on (e.g.
-                ``status="active"`` to return only active objectives).
-
-        Returns:
-            ``ClientResult[list[Objective]]`` with ``data`` holding the
-            (possibly empty) list of matching objectives.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def list_discoveries(self, **filters: object) -> ClientResult[list[Discovery]]:
-        """Return all discoveries, applying any keyword attribute filters.
-
-        Args:
-            **filters: Attribute-value pairs to filter on (e.g.
-                ``status="confirmed"`` to return only confirmed discoveries).
-
-        Returns:
-            ``ClientResult[list[Discovery]]`` with ``data`` holding the
-            (possibly empty) list of matching discoveries.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+        return self.get("dead_end", identifier)
 
     def list_dead_ends(self, **filters: object) -> ClientResult[list[DeadEnd]]:
-        """Return all dead ends, applying any keyword attribute filters.
+        return self.list("dead_end", **filters)
 
-        Args:
-            **filters: Attribute-value pairs to filter on.
-
-        Returns:
-            ``ClientResult[list[DeadEnd]]`` with ``data`` holding the
-            (possibly empty) list of matching dead ends.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def transition_objective(
-        self,
-        identifier: str,
-        new_status: ObjectiveStatus | str,
-        *,
-        dry_run: bool = False,
-    ) -> ClientResult[Objective]:
-        """Advance or retract a objective's lifecycle status.
-
-        Args:
-            identifier: The unique string ID of the objective to transition.
-            new_status: Target lifecycle status (``ObjectiveStatus`` enum value
-                or its string key).
-            dry_run: Simulate the transition without committing.
-
-        Returns:
-            ``ClientResult[Objective]`` with ``status="ok"`` and ``data`` holding
-            the updated entity, or ``status="BLOCKED"`` if the transition
-            violates a domain invariant.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def transition_discovery(
-        self,
-        identifier: str,
-        new_status: DiscoveryStatus | str,
-        *,
-        dry_run: bool = False,
-    ) -> ClientResult[Discovery]:
-        """Advance or retract a discovery's lifecycle status.
-
-        Args:
-            identifier: The unique string ID of the discovery to transition.
-            new_status: Target lifecycle status (``DiscoveryStatus`` enum
-                value or its string key).
-            dry_run: Simulate the transition without committing.
-
-        Returns:
-            ``ClientResult[Discovery]`` with ``status="ok"`` and ``data``
-            holding the updated entity, or ``status="BLOCKED"`` if the
-            transition violates a domain invariant.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def set_dead_end(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[DeadEnd]:
+        return self.set("dead_end", identifier, dry_run=dry_run, **payload)
 
     def transition_dead_end(
         self,
@@ -298,23 +166,7 @@ class _EpistemeClientRegistryHelpers:
         *,
         dry_run: bool = False,
     ) -> ClientResult[DeadEnd]:
-        """Advance or retract a dead end's lifecycle status.
-
-        Args:
-            identifier: The unique string ID of the dead end to transition.
-            new_status: Target lifecycle status (``DeadEndStatus`` enum value
-                or its string key).
-            dry_run: Simulate the transition without committing.
-
-        Returns:
-            ``ClientResult[DeadEnd]`` with ``status="ok"`` and ``data``
-            holding the updated entity, or ``status="BLOCKED"`` if the
-            transition violates a domain invariant.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+        return self.transition("dead_end", identifier, new_status, dry_run=dry_run)
 
 
 __all__ = ["_EpistemeClientRegistryHelpers"]

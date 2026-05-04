@@ -24,7 +24,7 @@ class _EpistemeClientResourceHelpers(
 
     Families:
     - ``_EpistemeClientHypothesisHelpers``: hypotheses, assumptions,
-      predictions, analyses.
+      predictions, analyses, observations, experiments.
     - ``_EpistemeClientRegistryHelpers``: objectives, discoveries, dead ends.
     - ``_EpistemeClientStructureHelpers``: parameters, independence groups,
       pairwise separations.

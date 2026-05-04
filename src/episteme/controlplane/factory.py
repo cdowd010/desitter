@@ -9,7 +9,7 @@ Persistence (``GraphRepository``) is NOT wired here. It belongs to
 """
 from __future__ import annotations
 
-from ..epistemic.ports import EpistemicGraphPort, PayloadValidator
+from ..epistemic.ports import EpistemicGraphPort, PayloadValidator, TransactionLog
 from .gateway import Gateway
 from .validate import DomainValidator
 
@@ -18,6 +18,7 @@ def build_gateway(
     graph: EpistemicGraphPort,
     *,
     payload_validator: PayloadValidator | None = None,
+    transaction_log: TransactionLog | None = None,
 ) -> Gateway:
     """Construct a ``Gateway`` around an epistemic-graph implementation.
 
@@ -35,4 +36,4 @@ def build_gateway(
         Gateway: A ready-to-use gateway owning the given graph.
     """
     validator = DomainValidator()
-    return Gateway(graph, validator, payload_validator=payload_validator)
+    return Gateway(graph, validator, payload_validator=payload_validator, transaction_log=transaction_log)

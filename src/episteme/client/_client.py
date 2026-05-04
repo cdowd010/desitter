@@ -5,8 +5,16 @@ bases and exposes the ``connect`` factory used by callers.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from ._core import _EpistemeClientCore
 from ._resources import _EpistemeClientResourceHelpers
+from ..adapters.json_repository import JsonRepository
+from ..adapters.payload_validator import SchemaPayloadValidator
+from ..adapters.transaction_log import JsonlTransactionLog
+from ..config import build_context
+from ..controlplane.factory import build_gateway
+from ..epistemic.graph import EpistemicGraph
 from ..epistemic.ports import EpistemicGraphPort, GraphRepository
 
 
@@ -43,52 +51,59 @@ def connect(
     *,
     repo: GraphRepository | None = None,
     graph: EpistemicGraphPort | None = None,
+    workspace: Path | str | None = None,
 ) -> EpistemeClient:
-    """Build a ``EpistemeClient``, optionally backed by a repository.
+    """Build an ``EpistemeClient``, optionally backed by a repository.
 
-    The typical researcher workflow is simply ``ds.connect()`` from a
-    project workspace directory. The function loads the project config,
-    derives paths, hydrates the graph, builds the gateway, and returns a
-    ready-to-use client.
+    When called with no arguments from a project workspace, ``connect``
+    searches for ``episteme.toml`` in the current directory to derive
+    the graph file path, loads the graph, builds the gateway, and returns
+    a ready-to-use client.
 
     Args:
-        repo: Optional ``GraphRepository`` implementation to use for
-            loading and saving. When provided, the graph is loaded from
-            the repository before the client is returned. When ``None``,
-            ``connect`` locates the repository automatically by searching
-            for a ``episteme.toml`` in the current directory tree.
-        graph: Optional pre-loaded ``EpistemicGraphPort`` instance. When
-            provided, this graph is used directly and no repository load
-            is performed. Useful for testing or in-memory workflows.
+        repo: Optional ``GraphRepository`` implementation. When provided,
+            the graph is loaded from the repository on construction.
+            Cannot be combined with ``graph``.
+        graph: Optional pre-loaded ``EpistemicGraphPort`` instance.
+            Used directly; no repository load is performed.
             Cannot be combined with ``repo``.
+        workspace: Optional workspace root path. Defaults to the current
+            working directory. Only used when neither ``repo`` nor
+            ``graph`` is provided.
 
     Returns:
         EpistemeClient: A fully initialized client ready for use.
-
-    Raises:
-        NotImplementedError: Not yet implemented.
     """
-    raise NotImplementedError
+    if repo is not None and graph is not None:
+        raise ValueError("Cannot supply both 'repo' and 'graph' to connect()")
+
+    payload_validator = SchemaPayloadValidator()
+
+    if graph is not None:
+        # Caller supplied a pre-loaded graph; no repository, no persistence.
+        gw = build_gateway(graph, payload_validator=payload_validator)
+        return EpistemeClient(gw)
+
+    if repo is not None:
+        # Caller supplied a repository; load the graph from it.
+        loaded = repo.load()
+        gw = build_gateway(loaded, payload_validator=payload_validator)
+        return EpistemeClient(gw, repo=repo)
+
+    # Default: derive the graph file path from the workspace config.
+    root = Path(workspace) if workspace is not None else Path.cwd()
+    ctx = build_context(root)
+    graph_path = ctx.paths.data_dir / "graph.json"
+    default_repo = JsonRepository(graph_path)
+    loaded = default_repo.load()
+    log = JsonlTransactionLog(ctx.paths.data_dir / "transactions.jsonl")
+    gw = build_gateway(loaded, payload_validator=payload_validator, transaction_log=log)
+    return EpistemeClient(gw, repo=default_repo)
 
 
 def _without_none(**payload: object) -> dict[str, object]:
-    """Return a copy of *payload* with all ``None`` values removed.
-
-    Used by typed helper methods to strip unset optional keyword
-    arguments before forwarding to the generic ``register`` / ``set``
-    operations, which pass payloads directly to the gateway.
-
-    Args:
-        **payload: Arbitrary keyword arguments to filter.
-
-    Returns:
-        dict[str, object]: A new dict containing only the entries from
-            ``payload`` whose values are not ``None``.
-
-    Raises:
-        NotImplementedError: Not yet implemented.
-    """
-    raise NotImplementedError
+    """Return a copy of *payload* with all ``None`` values removed."""
+    return {k: v for k, v in payload.items() if v is not None}
 
 
 __all__ = ["EpistemeClient", "_without_none", "connect"]

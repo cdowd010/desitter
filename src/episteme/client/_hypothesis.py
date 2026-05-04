@@ -1,25 +1,29 @@
-"""Client helper declarations for core hypothesis resources."""
+"""Client helper implementations for core hypothesis resources."""
 from __future__ import annotations
 
 from datetime import date
 from typing import Iterable, Mapping
 
 from ._types import ClientResult
-from ..epistemic.model import Analysis, Assumption, Hypothesis, Prediction
+from ..epistemic.model import Analysis, Assumption, Experiment, Hypothesis, Observation, Prediction
 from ..epistemic.types import (
     AssumptionType,
+    ExperimentStatus,
     HypothesisCategory,
     HypothesisStatus,
     HypothesisType,
     ConfidenceTier,
     EvidenceKind,
     MeasurementRegime,
+    ObservationStatus,
     PredictionStatus,
 )
 
 
 class _EpistemeClientHypothesisHelpers:
-    """Typed helpers for hypotheses, assumptions, predictions, and analyses."""
+    """Typed helpers for hypotheses, assumptions, predictions, analyses, and observations."""
+
+    # ── Hypothesis ────────────────────────────────────────────────
 
     def register_hypothesis(
         self,
@@ -33,79 +37,97 @@ class _EpistemeClientHypothesisHelpers:
         status: HypothesisStatus | str | None = None,
         category: HypothesisCategory | str | None = None,
         assumptions: Iterable[str] | None = None,
+        objectives: Iterable[str] | None = None,
         depends_on: Iterable[str] | None = None,
         analyses: Iterable[str] | None = None,
         parameter_constraints: Mapping[str, str] | None = None,
         source: str | None = None,
     ) -> ClientResult[Hypothesis]:
-        """Register a hypothesis in the epistemic graph.
+        type_str = type.value if isinstance(type, HypothesisType) else type
+        status_str = status.value if isinstance(status, HypothesisStatus) else status
+        category_str = category.value if isinstance(category, HypothesisCategory) else category
+        return self.register(
+            "hypothesis",
+            dry_run=dry_run,
+            id=id,
+            statement=statement,
+            type=type_str,
+            scope=scope,
+            refutation_criteria=refutation_criteria,
+            status=status_str,
+            category=category_str,
+            assumptions=list(assumptions) if assumptions is not None else None,
+            objectives=list(objectives) if objectives is not None else None,
+            depends_on=list(depends_on) if depends_on is not None else None,
+            analyses=list(analyses) if analyses is not None else None,
+            parameter_constraints=dict(parameter_constraints) if parameter_constraints is not None else None,
+            source=source,
+        )
 
-        Args:
-            id: Unique identifier for the hypothesis (e.g. ``"c-mass-energy"``).
-            statement: Human-readable statement of the hypothesis.
-            type: Epistemological type (``HypothesisType`` enum or its string key).
-            scope: Domain scope string identifying the area of the hypothesis.
-            refutation_criteria: Description of how this hypothesis could be
-                falsified. Optional at registration; should be filled in as
-                the hypothesis matures.
-            dry_run: Simulate the mutation without committing. Defaults to
-                ``False``.
-            status: Initial lifecycle status. Falls back to the graph default
-                when ``None``.
-            category: Optional category tag (``HypothesisCategory`` enum or string
-                key).
-            assumptions: IDs of assumptions that underpin this hypothesis.
-            depends_on: IDs of hypotheses this hypothesis logically depends on.
-            analyses: IDs of analyses that supply evidence for this hypothesis.
-            parameter_constraints: Mapping of parameter names to constraint
-                descriptions.
-            source: Citation or reference supporting the hypothesis.
+    def get_hypothesis(self, identifier: str) -> ClientResult[Hypothesis]:
+        return self.get("hypothesis", identifier)
 
-        Returns:
-            ``ClientResult[Hypothesis]`` with ``status="ok"`` and ``data`` holding
-            the registered entity on success; ``status="BLOCKED"`` if a
-            domain invariant prevents the write.
+    def list_hypotheses(self, **filters: object) -> ClientResult[list[Hypothesis]]:
+        return self.list("hypothesis", **filters)
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def set_hypothesis(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Hypothesis]:
+        return self.set("hypothesis", identifier, dry_run=dry_run, **payload)
+
+    def transition_hypothesis(
+        self,
+        identifier: str,
+        new_status: HypothesisStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Hypothesis]:
+        return self.transition("hypothesis", identifier, new_status, dry_run=dry_run)
+
+    # ── Assumption ────────────────────────────────────────────────
 
     def register_assumption(
         self,
         id: str,
         statement: str,
-        type: AssumptionType | str,
+        type: AssumptionType | str = AssumptionType.EMPIRICAL,
         *,
         scope: str = "global",
         dry_run: bool = False,
+        criticality: object | None = None,
         depends_on: Iterable[str] | None = None,
         falsifiable_consequence: str | None = None,
         source: str | None = None,
         notes: str | None = None,
     ) -> ClientResult[Assumption]:
-        """Register an assumption in the epistemic graph.
+        type_str = type.value if isinstance(type, AssumptionType) else type
+        criticality_str = criticality.value if hasattr(criticality, "value") else criticality
+        return self.register(
+            "assumption",
+            dry_run=dry_run,
+            id=id,
+            statement=statement,
+            type=type_str,
+            scope=scope,
+            criticality=criticality_str,
+            depends_on=list(depends_on) if depends_on is not None else None,
+            falsifiable_consequence=falsifiable_consequence,
+            source=source,
+            notes=notes,
+        )
 
-        Args:
-            id: Unique identifier for the assumption.
-            statement: Human-readable statement of the assumption.
-            type: Epistemological type (``AssumptionType`` enum or string key).
-            scope: Domain scope string situating the assumption in context.
-            dry_run: Simulate the mutation without committing.
-            depends_on: IDs of other assumptions this one rests on.
-            falsifiable_consequence: A testable prediction that would refute
-                this assumption if it failed.
-            source: Citation or reference.
-            notes: Free-text supplementary notes.
+    def get_assumption(self, identifier: str) -> ClientResult[Assumption]:
+        return self.get("assumption", identifier)
 
-        Returns:
-            ``ClientResult[Assumption]`` with ``status="ok"`` and ``data``
-            holding the registered entity on success.
+    def list_assumptions(self, **filters: object) -> ClientResult[list[Assumption]]:
+        return self.list("assumption", **filters)
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def set_assumption(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Assumption]:
+        return self.set("assumption", identifier, dry_run=dry_run, **payload)
+
+    # ── Prediction ────────────────────────────────────────────────
 
     def register_prediction(
         self,
@@ -130,51 +152,64 @@ class _EpistemeClientHypothesisHelpers:
         free_params: int | None = None,
         conditional_on: Iterable[str] | None = None,
         refutation_criteria: str | None = None,
+        stress_criteria: str | None = None,
         benchmark_source: str | None = None,
         source: str | None = None,
         notes: str | None = None,
     ) -> ClientResult[Prediction]:
-        """Register a prediction in the epistemic graph.
+        tier_str = tier.value if isinstance(tier, ConfidenceTier) else tier
+        status_str = status.value if isinstance(status, PredictionStatus) else status
+        ek_str = evidence_kind.value if isinstance(evidence_kind, EvidenceKind) else evidence_kind
+        mr_str = measurement_regime.value if isinstance(measurement_regime, MeasurementRegime) else measurement_regime
+        return self.register(
+            "prediction",
+            dry_run=dry_run,
+            id=id,
+            observable=observable,
+            predicted=predicted,
+            tier=tier_str,
+            status=status_str,
+            evidence_kind=ek_str,
+            measurement_regime=mr_str,
+            specification=specification,
+            derivation=derivation,
+            hypothesis_ids=list(hypothesis_ids) if hypothesis_ids is not None else None,
+            tests_assumptions=list(tests_assumptions) if tests_assumptions is not None else None,
+            analysis=analysis,
+            independence_group=independence_group,
+            correlation_tags=list(correlation_tags) if correlation_tags is not None else None,
+            observed=observed,
+            observed_bound=observed_bound,
+            free_params=free_params,
+            conditional_on=list(conditional_on) if conditional_on is not None else None,
+            refutation_criteria=refutation_criteria,
+            stress_criteria=stress_criteria,
+            benchmark_source=benchmark_source,
+            source=source,
+            notes=notes,
+        )
 
-        Args:
-            id: Unique identifier for the prediction.
-            observable: The quantity or phenomenon the prediction concerns.
-            tier: Confidence tier (``ConfidenceTier`` enum or string key).
-            status: Initial lifecycle status (``PredictionStatus`` enum or
-                string key).
-            evidence_kind: Kind of evidence used to evaluate the prediction
-                (``EvidenceKind`` enum or string key).
-            measurement_regime: Measurement approach (``MeasurementRegime``
-                enum or string key).
-            predicted: The predicted value or distribution.
-            dry_run: Simulate without committing.
-            specification: Detailed numerical specification of the prediction.
-            derivation: Theoretical derivation of the predicted value.
-            hypothesis_ids: IDs of hypotheses this prediction flows from.
-            tests_assumptions: IDs of assumptions this prediction tests.
-            analysis: ID of the analysis responsible for evaluation.
-            independence_group: ID of the independence group this prediction
-                belongs to.
-            correlation_tags: Tags marking predictions that share correlated
-                data.
-            observed: The observed value (``None`` while pending).
-            observed_bound: Upper or lower bound on the observed value.
-            free_params: Number of free parameters used in deriving the
-                prediction.
-            conditional_on: IDs of predictions this one is conditional on.
-            refutation_criteria: Description of what would falsify this prediction.
-            benchmark_source: Citation for the benchmark value.
-            source: General citation or reference.
-            notes: Free-text supplementary notes.
+    def get_prediction(self, identifier: str) -> ClientResult[Prediction]:
+        return self.get("prediction", identifier)
 
-        Returns:
-            ``ClientResult[Prediction]`` with ``status="ok"`` and ``data``
-            holding the registered entity on success.
+    def list_predictions(self, **filters: object) -> ClientResult[list[Prediction]]:
+        return self.list("prediction", **filters)
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def set_prediction(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Prediction]:
+        return self.set("prediction", identifier, dry_run=dry_run, **payload)
+
+    def transition_prediction(
+        self,
+        identifier: str,
+        new_status: PredictionStatus | str,
+        *,
+        dry_run: bool = False,
+    ) -> ClientResult[Prediction]:
+        return self.transition("prediction", identifier, new_status, dry_run=dry_run)
+
+    # ── Analysis ──────────────────────────────────────────────────
 
     def register_analysis(
         self,
@@ -189,210 +224,145 @@ class _EpistemeClientHypothesisHelpers:
         last_result_sha: str | None = None,
         last_result_date: date | str | None = None,
     ) -> ClientResult[Analysis]:
-        """Register an analysis node in the epistemic graph.
-
-        An analysis represents a runnable computation or procedure that
-        produces evidence for one or more predictions or hypotheses.
-
-        Args:
-            id: Unique identifier for the analysis.
-            dry_run: Simulate without committing.
-            command: Shell command or script invocation used to run the
-                analysis.
-            path: Path to the analysis script or notebook.
-            uses_parameters: IDs of parameters consumed by this analysis.
-            notes: Free-text supplementary notes.
-            last_result: Most recent output value from a previous run.
-            last_result_sha: Git SHA of the commit that produced
-                ``last_result``.
-            last_result_date: Date of the most recent run.
-
-        Returns:
-            ``ClientResult[Analysis]`` with ``status="ok"`` and ``data``
-            holding the registered entity on success.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def get_hypothesis(self, identifier: str) -> ClientResult[Hypothesis]:
-        """Retrieve a hypothesis by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the hypothesis to look up.
-
-        Returns:
-            ``ClientResult[Hypothesis]`` with ``status="ok"`` and ``data`` set to
-            the entity when found, or ``status="error"`` if no hypothesis with
-            that ID exists.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def get_assumption(self, identifier: str) -> ClientResult[Assumption]:
-        """Retrieve an assumption by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the assumption to look up.
-
-        Returns:
-            ``ClientResult[Assumption]`` with ``status="ok"`` and ``data``
-            set to the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def get_prediction(self, identifier: str) -> ClientResult[Prediction]:
-        """Retrieve a prediction by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the prediction to look up.
-
-        Returns:
-            ``ClientResult[Prediction]`` with ``status="ok"`` and ``data``
-            set to the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+        date_str = (
+            last_result_date.isoformat()
+            if hasattr(last_result_date, "isoformat")
+            else last_result_date
+        )
+        return self.register(
+            "analysis",
+            dry_run=dry_run,
+            id=id,
+            command=command,
+            path=path,
+            uses_parameters=list(uses_parameters) if uses_parameters is not None else None,
+            notes=notes,
+            last_result=last_result,
+            last_result_sha=last_result_sha,
+            last_result_date=date_str,
+        )
 
     def get_analysis(self, identifier: str) -> ClientResult[Analysis]:
-        """Retrieve an analysis node by its unique identifier.
-
-        Args:
-            identifier: The unique string ID of the analysis to look up.
-
-        Returns:
-            ``ClientResult[Analysis]`` with ``status="ok"`` and ``data``
-            set to the entity when found, or ``status="error"`` if not found.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def list_hypotheses(self, **filters: object) -> ClientResult[list[Hypothesis]]:
-        """Return all hypotheses, applying any keyword attribute filters.
-
-        Keyword filters are matched against entity attribute values. A hypothesis
-        is included only when every supplied filter matches.
-
-        Args:
-            **filters: Attribute-value pairs to filter on (e.g.
-                ``status="active"`` to return only active hypotheses).
-
-        Returns:
-            ``ClientResult[list[Hypothesis]]`` with ``data`` holding the
-            (possibly empty) list of matching hypotheses.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def list_assumptions(self, **filters: object) -> ClientResult[list[Assumption]]:
-        """Return all assumptions, applying any keyword attribute filters.
-
-        Args:
-            **filters: Attribute-value pairs to filter on (e.g.
-                ``type="domain"`` to return only domain-type assumptions).
-
-        Returns:
-            ``ClientResult[list[Assumption]]`` with ``data`` holding the
-            (possibly empty) list of matching assumptions.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
-
-    def list_predictions(self, **filters: object) -> ClientResult[list[Prediction]]:
-        """Return all predictions, applying any keyword attribute filters.
-
-        Args:
-            **filters: Attribute-value pairs to filter on (e.g.
-                ``status="pending"`` to return only pending predictions,
-                ``tier="A"`` to return Tier-A predictions).
-
-        Returns:
-            ``ClientResult[list[Prediction]]`` with ``data`` holding the
-            (possibly empty) list of matching predictions.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+        return self.get("analysis", identifier)
 
     def list_analyses(self, **filters: object) -> ClientResult[list[Analysis]]:
-        """Return all analysis nodes, applying any keyword attribute filters.
+        return self.list("analysis", **filters)
 
-        Args:
-            **filters: Attribute-value pairs to filter on.
+    def set_analysis(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Analysis]:
+        return self.set("analysis", identifier, dry_run=dry_run, **payload)
 
-        Returns:
-            ``ClientResult[list[Analysis]]`` with ``data`` holding the
-            (possibly empty) list of matching analysis nodes.
+    # ── Observation ───────────────────────────────────────────────
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def register_observation(
+        self,
+        id: str,
+        description: str,
+        value: object,
+        date: date | str,
+        *,
+        status: ObservationStatus | str = ObservationStatus.PRELIMINARY,
+        dry_run: bool = False,
+        predictions: Iterable[str] | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+    ) -> ClientResult[Observation]:
+        status_str = status.value if isinstance(status, ObservationStatus) else status
+        date_str = date.isoformat() if hasattr(date, "isoformat") else date
+        return self.register(
+            "observation",
+            dry_run=dry_run,
+            id=id,
+            description=description,
+            value=value,
+            date=date_str,
+            status=status_str,
+            predictions=list(predictions) if predictions is not None else None,
+            source=source,
+            notes=notes,
+        )
 
-    def transition_hypothesis(
+    def get_observation(self, identifier: str) -> ClientResult[Observation]:
+        return self.get("observation", identifier)
+
+    def list_observations(self, **filters: object) -> ClientResult[list[Observation]]:
+        return self.list("observation", **filters)
+
+    def set_observation(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Observation]:
+        return self.set("observation", identifier, dry_run=dry_run, **payload)
+
+    def transition_observation(
         self,
         identifier: str,
-        new_status: HypothesisStatus | str,
+        new_status: ObservationStatus | str,
         *,
         dry_run: bool = False,
-    ) -> ClientResult[Hypothesis]:
-        """Advance or retract a hypothesis's lifecycle status.
+    ) -> ClientResult[Observation]:
+        return self.transition("observation", identifier, new_status, dry_run=dry_run)
 
-        Args:
-            identifier: The unique string ID of the hypothesis to transition.
-            new_status: Target lifecycle status (``HypothesisStatus`` enum value
-                or its string key).
-            dry_run: Simulate the transition without committing.
+    # ── Experiment ────────────────────────────────────────────────
 
-        Returns:
-            ``ClientResult[Hypothesis]`` with ``status="ok"`` and ``data`` holding
-            the updated entity, or ``status="BLOCKED"`` if the transition
-            violates a domain invariant.
+    def register_experiment(
+        self,
+        id: str,
+        title: str,
+        *,
+        dry_run: bool = False,
+        status: ExperimentStatus | str | None = None,
+        protocol: str | None = None,
+        predictions_tested: Iterable[str] | None = None,
+        assumptions_tested: Iterable[str] | None = None,
+        replicate_of: str | None = None,
+        instrument: str | None = None,
+        conditions: str | None = None,
+        date: date | str | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+        tags: Iterable[str] | None = None,
+    ) -> ClientResult[Experiment]:
+        status_str = status.value if isinstance(status, ExperimentStatus) else status
+        date_str = date.isoformat() if hasattr(date, "isoformat") else date
+        return self.register(
+            "experiment",
+            dry_run=dry_run,
+            id=id,
+            title=title,
+            status=status_str,
+            protocol=protocol,
+            predictions_tested=list(predictions_tested) if predictions_tested is not None else None,
+            assumptions_tested=list(assumptions_tested) if assumptions_tested is not None else None,
+            replicate_of=replicate_of,
+            instrument=instrument,
+            conditions=conditions,
+            date=date_str,
+            source=source,
+            notes=notes,
+            tags=list(tags) if tags is not None else None,
+        )
 
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    def get_experiment(self, identifier: str) -> ClientResult[Experiment]:
+        return self.get("experiment", identifier)
 
-    def transition_prediction(
+    def list_experiments(self, **filters: object) -> ClientResult[list[Experiment]]:
+        return self.list("experiment", **filters)
+
+    def set_experiment(
+        self, identifier: str, *, dry_run: bool = False, **payload: object
+    ) -> ClientResult[Experiment]:
+        return self.set("experiment", identifier, dry_run=dry_run, **payload)
+
+    def transition_experiment(
         self,
         identifier: str,
-        new_status: PredictionStatus | str,
+        new_status: ExperimentStatus | str,
         *,
         dry_run: bool = False,
-    ) -> ClientResult[Prediction]:
-        """Advance or retract a prediction's lifecycle status.
-
-        Args:
-            identifier: The unique string ID of the prediction to transition.
-            new_status: Target lifecycle status (``PredictionStatus`` enum
-                value or its string key).
-            dry_run: Simulate the transition without committing.
-
-        Returns:
-            ``ClientResult[Prediction]`` with ``status="ok"`` and ``data``
-            holding the updated entity, or ``status="BLOCKED"`` if the
-            transition violates a domain invariant.
-
-        Raises:
-            NotImplementedError: This stub is not yet implemented.
-        """
-        raise NotImplementedError
+    ) -> ClientResult[Experiment]:
+        return self.transition("experiment", identifier, new_status, dry_run=dry_run)
 
 
 __all__ = ["_EpistemeClientHypothesisHelpers"]
+

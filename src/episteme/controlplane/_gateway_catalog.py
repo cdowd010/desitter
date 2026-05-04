@@ -71,7 +71,7 @@ RESOURCE_SPECS: dict[str, ResourceSpec] = {
 }
 """Mapping of canonical resource keys to their ``ResourceSpec`` descriptors.
 
-Covers all ten built-in entity types. The gateway resolves operations
+Covers all twelve built-in entity types. The gateway resolves operations
 (register, get, list, set, transition) against this table.
 """
 
